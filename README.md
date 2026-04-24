@@ -48,6 +48,10 @@ Implemented first tools:
 - `list_agents()`
 - `list_artifacts()`
 
+Messages that should trigger the recipient to act should set `requires_response: true`.
+Replies and informational receipts should leave `requires_response` false unless they are
+asking a new question or assigning a new task.
+
 ## Codex Setup
 
 Add this to `~/.codex/config.toml`:
@@ -86,3 +90,23 @@ Run tests:
 ```bash
 npm test
 ```
+
+## Companion Skills
+
+Repo source copies live in:
+
+```text
+skills/codex/agent-bus/SKILL.md
+skills/claude/agent-bus/SKILL.md
+```
+
+Installed local copies live in:
+
+```text
+/Users/antonybarfoot/.codex/skills/agent-bus/SKILL.md
+/Users/antonybarfoot/.claude/skills/agent-bus/SKILL.md
+```
+
+The skills define Agent Bus operating behavior: actionable inbound messages should be
+acknowledged, handled, replied to, marked read, and given a thread status without asking
+the user what to do unless there is a real blocker.

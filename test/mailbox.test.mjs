@@ -36,6 +36,7 @@ test("sendMessage creates inbox and thread files", async () => {
         subject: "Review design",
         body: "Please review this.",
         ack_required: true,
+        requires_response: true,
       },
       root,
     );
@@ -49,6 +50,7 @@ test("sendMessage creates inbox and thread files", async () => {
     assert.equal(inbox[0].from, "claude");
     assert.equal(inbox[0].status, "unread");
     assert.equal(inbox[0].ack_required, true);
+    assert.equal(inbox[0].requires_response, true);
 
     const threads = await listThreads(root);
     assert.equal(threads.length, 1);
@@ -64,7 +66,7 @@ test("reply increments thread sequence and creates recipient inbox message", asy
       root,
     );
     const reply = await replyMessage(
-      { from: "codex", to: "claude", thread_id: first.thread_id, body: "Yes." },
+      { from: "codex", to: "claude", thread_id: first.thread_id, body: "Yes.", requires_response: false },
       root,
     );
 

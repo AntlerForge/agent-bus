@@ -112,6 +112,7 @@ Each message shall include:
 - optional subject;
 - optional priority or importance;
 - optional acknowledgment requirement;
+- optional response requirement;
 - body text in Markdown;
 - optional references to shared files.
 
@@ -120,6 +121,10 @@ Messages should be human-readable without running the MCP server.
 Message creation should be idempotent where practical. If an agent retries the same send
 operation after a timeout, the system should avoid creating duplicate messages when the
 caller supplied an idempotency key.
+
+Messages that should cause the recipient to act automatically shall set
+`requires_response: true`. Replies and status receipts shall default to
+`requires_response: false` unless they assign a new task or ask a new question.
 
 ## 8. Thread Requirements
 

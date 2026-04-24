@@ -48,6 +48,13 @@ Proposed source layout:
     agents.test.mjs
     artifacts.test.mjs
     fixtures/
+  skills/
+    codex/
+      agent-bus/
+        SKILL.md
+    claude/
+      agent-bus/
+        SKILL.md
   package.json
 ```
 
@@ -79,6 +86,7 @@ created: 2026-04-24T15:30:00+01:00
 subject: Review Agent Bus design
 priority: normal
 ack_required: true
+requires_response: true
 idempotency_key: optional-client-supplied-key
 ---
 
@@ -131,8 +139,8 @@ Returns:
 - inbox file path;
 - thread file path.
 
-The implementation should accept optional `priority`, `ack_required`, `artifact_paths`,
-and `idempotency_key` fields.
+The implementation should accept optional `priority`, `ack_required`, `requires_response`,
+`artifact_paths`, and `idempotency_key` fields.
 
 ### `read_inbox(agent)`
 
@@ -408,3 +416,22 @@ Remaining implementation choice:
 Milestone 1 is complete when a local MCP server supports manual Claude-to-Codex and
 Codex-to-Claude messaging through Markdown files, with acknowledgments, lifecycle status,
 artifact metadata, and no automation required.
+
+## 11. Companion Skill Installation
+
+Install the Codex operating skill at:
+
+```text
+/Users/antonybarfoot/.codex/skills/agent-bus/SKILL.md
+```
+
+Install the Claude operating skill at:
+
+```text
+/Users/antonybarfoot/.claude/skills/agent-bus/SKILL.md
+```
+
+These skills tell each agent how to interpret Agent Bus messages. In particular, they
+should not ask the user what to do with an actionable inbound message. They should
+acknowledge, act, reply, mark read, and update thread status unless the task is unsafe,
+impossible, or genuinely ambiguous.

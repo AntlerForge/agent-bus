@@ -65,6 +65,7 @@ export async function sendMessage(
     thread_id,
     priority = "normal",
     ack_required = false,
+    requires_response = false,
     artifact_paths = [],
     idempotency_key,
   },
@@ -130,6 +131,7 @@ export async function sendMessage(
     subject,
     priority,
     ack_required: Boolean(ack_required),
+    requires_response: Boolean(requires_response),
     artifact_paths,
     idempotency_key: idempotency_key || null,
   };
@@ -167,13 +169,13 @@ export async function sendMessage(
 }
 
 export async function replyMessage(
-  { from, to, thread_id, body, priority = "normal", ack_required = false, artifact_paths = [] },
+  { from, to, thread_id, body, priority = "normal", ack_required = false, requires_response = false, artifact_paths = [] },
   root,
 ) {
   const paths = await ensureBusLayout(root);
   const thread = await readThread(paths, thread_id);
   const subject = thread.data.subject || `Reply to ${thread_id}`;
-  return sendMessage({ from, to, subject, body, thread_id, priority, ack_required, artifact_paths }, root);
+  return sendMessage({ from, to, subject, body, thread_id, priority, ack_required, requires_response, artifact_paths }, root);
 }
 
 async function readInboxFile(filePath) {
@@ -211,6 +213,7 @@ export async function readInbox({ agent, include_read = false }, root) {
       created: message.data.created,
       priority: message.data.priority,
       ack_required: message.data.ack_required,
+      requires_response: message.data.requires_response,
       file: message.filePath,
       body: message.body.trim(),
     });
