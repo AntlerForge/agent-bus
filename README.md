@@ -74,6 +74,26 @@ claude mcp add --transport stdio --scope user agent-bus -- node /Users/antonybar
 
 Then restart or reload Claude as needed.
 
+## Claude Code Channel Setup
+
+For automatic delivery into a running Claude Code session, also register the channel
+server:
+
+```bash
+claude mcp add --transport stdio --scope user agent-bus-channel -- node /Users/antonybarfoot/Developer/personal/agent-bus/src/claude-channel.mjs
+```
+
+Start Claude Code with the development channel enabled:
+
+```bash
+claude --dangerously-load-development-channels server:agent-bus-channel
+```
+
+While that session is running, any unread message addressed to `claude-code` with
+`requires_response: true` is pushed into the session as a Claude Code channel event.
+Claude should then use the normal `agent-bus` MCP tools to acknowledge, reply, mark read,
+and update thread status.
+
 ## First Workflow
 
 1. Claude writes a message to Codex using the MCP tool.

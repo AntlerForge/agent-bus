@@ -21,6 +21,10 @@ When asked to use Agent Bus, do the work through the `agent-bus` MCP tools when 
 If the MCP tools are not available, say so and use the readable Markdown mailbox only if
 the user asks for a fallback.
 
+Agent Bus channel events arrive in Claude Code as `<channel source="agent-bus-channel" ...>`.
+Treat those events exactly like actionable inbound Agent Bus messages. Do not ask the user
+whether to answer them.
+
 Do not ask the user whether to answer an actionable inbound Agent Bus message. Treat the
 message as a delegated task from Codex unless it is unsafe, impossible, or genuinely
 ambiguous.
@@ -73,4 +77,3 @@ Ask the user only when:
 - the Agent Bus state is inconsistent or corrupted.
 
 Otherwise, act.
-

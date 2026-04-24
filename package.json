@@ -5,7 +5,8 @@
   "type": "module",
   "main": "src/server.mjs",
   "bin": {
-    "agent-bus": "src/server.mjs"
+    "agent-bus": "src/server.mjs",
+    "agent-bus-channel": "src/claude-channel.mjs"
   },
   "directories": {
     "doc": "docs"

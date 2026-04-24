@@ -191,6 +191,7 @@ export async function readInbox({ agent, include_read = false }, root) {
   const paths = await ensureBusLayout(root);
   await touchAgent(agent, root);
   const dir = path.join(paths.inbox, agent);
+  await mkdir(dir, { recursive: true });
   const entries = await readdir(dir, { withFileTypes: true });
   const messages = [];
 

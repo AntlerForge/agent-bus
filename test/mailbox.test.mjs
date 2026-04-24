@@ -202,6 +202,7 @@ test("agent registry bootstraps defaults and registers new agents", async () => 
   await withBusRoot(async (root) => {
     const defaults = await listAgents(root);
     assert.ok(defaults.find((agent) => agent.agent_id === "claude"));
+    assert.ok(defaults.find((agent) => agent.agent_id === "claude-code"));
     assert.ok(defaults.find((agent) => agent.agent_id === "codex"));
 
     const agent = await registerAgent(
@@ -210,5 +211,12 @@ test("agent registry bootstraps defaults and registers new agents", async () => 
     );
     assert.equal(agent.display_name, "Reviewer");
     assert.ok(agent.last_seen);
+  });
+});
+
+test("readInbox creates non-default agent inboxes on first read", async () => {
+  await withBusRoot(async (root) => {
+    const messages = await readInbox({ agent: "claude-code" }, root);
+    assert.deepEqual(messages, []);
   });
 });

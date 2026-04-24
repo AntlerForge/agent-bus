@@ -218,7 +218,15 @@ The first version shall support manual initiation:
 - the user tells Claude or Codex to send a message;
 - the user tells the other agent to check its inbox.
 
-Later versions should support automated initiation:
+The next version shall support automated initiation into a persistent Claude Code session:
+
+- Codex sends a message to `claude-code` with `requires_response: true`;
+- a Claude Code channel server detects the pending message;
+- the channel server injects the message into the already-running Claude Code session;
+- Claude handles the task using its existing session context and available tools;
+- Claude replies through the normal Agent Bus MCP tools.
+
+Later versions should support broader automated initiation:
 
 - Claude-side hooks or channels where available;
 - Codex-side automation, polling, or CLI invocation;

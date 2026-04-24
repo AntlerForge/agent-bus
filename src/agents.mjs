@@ -6,6 +6,13 @@ const DEFAULT_AGENTS = {
   claude: {
     agent_id: "claude",
     display_name: "Claude",
+    type: "claude-generic",
+    capabilities: ["analysis", "writing", "coding", "review"],
+    last_seen: null,
+  },
+  "claude-code": {
+    agent_id: "claude-code",
+    display_name: "Claude Code",
     type: "claude-code",
     capabilities: ["analysis", "writing", "coding", "review"],
     last_seen: null,

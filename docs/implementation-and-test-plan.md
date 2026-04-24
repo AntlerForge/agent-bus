@@ -323,13 +323,33 @@ Exit criteria:
 
 Only after manual operation is reliable:
 
-- evaluate Claude hooks/channels for mailbox notification;
+- add a Claude Code channel server for mailbox notification;
 - evaluate Codex automations or polling;
 - consider a small local watcher if necessary.
 
 Exit criteria:
 
 - At least one direction can be initiated without a manual "check inbox" prompt.
+
+### Phase 8: Claude Code Channel
+
+- Add `src/claude-channel.mjs` as a second MCP server.
+- Advertise `capabilities.experimental["claude/channel"]`.
+- Watch `inbox/claude-code` for unread messages where `requires_response: true`.
+- Emit `notifications/claude/channel` with `content` and identifier-safe `meta`.
+- Keep replies on the normal `agent-bus` MCP server so thread state remains canonical.
+- Register the server as `agent-bus-channel` in Claude Code config.
+
+Expected test command for local channel development:
+
+```bash
+claude --dangerously-load-development-channels server:agent-bus-channel
+```
+
+Exit criteria:
+
+- A Codex-to-Claude Code message arrives in the running Claude Code session without the user
+  asking Claude to check its inbox.
 
 ## 8. Test Plan
 
@@ -365,6 +385,8 @@ Test MCP tool calls against a temporary mailbox root:
 - `mark_read` prevents the message appearing as unread again;
 - `list_threads` returns created threads;
 - artifact paths are captured in the artifact manifest.
+- the channel server advertises `claude/channel`;
+- the channel server emits a channel notification for a pending Claude message.
 
 ### Manual Acceptance Tests
 
@@ -379,6 +401,9 @@ Run against `/Users/antonybarfoot/AgentBus/`:
 6. Claude shares a file via `/Users/antonybarfoot/AgentBus/shared/`.
 7. Codex opens or references that shared file.
 8. User manually opens the thread file and can understand the exchange.
+9. Start Claude Code with `--dangerously-load-development-channels server:agent-bus-channel`.
+10. Codex sends Claude Code a `requires_response: true` message.
+11. Claude receives the channel event in the active session and replies through Agent Bus.
 
 ### Failure Tests
 
