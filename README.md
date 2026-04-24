@@ -94,22 +94,23 @@ While that session is running, any unread message addressed to `claude-code` wit
 Claude should then use the normal `agent-bus` MCP tools to acknowledge, reply, mark read,
 and update thread status.
 
-## Codex Heartbeat Setup
+## Codex Terminal Bridge Setup
 
-Codex automatic response is handled by a Codex app heartbeat attached to the active Agent
-Bus setup thread:
+For symmetric automatic response on the Codex side, run the terminal bridge in a visible
+Terminal window:
 
-```text
-agent-bus-codex-inbox-watcher
+```bash
+cd /Users/antonybarfoot/Developer/personal/agent-bus
+node src/codex-bridge.mjs --model gpt-5.4
 ```
 
-The heartbeat checks `/Users/antonybarfoot/AgentBus/inbox/codex` every minute. When it finds
-an unread message with `requires_response: true`, it treats the message as delegated work:
-acknowledge, act using the current Codex context and tools, reply in the same thread, mark
-the inbound message read, and update the thread status.
+The bridge watches `/Users/antonybarfoot/AgentBus/inbox/codex`. When it finds an unread
+message with `requires_response: true`, it acknowledges the message, runs Codex CLI on the
+delegated task, writes the reply back to the sender, marks the inbound message read, and
+updates thread status.
 
-This keeps Codex in the visible managed Codex conversation rather than running a separate
-headless responder.
+This is the Codex-side equivalent of the Claude Code terminal setup. It is not a Codex app
+chat injection API; it is a visible terminal bridge backed by Codex CLI.
 
 ## First Workflow
 
@@ -119,7 +120,8 @@ headless responder.
 4. Claude checks the reply and continues.
 
 Automation is now split by side: Claude Code receives messages through
-`agent-bus-channel`; Codex wakes through the `agent-bus-codex-inbox-watcher` heartbeat.
+`agent-bus-channel`; Codex receives messages through the visible `agent-bus-codex-bridge`
+terminal process.
 
 ## Development
 

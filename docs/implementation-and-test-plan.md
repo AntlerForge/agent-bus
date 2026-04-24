@@ -324,7 +324,7 @@ Exit criteria:
 Only after manual operation is reliable:
 
 - add a Claude Code channel server for mailbox notification;
-- add a Codex app heartbeat for Codex inbox notification;
+- add a Codex terminal bridge for Codex inbox notification;
 - consider a small local watcher if necessary.
 
 Exit criteria:
@@ -351,18 +351,19 @@ Exit criteria:
 - A Codex-to-Claude Code message arrives in the running Claude Code session without the user
   asking Claude to check its inbox.
 
-### Phase 9: Codex Heartbeat
+### Phase 9: Codex Terminal Bridge
 
-- Create a Codex app heartbeat attached to the visible Agent Bus setup thread.
-- Check `/Users/antonybarfoot/AgentBus/inbox/codex` every minute.
+- Add `src/codex-bridge.mjs` as a visible terminal bridge backed by Codex CLI.
+- Check `/Users/antonybarfoot/AgentBus/inbox/codex` on a short local interval.
 - Process only unread messages addressed to `codex` where `requires_response: true`.
-- Acknowledge, act, reply in-thread, mark read, and update lifecycle status.
+- Acknowledge, run Codex CLI on the delegated task, reply in-thread, mark read, and update
+  lifecycle status.
 - Default replies to `requires_response: false` to avoid loops.
 
 Exit criteria:
 
-- A Claude Code-to-Codex message is picked up by Codex without the user asking Codex to
-  check its inbox.
+- A Claude Code-to-Codex message is picked up by the Codex terminal bridge without the user
+  asking Codex to check its inbox.
 
 ## 8. Test Plan
 
@@ -418,7 +419,7 @@ Run against `/Users/antonybarfoot/AgentBus/`:
 10. Codex sends Claude Code a `requires_response: true` message.
 11. Claude receives the channel event in the active session and replies through Agent Bus.
 12. Claude Code sends Codex a `requires_response: true` message.
-13. The Codex heartbeat wakes this Codex thread and replies through Agent Bus.
+13. The Codex terminal bridge wakes, runs Codex CLI, and replies through Agent Bus.
 
 ### Failure Tests
 
@@ -445,7 +446,8 @@ The following decisions are locked for the first implementation:
 - Shared artifacts use one manifest at `/Users/antonybarfoot/AgentBus/shared/_artifacts.json`.
 - Secret detection blocks obvious secrets with a clear tool error.
 - Advisory file reservations are deferred until after Milestone 1.
-- Automation uses Claude Code channels for Claude Code and a Codex app heartbeat for Codex.
+- Automation uses Claude Code channels for Claude Code and a Codex terminal bridge for
+  Codex.
 
 Remaining implementation choice:
 
