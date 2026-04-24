@@ -1,0 +1,61 @@
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
+
+export const DEFAULT_BUS_ROOT = "/Users/antonybarfoot/AgentBus";
+
+export function getBusRoot() {
+  return path.resolve(process.env.AGENT_BUS_ROOT || DEFAULT_BUS_ROOT);
+}
+
+export function getPaths(root = getBusRoot()) {
+  const busRoot = path.resolve(root);
+  return {
+    root: busRoot,
+    inbox: path.join(busRoot, "inbox"),
+    claudeInbox: path.join(busRoot, "inbox", "claude"),
+    codexInbox: path.join(busRoot, "inbox", "codex"),
+    threads: path.join(busRoot, "threads"),
+    shared: path.join(busRoot, "shared"),
+    archive: path.join(busRoot, "archive"),
+    agentsFile: path.join(busRoot, "_agents.json"),
+    idempotencyFile: path.join(busRoot, "_idempotency.json"),
+    artifactManifest: path.join(busRoot, "shared", "_artifacts.json"),
+  };
+}
+
+export async function ensureBusLayout(root = getBusRoot()) {
+  const paths = getPaths(root);
+  await Promise.all([
+    mkdir(paths.claudeInbox, { recursive: true }),
+    mkdir(paths.codexInbox, { recursive: true }),
+    mkdir(paths.threads, { recursive: true }),
+    mkdir(paths.shared, { recursive: true }),
+    mkdir(paths.archive, { recursive: true }),
+  ]);
+  return paths;
+}
+
+export function assertInsideRoot(candidatePath, root = getBusRoot()) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedPath = path.resolve(candidatePath);
+  const relative = path.relative(resolvedRoot, resolvedPath);
+
+  if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+    return resolvedPath;
+  }
+
+  throw new Error(`Path is outside the Agent Bus root: ${candidatePath}`);
+}
+
+export function assertInsideShared(candidatePath, root = getBusRoot()) {
+  const paths = getPaths(root);
+  const resolvedShared = path.resolve(paths.shared);
+  const resolvedPath = path.resolve(candidatePath);
+  const relative = path.relative(resolvedShared, resolvedPath);
+
+  if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+    return resolvedPath;
+  }
+
+  throw new Error(`Shared artifact path must be inside ${resolvedShared}: ${candidatePath}`);
+}

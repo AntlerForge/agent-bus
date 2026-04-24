@@ -192,9 +192,9 @@ should not prevent adding more agents later.
 
 The first MCP server should expose these tools:
 
-- `send_message(to, subject, body, thread_id?)`
+- `send_message(from, to, subject, body, thread_id?)`
 - `read_inbox(agent)`
-- `reply(thread_id, body)`
+- `reply(from, to, thread_id, body)`
 - `mark_read(message_id)`
 - `list_threads()`
 - `ack_message(message_id)`
@@ -203,6 +203,8 @@ The first MCP server should expose these tools:
 
 The tool interface should hide file mechanics from the agents but leave the files readable
 to the user.
+
+The MCP server shall be named `agent-bus` in local client configuration.
 
 ## 12. Initiation Requirements
 
@@ -277,6 +279,10 @@ Reservations should include:
 
 Reservations should be advisory in the first version and should expire automatically to
 avoid stale locks.
+
+Advisory file reservations are not part of Milestone 1. They are a later coordination
+capability once basic messaging, acknowledgment, lifecycle, and artifact handling are
+working.
 
 ## 17. Success Criteria
 

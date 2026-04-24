@@ -1,0 +1,32 @@
+{
+  "name": "agent-bus",
+  "version": "1.0.0",
+  "description": "Local bridge for agent-to-agent messaging between Claude and Codex on macOS.",
+  "type": "module",
+  "main": "src/server.mjs",
+  "bin": {
+    "agent-bus": "src/server.mjs"
+  },
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AntlerForge/agent-bus.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/AntlerForge/agent-bus/issues"
+  },
+  "homepage": "https://github.com/AntlerForge/agent-bus#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "yaml": "^2.8.3",
+    "zod": "^4.3.6"
+  }
+}

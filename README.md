@@ -35,18 +35,54 @@ Project source lives here:
 
 ## Initial MCP Tools
 
-Planned first tools:
+Implemented first tools:
 
-- `send_message(to, subject, body, thread_id?)`
+- `send_message(from, to, subject, body, thread_id?)`
 - `read_inbox(agent)`
-- `reply(thread_id, body)`
+- `reply(from, to, thread_id, body)`
+- `ack_message(message_id)`
 - `mark_read(message_id)`
+- `update_thread_status(thread_id, status)`
 - `list_threads()`
+- `register_agent(agent_id, display_name, capabilities?)`
+- `list_agents()`
+- `list_artifacts()`
+
+## Codex Setup
+
+Add this to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.agent-bus]
+command = "node"
+args = ["/Users/antonybarfoot/Developer/personal/agent-bus/src/server.mjs"]
+```
+
+Then restart or reload Codex so it discovers the MCP server.
+
+## Claude Setup
+
+For Claude Code, add the MCP server at user scope:
+
+```bash
+claude mcp add --transport stdio --scope user agent-bus -- node /Users/antonybarfoot/Developer/personal/agent-bus/src/server.mjs
+```
+
+Then restart or reload Claude as needed.
 
 ## First Workflow
 
 1. Claude writes a message to Codex using the MCP tool.
-2. Codex checks its inbox and replies into the same thread.
-3. Claude checks the reply and continues.
+2. Codex checks its inbox and acknowledges the message.
+3. Codex replies into the same thread and updates the thread status if appropriate.
+4. Claude checks the reply and continues.
 
 Automation can be added after the file protocol and tool interface are proven manually.
+
+## Development
+
+Run tests:
+
+```bash
+npm test
+```

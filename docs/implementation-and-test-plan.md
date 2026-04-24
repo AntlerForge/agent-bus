@@ -116,7 +116,7 @@ next_seq: 3
 
 ## 5. MCP Tool Behaviour
 
-### `send_message(to, subject, body, thread_id?)`
+### `send_message(from, to, subject, body, thread_id?)`
 
 Creates:
 
@@ -148,12 +148,9 @@ Returns:
 - file paths;
 - body summaries or full bodies, depending on implementation simplicity.
 
-### `reply(thread_id, body)`
+### `reply(from, to, thread_id, body)`
 
-Appends a reply to the thread and creates a message for the other participant.
-
-The first version may require an explicit `from` or `to` field if inferring the recipient
-is ambiguous.
+Appends a reply to the thread and creates a message for the recipient.
 
 ### `ack_message(message_id)`
 
@@ -270,7 +267,7 @@ Exit criteria:
 - Add Codex MCP config in `~/.codex/config.toml`:
 
 ```toml
-[mcp_servers.agent-mailbox]
+[mcp_servers.agent-bus]
 command = "node"
 args = ["/Users/antonybarfoot/Developer/personal/agent-bus/src/server.mjs"]
 ```
@@ -290,7 +287,7 @@ Exit criteria:
 Expected Claude Code command:
 
 ```bash
-claude mcp add --transport stdio --scope user agent-mailbox -- node /Users/antonybarfoot/Developer/personal/agent-bus/src/server.mjs
+claude mcp add --transport stdio --scope user agent-bus -- node /Users/antonybarfoot/Developer/personal/agent-bus/src/server.mjs
 ```
 
 Exit criteria:
@@ -388,18 +385,23 @@ Check:
 - a path traversal attempt is supplied as a shared artifact path;
 - a message appears to contain a secret.
 
-## 9. Open Design Decisions
+## 9. Design Decisions for Milestone 1
 
-These should be resolved during implementation:
+The following decisions are locked for the first implementation:
 
-- whether `mark_read` updates frontmatter or moves messages to archive;
-- whether `reply` infers sender/recipient from current MCP client context or requires explicit fields;
-- whether thread IDs are generated from subjects, timestamps, or opaque IDs;
-- whether thread sequence state lives in the thread file only or in a separate index;
-- whether shared artifacts need only `_artifacts.json` or per-thread artifact manifests;
-- whether secret detection should block sends or only warn;
-- whether advisory file reservations belong in milestone 1 or a later milestone;
-- how much automation is worthwhile after the manual flow works.
+- MCP server name: `agent-bus`.
+- `mark_read` updates message frontmatter in place; archive movement is deferred.
+- `reply` requires explicit `from` and `to` fields.
+- Thread IDs are opaque IDs such as `thread_20260424_123456_ab12`; subject is stored separately.
+- Thread sequence state lives in the thread file frontmatter as `next_seq`.
+- Shared artifacts use one manifest at `/Users/antonybarfoot/AgentBus/shared/_artifacts.json`.
+- Secret detection blocks obvious secrets with a clear tool error.
+- Advisory file reservations are deferred until after Milestone 1.
+- Automation is deferred until manual Claude-to-Codex and Codex-to-Claude messaging is proven.
+
+Remaining implementation choice:
+
+- exact secret patterns for the first detector.
 
 ## 10. Initial Milestone
 
