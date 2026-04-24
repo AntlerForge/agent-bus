@@ -226,6 +226,13 @@ The next version shall support automated initiation into a persistent Claude Cod
 - Claude handles the task using its existing session context and available tools;
 - Claude replies through the normal Agent Bus MCP tools.
 
+The same version shall support automated initiation into the visible Codex setup thread:
+
+- Claude Code sends a message to `codex` with `requires_response: true`;
+- a Codex app heartbeat checks the Codex inbox on a short interval;
+- Codex handles the task using the existing Codex conversation context and tools;
+- Codex replies through the normal Agent Bus MCP tools.
+
 Later versions should support broader automated initiation:
 
 - Claude-side hooks or channels where available;

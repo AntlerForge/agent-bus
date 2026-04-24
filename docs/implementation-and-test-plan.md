@@ -324,7 +324,7 @@ Exit criteria:
 Only after manual operation is reliable:
 
 - add a Claude Code channel server for mailbox notification;
-- evaluate Codex automations or polling;
+- add a Codex app heartbeat for Codex inbox notification;
 - consider a small local watcher if necessary.
 
 Exit criteria:
@@ -350,6 +350,19 @@ Exit criteria:
 
 - A Codex-to-Claude Code message arrives in the running Claude Code session without the user
   asking Claude to check its inbox.
+
+### Phase 9: Codex Heartbeat
+
+- Create a Codex app heartbeat attached to the visible Agent Bus setup thread.
+- Check `/Users/antonybarfoot/AgentBus/inbox/codex` every minute.
+- Process only unread messages addressed to `codex` where `requires_response: true`.
+- Acknowledge, act, reply in-thread, mark read, and update lifecycle status.
+- Default replies to `requires_response: false` to avoid loops.
+
+Exit criteria:
+
+- A Claude Code-to-Codex message is picked up by Codex without the user asking Codex to
+  check its inbox.
 
 ## 8. Test Plan
 
@@ -404,6 +417,8 @@ Run against `/Users/antonybarfoot/AgentBus/`:
 9. Start Claude Code with `--dangerously-load-development-channels server:agent-bus-channel`.
 10. Codex sends Claude Code a `requires_response: true` message.
 11. Claude receives the channel event in the active session and replies through Agent Bus.
+12. Claude Code sends Codex a `requires_response: true` message.
+13. The Codex heartbeat wakes this Codex thread and replies through Agent Bus.
 
 ### Failure Tests
 
@@ -430,7 +445,7 @@ The following decisions are locked for the first implementation:
 - Shared artifacts use one manifest at `/Users/antonybarfoot/AgentBus/shared/_artifacts.json`.
 - Secret detection blocks obvious secrets with a clear tool error.
 - Advisory file reservations are deferred until after Milestone 1.
-- Automation is deferred until manual Claude-to-Codex and Codex-to-Claude messaging is proven.
+- Automation uses Claude Code channels for Claude Code and a Codex app heartbeat for Codex.
 
 Remaining implementation choice:
 

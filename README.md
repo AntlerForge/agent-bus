@@ -94,6 +94,23 @@ While that session is running, any unread message addressed to `claude-code` wit
 Claude should then use the normal `agent-bus` MCP tools to acknowledge, reply, mark read,
 and update thread status.
 
+## Codex Heartbeat Setup
+
+Codex automatic response is handled by a Codex app heartbeat attached to the active Agent
+Bus setup thread:
+
+```text
+agent-bus-codex-inbox-watcher
+```
+
+The heartbeat checks `/Users/antonybarfoot/AgentBus/inbox/codex` every minute. When it finds
+an unread message with `requires_response: true`, it treats the message as delegated work:
+acknowledge, act using the current Codex context and tools, reply in the same thread, mark
+the inbound message read, and update the thread status.
+
+This keeps Codex in the visible managed Codex conversation rather than running a separate
+headless responder.
+
 ## First Workflow
 
 1. Claude writes a message to Codex using the MCP tool.
@@ -101,7 +118,8 @@ and update thread status.
 3. Codex replies into the same thread and updates the thread status if appropriate.
 4. Claude checks the reply and continues.
 
-Automation can be added after the file protocol and tool interface are proven manually.
+Automation is now split by side: Claude Code receives messages through
+`agent-bus-channel`; Codex wakes through the `agent-bus-codex-inbox-watcher` heartbeat.
 
 ## Development
 
