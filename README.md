@@ -19,8 +19,13 @@ Runtime mailbox data should live outside iCloud:
     claude/
     codex/
   threads/
+  shared/
   archive/
 ```
+
+Use `shared/` for artifacts that are too large or awkward to put directly in a message:
+draft documents, logs, screenshots, patches, JSON exports, and similar files. Mailbox
+messages should reference shared files by absolute path.
 
 Project source lives here:
 
