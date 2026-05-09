@@ -11,6 +11,9 @@ Before making the repository public:
 - [ ] Any screenshots or demo artifacts are deliberate examples, not private working files.
 - [ ] `README.md` and `docs/setup.md` describe generic setup.
 - [ ] License file is present and `package.json` license matches it.
+- [ ] GitHub Actions test workflow is present.
+- [ ] `SECURITY.md`, `SUPPORT.md`, and `CONTRIBUTING.md` are present.
+- [ ] A clean clone can run `./setup.sh` and `npm test`.
 
 Useful checks:
 

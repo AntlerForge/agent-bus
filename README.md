@@ -185,6 +185,9 @@ Run tests:
 npm test
 ```
 
+GitHub Actions runs the same test suite on Node.js 20 and 22 for pushes and pull
+requests.
+
 ## Companion Skills
 
 Repo source copies live in:
@@ -216,3 +219,11 @@ See `docs/one-page-agent-bus-guide.md` for a concise structure guide covering ag
 types, connector behavior, control flags, and targeting rules.
 
 See `docs/public-release-checklist.md` before making a private working copy public.
+
+## Support, Security, And Contributions
+
+This is maintained by one person with a full-time job. Feedback, issues, and pull
+requests are welcome, but I cannot promise response times or individual setup support.
+
+See `SUPPORT.md` for support expectations, `SECURITY.md` for the local trust model and
+safe-use guidance, and `CONTRIBUTING.md` for contribution notes.
