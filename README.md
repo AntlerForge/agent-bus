@@ -1,6 +1,19 @@
 # Agent Bus
 
-Local bridge for agent-to-agent messaging between Claude and Codex on macOS.
+Local-first bridge for agent-to-agent messaging between Claude, Codex, and other
+LLM agents on macOS.
+
+Agent Bus gives agents a shared mailbox, shared file area, durable threads, and simple
+operating rules. It is useful when you want one model to stay in charge of a project while
+delegating work to another model for a different strength, capability, or rate limit.
+
+Examples:
+
+- ask Codex to generate or edit an image for a Claude-led workflow;
+- ask Claude for an independent review of Codex's implementation;
+- hand off research, drafting, test runs, or critique between agents;
+- continue progressing a project when one provider's rate limit is tight;
+- keep a visible Markdown audit trail of what was asked, answered, blocked, or completed.
 
 The first design target is deliberately simple:
 
@@ -9,12 +22,30 @@ The first design target is deliberately simple:
 - each message has explicit sender, recipient, thread, status, and timestamps;
 - the file store remains readable and recoverable without any special tooling.
 
+## Quick Start
+
+```bash
+git clone https://github.com/AntlerForge/agent-bus.git
+cd agent-bus
+./setup.sh
+npm test
+```
+
+The setup script creates the runtime mailbox, installs dependencies if needed, writes an
+ignored local config file, and prints the exact Codex and Claude MCP commands for your
+machine.
+
+Both agents need access to the project folder and the runtime mailbox folder. If your
+agent host uses sandboxed folder grants, add both folders during setup. The `shared/`
+folder is the artifact exchange point for screenshots, drafts, logs, patches, images, and
+other files too large to inline in a message.
+
 ## Local Layout
 
 Runtime mailbox data should live outside iCloud:
 
 ```text
-/Users/antonybarfoot/AgentBus/
+~/AgentBus/
   inbox/
     claude/
     codex/
@@ -27,10 +58,10 @@ Use `shared/` for artifacts that are too large or awkward to put directly in a m
 draft documents, logs, screenshots, patches, JSON exports, and similar files. Mailbox
 messages should reference shared files by absolute path.
 
-Project source lives here:
+Project source lives wherever you cloned this repository:
 
 ```text
-/Users/antonybarfoot/Developer/personal/agent-bus/
+/path/to/agent-bus/
 ```
 
 ## Initial MCP Tools
@@ -59,7 +90,8 @@ Add this to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.agent-bus]
 command = "node"
-args = ["/Users/antonybarfoot/Developer/personal/agent-bus/src/server.mjs"]
+args = ["/path/to/agent-bus/src/server.mjs"]
+env = { AGENT_BUS_ROOT = "~/AgentBus" }
 ```
 
 Then restart or reload Codex so it discovers the MCP server.
@@ -69,7 +101,7 @@ Then restart or reload Codex so it discovers the MCP server.
 For Claude Code, add the MCP server at user scope:
 
 ```bash
-claude mcp add --transport stdio --scope user agent-bus -- node /Users/antonybarfoot/Developer/personal/agent-bus/src/server.mjs
+claude mcp add --transport stdio --scope user --env AGENT_BUS_ROOT="$HOME/AgentBus" agent-bus -- node /path/to/agent-bus/src/server.mjs
 ```
 
 Then restart or reload Claude as needed.
@@ -80,7 +112,7 @@ For automatic delivery into a running Claude Code session, also register the cha
 server:
 
 ```bash
-claude mcp add --transport stdio --scope user agent-bus-channel -- node /Users/antonybarfoot/Developer/personal/agent-bus/src/claude-channel.mjs
+claude mcp add --transport stdio --scope user --env AGENT_BUS_ROOT="$HOME/AgentBus" agent-bus-channel -- node /path/to/agent-bus/src/claude-channel.mjs
 ```
 
 Start Claude Code with the development channel enabled:
@@ -100,17 +132,39 @@ For symmetric automatic response on the Codex side, run the terminal bridge in a
 Terminal window:
 
 ```bash
-cd /Users/antonybarfoot/Developer/personal/agent-bus
-node src/codex-bridge.mjs --model gpt-5.4
+cd /path/to/agent-bus
+node src/codex-bridge.mjs --model gpt-5.2
 ```
 
-The bridge watches `/Users/antonybarfoot/AgentBus/inbox/codex`. When it finds an unread
-message with `requires_response: true`, it acknowledges the message, runs Codex CLI on the
-delegated task, writes the reply back to the sender, marks the inbound message read, and
-updates thread status.
+The bridge creates or resumes one persistent Codex CLI session and stores the session id
+in `~/AgentBus/_codex_bridge_session.json`. It watches
+`~/AgentBus/inbox/codex`. When it finds an unread message with
+`requires_response: true`, it acknowledges the message, resumes the same Codex session on
+the delegated task, writes the reply back to the sender, marks the inbound message read,
+and updates thread status.
+
+The same terminal also gives you a visible prompt:
+
+```text
+agent-bus>
+```
+
+Anything you type there is sent into the same persistent Codex session used for Claude
+messages, so you and Claude are both interacting with one responder context. Use
+`/session` to see the active session id and `/quit` to close the bridge. To initiate the
+other direction from this terminal, use:
+
+```text
+/send claude-code | Subject | Body
+```
+
+Use `--new-session` when you intentionally want to reset the bridge context.
 
 This is the Codex-side equivalent of the Claude Code terminal setup. It is not a Codex app
-chat injection API; it is a visible terminal bridge backed by Codex CLI.
+chat injection API; it is a visible terminal bridge backed by a persistent Codex CLI
+session. With the current installed Codex CLI, `gpt-5.2` is the working default. Newer
+models such as `gpt-5.4` or `gpt-5.5` can be selected with `--model` after the local Codex
+CLI supports them.
 
 ## First Workflow
 
@@ -143,10 +197,22 @@ skills/claude/agent-bus/SKILL.md
 Installed local copies live in:
 
 ```text
-/Users/antonybarfoot/.codex/skills/agent-bus/SKILL.md
-/Users/antonybarfoot/.claude/skills/agent-bus/SKILL.md
+~/.codex/skills/agent-bus/SKILL.md
+~/.claude/skills/agent-bus/SKILL.md
 ```
 
 The skills define Agent Bus operating behavior: actionable inbound messages should be
 acknowledged, handled, replied to, marked read, and given a thread status without asking
 the user what to do unless there is a real blocker.
+
+## User Guide
+
+See `docs/user-guide.md` for the full operator guide covering aims, setup, targeting,
+automatic responders, in-app chats, CLI sessions, and troubleshooting.
+
+See `docs/setup.md` for the generic installation and folder-access guide.
+
+See `docs/one-page-agent-bus-guide.md` for a concise structure guide covering agent
+types, connector behavior, control flags, and targeting rules.
+
+See `docs/public-release-checklist.md` before making a private working copy public.

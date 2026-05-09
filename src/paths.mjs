@@ -1,10 +1,24 @@
 import { mkdir } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
-export const DEFAULT_BUS_ROOT = "/Users/antonybarfoot/AgentBus";
+export const DEFAULT_BUS_ROOT = path.join(os.homedir(), "AgentBus");
+
+export function expandHome(inputPath) {
+  if (!inputPath) {
+    return inputPath;
+  }
+  if (inputPath === "~") {
+    return os.homedir();
+  }
+  if (inputPath.startsWith("~/")) {
+    return path.join(os.homedir(), inputPath.slice(2));
+  }
+  return inputPath;
+}
 
 export function getBusRoot() {
-  return path.resolve(process.env.AGENT_BUS_ROOT || DEFAULT_BUS_ROOT);
+  return path.resolve(expandHome(process.env.AGENT_BUS_ROOT) || DEFAULT_BUS_ROOT);
 }
 
 export function getPaths(root = getBusRoot()) {

@@ -21,7 +21,7 @@ Initial implementation:
 - Node.js MCP server using stdio transport.
 - Plain Markdown message and thread files.
 - JSON or YAML frontmatter for metadata.
-- Local filesystem storage under `/Users/antonybarfoot/AgentBus/`.
+- Local filesystem storage under `~/AgentBus/`.
 
 The server should avoid external services and heavy dependencies unless they clearly reduce
 implementation risk.
@@ -31,7 +31,7 @@ implementation risk.
 Proposed source layout:
 
 ```text
-/Users/antonybarfoot/Developer/personal/agent-bus/
+/path/to/agent-bus/
   README.md
   docs/
     user-requirements.md
@@ -61,7 +61,7 @@ Proposed source layout:
 Runtime data layout:
 
 ```text
-/Users/antonybarfoot/AgentBus/
+~/AgentBus/
   inbox/
     claude/
     codex/
@@ -94,7 +94,7 @@ idempotency_key: optional-client-supplied-key
 
 Please review the design in:
 
-/Users/antonybarfoot/AgentBus/shared/agent-bus-design.md
+~/AgentBus/shared/agent-bus-design.md
 ```
 
 Thread files should be append-only Markdown where possible:
@@ -212,7 +212,7 @@ Shared artifacts should be referenced through metadata, not only free text paths
 Initial artifact metadata can be stored in:
 
 ```text
-/Users/antonybarfoot/AgentBus/shared/_artifacts.json
+~/AgentBus/shared/_artifacts.json
 ```
 
 Each artifact record should include:
@@ -233,7 +233,7 @@ receives `artifact_paths`.
 
 ### Phase 1: Filesystem Foundation
 
-- Verify `/Users/antonybarfoot/AgentBus/` exists.
+- Verify `~/AgentBus/` exists.
 - Create missing runtime folders on server start.
 - Define message ID and thread ID conventions.
 - Define thread sequence/cursor conventions.
@@ -277,7 +277,7 @@ Exit criteria:
 ```toml
 [mcp_servers.agent-bus]
 command = "node"
-args = ["/Users/antonybarfoot/Developer/personal/agent-bus/src/server.mjs"]
+args = ["/path/to/agent-bus/src/server.mjs"]
 ```
 
 - Restart or reload Codex as required.
@@ -295,7 +295,7 @@ Exit criteria:
 Expected Claude Code command:
 
 ```bash
-claude mcp add --transport stdio --scope user agent-bus -- node /Users/antonybarfoot/Developer/personal/agent-bus/src/server.mjs
+claude mcp add --transport stdio --scope user --env AGENT_BUS_ROOT="$HOME/AgentBus" agent-bus -- node /path/to/agent-bus/src/server.mjs
 ```
 
 Exit criteria:
@@ -324,7 +324,7 @@ Exit criteria:
 Only after manual operation is reliable:
 
 - add a Claude Code channel server for mailbox notification;
-- add a Codex terminal bridge for Codex inbox notification;
+- add a persistent Codex terminal bridge for Codex inbox notification and user interaction;
 - consider a small local watcher if necessary.
 
 Exit criteria:
@@ -354,16 +354,24 @@ Exit criteria:
 ### Phase 9: Codex Terminal Bridge
 
 - Add `src/codex-bridge.mjs` as a visible terminal bridge backed by Codex CLI.
-- Check `/Users/antonybarfoot/AgentBus/inbox/codex` on a short local interval.
+- Create or resume one dedicated Codex CLI session and store its id in
+  `~/AgentBus/_codex_bridge_session.json`.
+- Send both Agent Bus messages and user terminal input into that same Codex session so
+  responder context persists.
+- Add a terminal `/send claude-code | Subject | Body` command for Codex-to-Claude Code
+  task initiation from the same visible bridge window.
+- Check `~/AgentBus/inbox/codex` on a short local interval.
 - Process only unread messages addressed to `codex` where `requires_response: true`.
-- Acknowledge, run Codex CLI on the delegated task, reply in-thread, mark read, and update
-  lifecycle status.
+- Acknowledge, resume the persistent Codex session on the delegated task, reply in-thread,
+  mark read, and update lifecycle status.
 - Default replies to `requires_response: false` to avoid loops.
 
 Exit criteria:
 
 - A Claude Code-to-Codex message is picked up by the Codex terminal bridge without the user
   asking Codex to check its inbox.
+- A second Claude Code-to-Codex message can rely on context established by the first
+  message or by user input typed into the bridge terminal.
 
 ## 8. Test Plan
 
@@ -404,7 +412,7 @@ Test MCP tool calls against a temporary mailbox root:
 
 ### Manual Acceptance Tests
 
-Run against `/Users/antonybarfoot/AgentBus/`:
+Run against `~/AgentBus/`:
 
 1. Claude sends Codex a plain text question.
 2. Codex reads and acknowledges the message.
@@ -412,14 +420,20 @@ Run against `/Users/antonybarfoot/AgentBus/`:
 3. Codex sends Claude a plain text question.
 4. Claude reads, acknowledges, and replies.
 5. A thread moves to `completed`.
-6. Claude shares a file via `/Users/antonybarfoot/AgentBus/shared/`.
+6. Claude shares a file via `~/AgentBus/shared/`.
 7. Codex opens or references that shared file.
 8. User manually opens the thread file and can understand the exchange.
 9. Start Claude Code with `--dangerously-load-development-channels server:agent-bus-channel`.
 10. Codex sends Claude Code a `requires_response: true` message.
 11. Claude receives the channel event in the active session and replies through Agent Bus.
 12. Claude Code sends Codex a `requires_response: true` message.
-13. The Codex terminal bridge wakes, runs Codex CLI, and replies through Agent Bus.
+13. The Codex terminal bridge wakes, resumes its persistent Codex session, and replies
+    through Agent Bus.
+14. Type a short fact into the `agent-bus>` prompt, then send a Claude Code-to-Codex
+    message asking Codex to recall it; Codex should answer from the same persistent
+    session context.
+15. Use `/send claude-code | Smoke | Reply with received` from the Codex bridge terminal
+    and confirm Claude Code receives it through the channel.
 
 ### Failure Tests
 
@@ -443,11 +457,11 @@ The following decisions are locked for the first implementation:
 - `reply` requires explicit `from` and `to` fields.
 - Thread IDs are opaque IDs such as `thread_20260424_123456_ab12`; subject is stored separately.
 - Thread sequence state lives in the thread file frontmatter as `next_seq`.
-- Shared artifacts use one manifest at `/Users/antonybarfoot/AgentBus/shared/_artifacts.json`.
+- Shared artifacts use one manifest at `~/AgentBus/shared/_artifacts.json`.
 - Secret detection blocks obvious secrets with a clear tool error.
 - Advisory file reservations are deferred until after Milestone 1.
-- Automation uses Claude Code channels for Claude Code and a Codex terminal bridge for
-  Codex.
+- Automation uses Claude Code channels for Claude Code and a persistent Codex terminal
+  bridge for Codex.
 
 Remaining implementation choice:
 
@@ -464,13 +478,13 @@ artifact metadata, and no automation required.
 Install the Codex operating skill at:
 
 ```text
-/Users/antonybarfoot/.codex/skills/agent-bus/SKILL.md
+~/.codex/skills/agent-bus/SKILL.md
 ```
 
 Install the Claude operating skill at:
 
 ```text
-/Users/antonybarfoot/.claude/skills/agent-bus/SKILL.md
+~/.claude/skills/agent-bus/SKILL.md
 ```
 
 These skills tell each agent how to interpret Agent Bus messages. In particular, they

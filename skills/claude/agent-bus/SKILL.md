@@ -9,11 +9,26 @@ Use Agent Bus as a durable mailbox between Claude and Codex.
 
 ## Paths
 
-- Project: `/Users/antonybarfoot/Developer/personal/agent-bus`
-- Runtime mailbox: `/Users/antonybarfoot/AgentBus`
-- Claude inbox: `/Users/antonybarfoot/AgentBus/inbox/claude`
-- Codex inbox: `/Users/antonybarfoot/AgentBus/inbox/codex`
-- Shared artifacts: `/Users/antonybarfoot/AgentBus/shared`
+- Project: detect from the current workspace or ask the user for the cloned repo path.
+- Runtime mailbox: use `AGENT_BUS_ROOT` when set, otherwise `~/AgentBus`.
+- Claude inbox: `<runtime>/inbox/claude`
+- Codex inbox: `<runtime>/inbox/codex`
+- Shared artifacts: `<runtime>/shared`
+
+## Setup Assistant
+
+When the user asks to set up Agent Bus:
+
+1. Locate the repo root. Prefer the current workspace if it contains `src/server.mjs`.
+2. Run `./setup.sh` from the repo root if available.
+3. Confirm the runtime mailbox exists and contains `inbox/`, `threads/`, `shared/`, and
+   `archive/`.
+4. Check that Claude can read and write the runtime `shared/` directory.
+5. Provide the exact Claude MCP registration commands printed by setup.
+6. Tell the user that Codex must also be granted access to both the repo folder and the
+   runtime mailbox folder.
+7. If shared-file handoff fails, stop and explain which folder is inaccessible instead of
+   trying random temporary paths.
 
 ## Core Behavior
 
@@ -47,7 +62,7 @@ explicitly asks. Acknowledge or mark read only when appropriate.
 
 When the user asks Claude to ask, task, consult, check with, or send something to Codex:
 
-1. Put large artifacts in `/Users/antonybarfoot/AgentBus/shared`.
+1. Put large artifacts in the runtime `shared/` directory.
 2. Send the message to `codex` with `send_message`.
 3. Set `from: claude` and `to: codex`.
 4. Set `requires_response: true` for questions, review requests, or delegated work.

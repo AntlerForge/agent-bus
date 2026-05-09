@@ -45,13 +45,16 @@ function runBridge(args) {
 test("codex bridge processes an actionable inbox message with a fake Codex CLI", async () => {
   await withBusRoot(async (root) => {
     const fakeCodex = path.join(root, "fake-codex.mjs");
+    const fakeRun = path.join(root, "fake-codex-run.json");
     await writeFile(
       fakeCodex,
       [
         "#!/usr/bin/env node",
+        "import { writeFileSync } from 'node:fs';",
         "let input = '';",
         "process.stdin.on('data', (chunk) => { input += chunk.toString(); });",
         "process.stdin.on('end', () => {",
+        `  writeFileSync(${JSON.stringify(fakeRun)}, JSON.stringify({ args: process.argv.slice(2), input }, null, 2));`,
         "  if (!input.includes('Bridge acceptance')) process.exit(2);",
         "  console.log(JSON.stringify({id:'0', msg:{type:'task_started'}}));",
         "  console.log(JSON.stringify({id:'0', msg:{type:'agent_message', message:'Bridge reply body'}}));",
@@ -72,7 +75,7 @@ test("codex bridge processes an actionable inbox message with a fake Codex CLI",
       root,
     );
 
-    await runBridge(["--once", "--root", root, "--codex-command", fakeCodex]);
+    await runBridge(["--once", "--root", root, "--codex-command", fakeCodex, "--session-id", "fake-session"]);
 
     const codexMessages = await readInbox({ agent: "codex", include_read: true }, root);
     const inbound = codexMessages.find((message) => message.message_id === sent.message_id);
@@ -86,7 +89,65 @@ test("codex bridge processes an actionable inbox message with a fake Codex CLI",
     const threads = await listThreads(root);
     assert.equal(threads.find((thread) => thread.thread_id === sent.thread_id).status, "completed");
 
-    const prompt = await readFile(fakeCodex, "utf8");
-    assert.match(prompt, /agent_message/);
+    const fakeRunData = JSON.parse(await readFile(fakeRun, "utf8"));
+    assert.match(fakeRunData.input, /Agent Bus inbound message/);
+    assert.match(fakeRunData.input, /Bridge acceptance/);
+    assert.deepEqual(fakeRunData.args.slice(0, 2), ["-a", "never"]);
+    assert.ok(fakeRunData.args.includes("resume"));
+    assert.ok(fakeRunData.args.includes("fake-session"));
+  });
+});
+
+test("codex bridge bootstraps and stores a persistent session id", async () => {
+  await withBusRoot(async (root) => {
+    const fakeCodexHome = path.join(root, "fake-codex-home");
+    const fakeSessionFile = path.join(
+      fakeCodexHome,
+      "sessions",
+      "2026",
+      "04",
+      "24",
+      "rollout-2026-04-24T22-00-00-fake-created-session.jsonl",
+    );
+    const fakeCodex = path.join(root, "fake-codex-bootstrap.mjs");
+    const sessionStore = path.join(root, "session-store.json");
+    await writeFile(
+      fakeCodex,
+      [
+        "#!/usr/bin/env node",
+        "import { mkdirSync, writeFileSync } from 'node:fs';",
+        "import { dirname } from 'node:path';",
+        "let input = '';",
+        "process.stdin.on('data', (chunk) => { input += chunk.toString(); });",
+        "process.stdin.on('end', () => {",
+        "  if (!input.includes('persistent Codex responder')) process.exit(2);",
+        `  const sessionFile = ${JSON.stringify(fakeSessionFile)};`,
+        "  mkdirSync(dirname(sessionFile), { recursive: true });",
+        "  const meta = { timestamp: new Date().toISOString(), type: 'session_meta', payload: { id: 'fake-created-session', timestamp: new Date().toISOString(), cwd: process.cwd(), originator: 'fake-codex', cli_version: 'test' } };",
+        "  writeFileSync(sessionFile, `${JSON.stringify(meta)}\\n`);",
+        "  console.log(JSON.stringify({id:'0', msg:{type:'task_started'}}));",
+        "  console.log(JSON.stringify({id:'0', msg:{type:'agent_message', message:'CODEX_BRIDGE_SESSION_READY'}}));",
+        "});",
+      ].join("\n"),
+      "utf8",
+    );
+    await chmod(fakeCodex, 0o755);
+
+    await runBridge([
+      "--once",
+      "--root",
+      root,
+      "--codex-command",
+      fakeCodex,
+      "--codex-home",
+      fakeCodexHome,
+      "--session-store",
+      sessionStore,
+      "--new-session",
+    ]);
+
+    const stored = JSON.parse(await readFile(sessionStore, "utf8"));
+    assert.equal(stored.session_id, "fake-created-session");
+    assert.equal(stored.session_file, fakeSessionFile);
   });
 });

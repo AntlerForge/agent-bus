@@ -24,6 +24,7 @@ Existing local agent buses such as MCP Agent Mail and AgentChatBus show that the
 coordination problems are broader than send/read/reply:
 
 - agents need persistent or semi-persistent identities;
+- automated responders need persistent context, not one fresh model turn per message;
 - messages need targeted recipients, subjects, threads, and acknowledgments;
 - polling needs cursors or monotonic sequence numbers;
 - operators need a way to see who is active and what is blocked;
@@ -45,6 +46,7 @@ The initial requirements were a good first shape but under-specified these adjac
 8. Path/root validation and secret detection.
 9. Optional advisory file reservations for future multi-agent coding.
 10. Audit trail for lifecycle changes and message edits.
+11. Persistent responder context for automated agent endpoints.
 
 ## Updates Applied
 
@@ -57,6 +59,7 @@ The user requirements and implementation/test plan were updated to include:
 - operator visibility requirements;
 - stronger reliability and security requirements;
 - future advisory file reservation requirements;
+- persistent Claude Code and Codex-side responder context requirements;
 - expanded implementation phases and tests.
 
 ## Sources

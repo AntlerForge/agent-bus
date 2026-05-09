@@ -14,7 +14,7 @@ files.
 
 Primary user:
 
-- Tony, using Claude and Codex on macOS.
+- A user running Claude, Codex, or other local agent workflows on macOS.
 
 Participating agents:
 
@@ -35,7 +35,7 @@ Agent Bus shall:
 - support shared artifacts such as logs, screenshots, documents, patches, and JSON files;
 - store messages and threads as Markdown so the user can inspect and recover them manually;
 - keep runtime mailbox data outside iCloud;
-- keep project source in a local Git repository under `~/Developer/personal/`;
+- keep project source in a local Git repository outside the runtime mailbox;
 - support later automation without requiring it for the first working version.
 
 ## 4. Non-Goals
@@ -69,7 +69,7 @@ The system should make the file paths clear when artifacts are involved. For exa
 
 ```text
 Please review:
-/Users/antonybarfoot/AgentBus/shared/mcp-design-draft.md
+~/AgentBus/shared/mcp-design-draft.md
 ```
 
 ## 6. Local Storage Requirements
@@ -77,7 +77,7 @@ Please review:
 Runtime data shall be stored at:
 
 ```text
-/Users/antonybarfoot/AgentBus/
+~/AgentBus/
   inbox/
     claude/
     codex/
@@ -89,7 +89,7 @@ Runtime data shall be stored at:
 Project source shall be stored at:
 
 ```text
-/Users/antonybarfoot/Developer/personal/agent-bus/
+/path/to/agent-bus/
 ```
 
 The GitHub repository shall be:
@@ -230,8 +230,18 @@ The same version shall support automated initiation into a visible Codex termina
 
 - Claude Code sends a message to `codex` with `requires_response: true`;
 - a Codex terminal bridge checks the Codex inbox on a short local interval;
-- the bridge runs Codex CLI to handle the task with local repository and shell access;
-- Codex replies through the normal Agent Bus MCP tools.
+- the bridge creates or resumes one dedicated Codex CLI session and reuses that same
+  session for every Agent Bus turn;
+- the bridge exposes a visible terminal prompt where the user can talk to the same Codex
+  session that Claude is messaging;
+- the bridge exposes a simple terminal send command so the user can initiate a
+  Codex-to-Claude Code Agent Bus task from the same visible terminal;
+- the persistent Codex session handles the task with local repository and shell access;
+- the bridge writes Codex's reply through the normal Agent Bus mailbox operations.
+
+The Codex bridge shall not start from a blank model context for every message. It shall
+preserve responder context through the dedicated Codex session id stored under the Agent
+Bus runtime folder.
 
 Later versions should support broader automated initiation:
 
