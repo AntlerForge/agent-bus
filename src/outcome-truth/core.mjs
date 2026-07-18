@@ -54,6 +54,7 @@ export function applyEvaluation({ matrix, snapshot, previous = {}, now = new Dat
       prior.status = "closed";
       prior.recovered_at = now;
       prior.last_seen = now;
+      prior.actual = result.actual;
       transitions.push({ type: "recovered", card: prior, notify: true });
     }
   }

@@ -27,6 +27,7 @@ test("cards deduplicate and close only after semantic recovery", () => {
   const recovered = applyEvaluation({ matrix, snapshot: healthy, previous: repeated.cards, now: "2026-07-18T12:30:00Z", shadowStartedAt: "2026-07-18T12:00:00Z" });
   assert.equal(recovered.transitions.filter((t) => t.type === "recovered").length, 8);
   assert.equal(Object.values(recovered.cards).every((c) => c.status === "closed"), true);
+  assert.equal(recovered.cards[cardId(matrix.matrix_id,"kv-doctor-overall")].actual, "pass");
   assert.equal(recovered.transitions.every((t) => t.notify), true);
 });
 
