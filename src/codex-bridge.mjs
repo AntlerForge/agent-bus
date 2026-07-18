@@ -139,6 +139,7 @@ async function registerHeartbeat(options) {
 async function handleMessage(message, options, session) {
   log(`Handling ${message.message_id} from ${message.from}: ${message.subject}`);
   await ackMessage({ message_id: message.message_id }, options.root);
+  let providerCompleted = false;
 
   try {
     const remote = configuredRemoteBus();
@@ -148,10 +149,11 @@ async function handleMessage(message, options, session) {
         ? remote.materializeMessageArtifacts(message, path.join(path.dirname(options.sessionStore), "artifacts", message.thread_id))
         : Promise.resolve((message.artifact_paths || []).map((artifactPath) => ({ local_path: artifactPath, filename: path.basename(artifactPath) }))),
     ]);
-    const rawReply = await runPersistentTurn(buildAgentBusPrompt(message, thread.body, options, artifacts), options, session, log);
+    const rawReply = await runPersistentTurn(buildAgentBusPrompt(message, thread.body, options, artifacts), options, session, log, { messageId: message.message_id });
     if (!rawReply) {
       throw new Error("Codex produced an empty reply.");
     }
+    providerCompleted = true;
 
     const { status, body } = parseResponseStatus(rawReply);
     const reply = await replyMessage(
@@ -168,23 +170,22 @@ async function handleMessage(message, options, session) {
     await updateThreadStatus({ thread_id: message.thread_id, status }, options.root);
     log(`Replied with ${reply.message_id}; set ${message.thread_id} to ${status}.`);
   } catch (error) {
+    if (providerCompleted) {
+      log(`Completed reply for ${message.message_id} was not delivered; leaving it unread for durable replay: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
     const body = [
       "Codex bridge failed while processing this Agent Bus message.",
       "",
       error instanceof Error ? error.message : String(error),
     ].join("\n");
-    await replyMessage(
-      {
-        from: "codex",
-        to: message.from,
-        thread_id: message.thread_id,
-        body,
-        requires_response: false,
-      },
-      options.root,
-    );
-    await markRead({ message_id: message.message_id }, options.root);
-    await updateThreadStatus({ thread_id: message.thread_id, status: "failed" }, options.root);
+    try {
+      await replyMessage({ from: "codex", to: message.from, thread_id: message.thread_id, body, requires_response: false }, options.root);
+      await markRead({ message_id: message.message_id }, options.root);
+      await updateThreadStatus({ thread_id: message.thread_id, status: "failed" }, options.root);
+    } catch (deliveryError) {
+      log(`Failure reply could not be delivered; leaving ${message.message_id} unread for durable retry: ${deliveryError instanceof Error ? deliveryError.message : String(deliveryError)}`);
+    }
     log(`Failed ${message.message_id}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }

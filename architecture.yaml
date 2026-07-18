@@ -64,6 +64,29 @@ properties:
 ---
 apiVersion: arch.kv/v1
 kind: Component
+id: ha-notification-channel
+namespace: project:agent-bus
+title: "Home Assistant notification and approval channel"
+description: |
+  Does: send deduplicated ALERT/APPROVAL/INFO mobile notifications and capture stable-id
+  actionable responses on A6. Does not: own approval authority, store HA credentials,
+  expose the control plane to the LAN or modify Home Assistant configuration.
+owner: tony
+status: active
+properties:
+  path: "scripts/ha-notify-tony.mjs"
+  tech: "Node.js, Home Assistant REST and WebSocket APIs"
+  responsibilities:
+    - "Deliver visually distinct notifications using stable idempotency identifiers"
+    - "Capture YES/NO mobile actions into bounded A6 runtime records"
+  non_responsibilities:
+    - "Work-item approval decisions or Home Assistant configuration ownership"
+relations:
+  - to: DataStore:project:agent-bus/bus-runtime-files
+    type: writes-to
+---
+apiVersion: arch.kv/v1
+kind: Component
 id: agent-directory
 namespace: project:agent-bus
 title: "Agent Directory"

@@ -1,0 +1,21 @@
+[Unit]
+Description=Agent Bus Home Assistant approval response listener
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ajbarfoot
+Group=ajbarfoot
+WorkingDirectory=/srv/projects/Personal/agent-bus/app
+ExecStart=/usr/bin/node /srv/projects/Personal/agent-bus/app/scripts/ha-approval-listener.mjs
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/srv/projects/Personal/agent-bus/runtime/ha-notify
+
+[Install]
+WantedBy=multi-user.target

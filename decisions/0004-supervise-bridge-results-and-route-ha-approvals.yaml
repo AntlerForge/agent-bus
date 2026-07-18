@@ -1,0 +1,27 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0004-supervise-bridge-results-and-route-ha-approvals
+namespace: project:agent-bus
+title: "Persist provider turn results and route approvals through Home Assistant"
+status: active
+owner: tony
+properties:
+  date: 2026-07-18
+  component: agent-adapters
+  tags: [bridge-recovery, home-assistant, approvals, stage-0]
+  context: |
+    Tony approved Home Assistant as the programme alert channel. A Codex CLI wrapper also
+    exited while its native worker survived, causing a false bridge failure and losing the
+    provider reply path held in a temporary directory.
+  decision: |
+    Persist each Codex provider result by Agent Bus message id and, on wrapper failure,
+    observe the provider session/output before declaring failure. Retry delivery from the
+    durable result. Send HA mobile notifications from A6 with atomic stable-id claims and
+    capture one-tap responses through an A6 WebSocket listener. Do not change HA YAML or
+    expose the A6 control plane beyond localhost.
+  consequences:
+    positive: "Provider replies survive wrapper/delivery faults and approvals reach Tony in one tap."
+    negative: "A small always-on A6 HA event listener and bounded runtime state are added."
+    neutral: "HA credentials remain in the existing external env file and message transport remains separate from work authority."
+  supersedes: null
+  superseded_by: null

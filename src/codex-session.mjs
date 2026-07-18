@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { readJsonFile, writeJsonFileAtomic } from "./io.mjs";
@@ -118,9 +118,38 @@ function buildCodexArgs(options, outputFile, sessionId) {
   return args;
 }
 
-async function runCodexProcess(prompt, options, sessionId = null, log = () => {}) {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "agent-bus-codex-"));
-  const outputFile = path.join(tempDir, "last-message.txt");
+async function readIfPresent(filePath) {
+  try { return await readFile(filePath, "utf8"); } catch (error) { if (error.code === "ENOENT") return ""; throw error; }
+}
+
+async function recoverDetachedTurn({ outputFile, sessionFile, closedAt, options, log }) {
+  const timeoutMs = Number(options.detachedRecoveryTimeoutMs || 10 * 60 * 1000);
+  const quietMs = Number(options.detachedQuietMs || 15 * 1000);
+  const deadline = Date.now() + timeoutMs;
+  let lastAdvance = closedAt;
+  let previousMtime = 0;
+  while (Date.now() < deadline) {
+    const reply = (await readIfPresent(outputFile)).trim();
+    if (reply) return reply;
+    if (sessionFile) {
+      try {
+        const current = (await stat(sessionFile)).mtimeMs;
+        if (current > previousMtime) { previousMtime = current; lastAdvance = Date.now(); }
+      } catch (error) { if (error.code !== "ENOENT") throw error; }
+    }
+    if (Date.now() - lastAdvance > quietMs) break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  log("Detached Codex worker did not produce a durable reply before becoming quiet.");
+  return "";
+}
+
+async function runCodexProcess(prompt, options, sessionId = null, log = () => {}, runRef = null) {
+  const tempDir = runRef ? null : await mkdtemp(path.join(os.tmpdir(), "agent-bus-codex-"));
+  const resultDir = runRef ? path.join(path.dirname(options.sessionStore), "results", runRef) : tempDir;
+  await mkdir(resultDir, { recursive: true });
+  const outputFile = path.join(resultDir, "last-message.txt");
+  const resultFile = path.join(resultDir, "turn-result.json");
   const childArgs = buildCodexArgs(options, outputFile, sessionId);
 
   return new Promise((resolve, reject) => {
@@ -173,21 +202,19 @@ async function runCodexProcess(prompt, options, sessionId = null, log = () => {}
 
     child.on("error", reject);
     child.on("close", async (code) => {
-      let outputFileBody = "";
-      try {
-        outputFileBody = await readFile(outputFile, "utf8");
-      } catch (error) {
-        if (error.code !== "ENOENT") {
-          await rm(tempDir, { recursive: true, force: true });
-          reject(error);
-          return;
-        }
+      let outputFileBody = await readIfPresent(outputFile);
+      if (code !== 0 && !lastAgentMessage && !outputFileBody.trim()) {
+        log(`Codex wrapper exited ${code}; checking durable worker/session progress before declaring failure.`);
+        outputFileBody = await recoverDetachedTurn({ outputFile, sessionFile: options.sessionFile, closedAt: Date.now(), options, log });
       }
-
-      await rm(tempDir, { recursive: true, force: true });
+      if (tempDir) await rm(tempDir, { recursive: true, force: true });
       const reply = (lastAgentMessage || outputFileBody).trim();
 
-      if (code !== 0) {
+      if (runRef && reply) {
+        await writeJsonFileAtomic(resultFile, { run_ref: runRef, status: code === 0 ? "completed" : "recovered", exit_code: code, reply, completed_at: now() });
+      }
+
+      if (code !== 0 && !reply) {
         reject(new Error(`codex exited ${code}: ${stderr.trim() || stdout.trim()}`));
         return;
       }
@@ -297,8 +324,17 @@ async function saveSessionTouch(options, session) {
   await writeJsonFileAtomic(options.sessionStore, session);
 }
 
-export async function runPersistentTurn(prompt, options, session, log = () => {}) {
-  const result = await runCodexProcess(prompt, options, session.session_id, log);
+export async function runPersistentTurn(prompt, options, session, log = () => {}, { messageId = null } = {}) {
+  const runRef = messageId;
+  const resultFile = runRef ? path.join(path.dirname(options.sessionStore), "results", runRef, "turn-result.json") : null;
+  if (resultFile) {
+    const recovered = await readJsonFile(resultFile, null);
+    if (recovered?.reply && ["completed", "recovered"].includes(recovered.status)) {
+      log(`Recovering durable completed turn for ${runRef}.`);
+      return recovered.reply;
+    }
+  }
+  const result = await runCodexProcess(prompt, { ...options, sessionFile: session.session_file }, session.session_id, log, runRef);
   await saveSessionTouch(options, session);
   return result.reply;
 }

@@ -151,3 +151,27 @@ test("codex bridge bootstraps and stores a persistent session id", async () => {
     assert.equal(stored.session_file, fakeSessionFile);
   });
 });
+
+test("codex bridge recovers a durable reply when the CLI wrapper exits before its worker", async () => {
+  await withBusRoot(async (root) => {
+    const fakeCodex = path.join(root, "fake-detached-wrapper.mjs");
+    const sessionStore = path.join(root, "bridge-state", "sessions.json");
+    await writeFile(fakeCodex, [
+      "#!/usr/bin/env node",
+      "import { spawn } from 'node:child_process';",
+      "const args = process.argv.slice(2);",
+      "const output = args[args.indexOf('--output-last-message') + 1];",
+      "const script = `setTimeout(() => require('node:fs').writeFileSync(${JSON.stringify('${OUTPUT}')}, 'Recovered worker reply'), 200)`;".replace("${OUTPUT}", "' + output + '"),
+      "spawn(process.execPath, ['-e', script], { detached: true, stdio: 'ignore' }).unref();",
+      "process.exit(2);",
+    ].join("\n"), "utf8");
+    await chmod(fakeCodex, 0o755);
+    const sent = await sendMessage({ from: "claude-code", to: "codex", subject: "Detached worker", body: "Recover this reply.", requires_response: true }, root);
+    await runBridge(["--once", "--root", root, "--codex-command", fakeCodex, "--session-id", "fake-session", "--session-store", sessionStore]);
+    const replies = await readInbox({ agent: "claude-code", include_read: true }, root);
+    assert.equal(replies[0].body, "# Detached worker\n\nRecovered worker reply");
+    const result = JSON.parse(await readFile(path.join(path.dirname(sessionStore), "results", sent.message_id, "turn-result.json"), "utf8"));
+    assert.equal(result.status, "recovered");
+    assert.equal(result.reply, "Recovered worker reply");
+  });
+});
