@@ -273,6 +273,8 @@ export function createControlPlane({
         return sendJson(response, 200, await updateThreadStatus({
           thread_id: decodeURIComponent(threadStatus[1]),
           status: body.status,
+          reason: body.reason,
+          actor: body.actor,
         }, root));
       }
       if (request.method === "GET" && pathname === "/api/v1/usage") {

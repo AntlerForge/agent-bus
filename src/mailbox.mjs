@@ -291,9 +291,9 @@ export async function markRead({ message_id }, root) {
   return { message_id, status: "read", read, file: message.filePath };
 }
 
-export async function updateThreadStatus({ thread_id, status }, root) {
+export async function updateThreadStatus({ thread_id, status, reason = null, actor = null }, root) {
   const remote = configuredRemoteBus();
-  if (remote) return remote.updateThreadStatus({ thread_id, status });
+  if (remote) return remote.updateThreadStatus({ thread_id, status, reason, actor });
   if (!ALLOWED_STATUSES.has(status)) {
     throw new Error(`Unsupported thread status: ${status}`);
   }
@@ -302,9 +302,10 @@ export async function updateThreadStatus({ thread_id, status }, root) {
   const updated = nowIso();
   thread.data.status = status;
   thread.data.updated = updated;
-  const body = `${thread.body.trimEnd()}\n\n_Status changed to ${status} at ${updated}._\n`;
+  const audit = reason ? ` Reason: ${String(reason).trim()}${actor ? ` (actor: ${String(actor).trim()})` : ""}.` : "";
+  const body = `${thread.body.trimEnd()}\n\n_Status changed to ${status} at ${updated}._${audit}\n`;
   await writeThread(thread.filePath, thread.data, body);
-  return { thread_id, status, updated, file: thread.filePath };
+  return { thread_id, status, updated, reason: reason || null, actor: actor || null, file: thread.filePath };
 }
 
 export async function listThreads(root) {

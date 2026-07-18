@@ -1,4 +1,4 @@
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
@@ -19,19 +19,34 @@ export async function writeJsonFileAtomic(filePath, value) {
 }
 
 export async function writeFileAtomic(filePath, content) {
-  const tempPath = path.join(
-    path.dirname(filePath),
-    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
-  );
-  await writeFile(tempPath, content, "utf8");
-  await rename(tempPath, filePath);
+  await writeAtomic(filePath, content, "utf8");
 }
 
 export async function writeBufferAtomic(filePath, content) {
-  const tempPath = path.join(
-    path.dirname(filePath),
-    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
-  );
-  await writeFile(tempPath, content);
-  await rename(tempPath, filePath);
+  await writeAtomic(filePath, content);
+}
+
+async function writeAtomic(filePath, content, encoding) {
+  const directory = path.dirname(filePath);
+  await mkdir(directory, { recursive: true });
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const tempPath = path.join(directory, `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);
+    try {
+      const handle = await open(tempPath, "wx", 0o600);
+      try {
+        await handle.writeFile(content, encoding ? { encoding } : undefined);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      await rename(tempPath, filePath);
+      return;
+    } catch (error) {
+      lastError = error;
+      await unlink(tempPath).catch(() => {});
+      if (error.code !== "ENOENT" || attempt === 3) throw error;
+    }
+  }
+  throw lastError;
 }

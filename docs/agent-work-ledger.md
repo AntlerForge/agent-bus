@@ -31,6 +31,21 @@ Agent availability is derived from active assignments rather than manually asser
 
 ## Status model
 
+### Outcome-contract integrity
+
+- Unknown provider usage is stored as `null`, never inferred as zero. Zero is valid only
+  when a provider explicitly reports zero. Aggregate usage stays unknown while any included
+  run is unknown and exposes an `unknown_runs` count.
+- Every completion receipt supplies at least one structured evidence claim with
+  `target_state` (what is now true), `location` (where to inspect it), and `verify` (an exact
+  read-only verification command or procedure). Process exit alone is not evidence.
+- Proposal creation computes a normalized intent signature and compares it with open work.
+  A likely replay is retained as a canceled audit record pointing to the accepted item.
+  `duplicate_override: true` is the explicit escape hatch for legitimately repeated work.
+- `npm run state:lint` deterministically reports active runs beneath terminal/review work,
+  stale active runs, ambiguous historical zero usage, and stale non-terminal threads.
+  `AGENT_BUS_STATE_STALE_HOURS` controls the stale threshold (default 24 hours).
+
 Work item states are deliberately small:
 
 ```text

@@ -21,6 +21,7 @@
     "dashboard": "node src/control-plane/server.mjs",
     "bridge:test": "node scripts/bridge-roundtrip.mjs",
     "selector:check": "node src/model-selector-check.mjs",
+    "state:lint": "node src/state-lint.mjs",
     "test": "node --test"
   },
   "repository": {

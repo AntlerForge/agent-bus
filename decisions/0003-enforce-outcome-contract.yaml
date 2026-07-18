@@ -1,0 +1,28 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0003-enforce-outcome-contract
+namespace: project:agent-bus
+title: "Enforce honest usage and verifiable outcomes at the ledger boundary"
+status: active
+owner: tony
+properties:
+  date: 2026-07-18
+  component: work-ledger
+  tags: [outcome-contract, usage, evidence, deduplication, state-integrity]
+  context: |
+    Tony approved Automation Portfolio v1 Stage 0 on 2026-07-18. Existing runs encoded
+    unknown usage as zero, receipts could contain process-only claims, duplicate intents
+    could be accepted repeatedly, and stale transport/run states required manual discovery.
+  decision: |
+    Unknown usage is null end-to-end. Receipt evidence is structured as target_state,
+    location and verify. New work intents are compared with open items and duplicates are
+    retained as canceled audit records unless explicitly overridden. A deterministic lint
+    reports impossible and stale ledger/thread states. Atomic state writes retry the ENOENT
+    rename failure class with fresh private temporary files.
+  consequences:
+    positive: "Usage, outcomes, duplicate warnings and state corrections become machine-verifiable."
+    negative: "Receipt and proposal clients must use the stricter v2 evidence/intent contract."
+    neutral: "Message delivery remains owned by Agent Bus and is not treated as work completion."
+  alternatives: |
+    Documentation-only warnings were rejected because existing bad records proved that
+    conventions alone do not preserve outcome truth.

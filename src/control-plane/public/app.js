@@ -16,7 +16,7 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 }
 function formatStatus(value) { return String(value || "unknown").replaceAll("_", " "); }
-function formatNumber(value) { return new Intl.NumberFormat().format(Number(value || 0)); }
+function formatNumber(value) { return value === null || value === undefined ? "Unknown" : new Intl.NumberFormat().format(Number(value)); }
 function formatDate(value) { return value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "Never"; }
 function badge(status) { return `<span class="badge ${escapeHtml(status)}">${escapeHtml(formatStatus(status))}</span>`; }
 function initials(name) { return String(name || "?").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(); }

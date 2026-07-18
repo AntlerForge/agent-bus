@@ -4,6 +4,7 @@ import { makeId, nowIso } from "../ids.mjs";
 import { writeFileAtomic } from "../io.mjs";
 import { parseMarkdownWithFrontmatter, stringifyMarkdownWithFrontmatter } from "../markdown.mjs";
 import { ensureBusLayout } from "../paths.mjs";
+import { findDuplicateIntent } from "./intent.mjs";
 
 export const WORK_STATUSES = ["proposed", "ready", "in_progress", "blocked", "review", "done", "canceled"];
 export const RUN_STATUSES = [
@@ -176,6 +177,7 @@ export async function createWorkItem(
     review_policy = "none",
     acceptance_criteria = [],
     tags = [],
+    duplicate_override = false,
   },
   root,
 ) {
@@ -191,6 +193,8 @@ export async function createWorkItem(
   }
 
   const paths = await ensureBusLayout(root);
+  const existingItems = await listWorkItems({}, root);
+  const intent = findDuplicateIntent({ title, objective }, existingItems);
   const workItemId = makeId("work");
   const files = itemPaths(paths, workItemId);
   await mkdir(files.directory, { recursive: false });
@@ -201,7 +205,7 @@ export async function createWorkItem(
     work_item_id: workItemId,
     title: cleanText(title, "title"),
     objective: cleanText(objective, "objective"),
-    status: "proposed",
+    status: intent.duplicate && !duplicate_override ? "canceled" : "proposed",
     human_owner: cleanText(human_owner, "human_owner"),
     proposed_by: cleanText(proposed_by, "proposed_by"),
     source_ref: cleanText(source_ref, "source_ref"),
@@ -218,13 +222,21 @@ export async function createWorkItem(
     runs: [],
     reviews: [],
     receipt_ref: null,
+    intent_guard: {
+      signature: intent.signature,
+      accepted: !intent.duplicate || Boolean(duplicate_override),
+      duplicate_of: intent.duplicate?.work_item_id || null,
+      similarity: intent.duplicate?.score ?? null,
+      override: Boolean(duplicate_override),
+    },
     created_at: createdAt,
     updated_at: createdAt,
   };
   await writeStoredWorkItem(item);
   await appendEvent(files, eventRecord(workItemId, "work_item_created", item.proposed_by, {
-    status: "proposed",
+    status: item.status,
     source_ref: item.source_ref,
+    intent_guard: item.intent_guard,
   }));
   return publicWorkItem(item);
 }
@@ -335,7 +347,7 @@ export async function startRun(
       status: "running",
       started_at: nowIso(),
       updated_at: nowIso(),
-      usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_cost: null },
+      usage: { input_tokens: null, output_tokens: null, total_tokens: null, estimated_cost: null },
     };
     item.runs.push(run);
     if (item.status !== "in_progress") {
@@ -364,16 +376,17 @@ export async function updateRun(
     if (!RUN_STATUSES.includes(status)) throw new Error(`Unsupported run status: ${status}`);
     run.status = status;
     run.updated_at = nowIso();
-    const parsedInput = input_tokens === undefined ? run.usage.input_tokens : Number(input_tokens);
-    const parsedOutput = output_tokens === undefined ? run.usage.output_tokens : Number(output_tokens);
-    if (![parsedInput, parsedOutput].every((value) => Number.isFinite(value) && value >= 0)) {
-      throw new Error("Token usage must be non-negative numbers");
+    const parseUsage = (value, previous) => value === undefined ? previous : value === null ? null : Number(value);
+    const parsedInput = parseUsage(input_tokens, run.usage.input_tokens);
+    const parsedOutput = parseUsage(output_tokens, run.usage.output_tokens);
+    if (![parsedInput, parsedOutput].every((value) => value === null || (Number.isFinite(value) && value >= 0))) {
+      throw new Error("Token usage must be non-negative numbers or null");
     }
     run.usage = {
       input_tokens: parsedInput,
       output_tokens: parsedOutput,
-      total_tokens: parsedInput + parsedOutput,
-      estimated_cost: estimated_cost === undefined ? run.usage.estimated_cost : Number(estimated_cost),
+      total_tokens: parsedInput === null || parsedOutput === null ? null : parsedInput + parsedOutput,
+      estimated_cost: estimated_cost === undefined ? run.usage.estimated_cost : estimated_cost === null ? null : Number(estimated_cost),
     };
     if (run.usage.estimated_cost !== null && !Number.isFinite(run.usage.estimated_cost)) {
       throw new Error("estimated_cost must be numeric or null");
@@ -417,17 +430,22 @@ export async function submitReceipt(
       throw new Error("Only the assigned agent, human owner, or an explicit policy can submit this receipt");
     }
     const receipt = {
-      schema_version: 1,
+      schema_version: 2,
       receipt_id: makeId("receipt"),
       work_item_id: id,
       submitted_by: receiptActor,
       outcome: cleanText(outcome, "outcome"),
-      evidence: Array.isArray(evidence) ? evidence.map(String) : [],
+      evidence: Array.isArray(evidence) ? evidence : [],
       deliverables: Array.isArray(deliverables) ? deliverables.map(String) : [],
       limitations: Array.isArray(limitations) ? limitations.map(String) : [],
       usage,
       created_at: nowIso(),
     };
+    if (!receipt.evidence.length || receipt.evidence.some((entry) => !entry || typeof entry !== "object"
+      || !String(entry.target_state || "").trim() || !String(entry.location || "").trim()
+      || !String(entry.verify || "").trim())) {
+      throw new Error("Receipt evidence must include target_state, location, and verify for every claim");
+    }
     const receiptBody = `# Completion receipt\n\n${cleanText(summary, "summary")}\n`;
     await writeFileAtomic(item.files.receipt, stringifyMarkdownWithFrontmatter(receipt, receiptBody));
     item.receipt_ref = item.files.receipt;
@@ -490,17 +508,24 @@ export async function getUsageSummary(root) {
   const items = await listWorkItems({}, root);
   const byAgent = {};
   let totalTokens = 0;
+  let usageKnown = true;
   let estimatedCost = 0;
   let costKnown = true;
   for (const item of items) {
     for (const run of item.runs || []) {
       const usage = run.usage || {};
       const agent = run.agent_id || "unassigned";
-      byAgent[agent] ||= { input_tokens: 0, output_tokens: 0, total_tokens: 0, estimated_cost: 0, cost_known: true };
-      byAgent[agent].input_tokens += Number(usage.input_tokens || 0);
-      byAgent[agent].output_tokens += Number(usage.output_tokens || 0);
-      byAgent[agent].total_tokens += Number(usage.total_tokens || 0);
-      totalTokens += Number(usage.total_tokens || 0);
+      byAgent[agent] ||= { input_tokens: 0, output_tokens: 0, total_tokens: 0, usage_known: true, unknown_runs: 0, estimated_cost: 0, cost_known: true };
+      if (usage.total_tokens === null || usage.total_tokens === undefined) {
+        byAgent[agent].usage_known = false;
+        byAgent[agent].unknown_runs += 1;
+        usageKnown = false;
+      } else {
+        byAgent[agent].input_tokens += Number(usage.input_tokens);
+        byAgent[agent].output_tokens += Number(usage.output_tokens);
+        byAgent[agent].total_tokens += Number(usage.total_tokens);
+        totalTokens += Number(usage.total_tokens);
+      }
       if (usage.estimated_cost === null || usage.estimated_cost === undefined) {
         byAgent[agent].cost_known = false;
         costKnown = false;
@@ -511,7 +536,8 @@ export async function getUsageSummary(root) {
     }
   }
   return {
-    total_tokens: totalTokens,
+    total_tokens: usageKnown ? totalTokens : null,
+    usage_known: usageKnown,
     estimated_cost: costKnown ? estimatedCost : null,
     cost_known: costKnown,
     by_agent: byAgent,

@@ -98,7 +98,7 @@ test("assignment, run, usage, receipt and no-review completion form one lifecycl
         submitted_by: "codex",
         outcome: "success",
         summary: "Dashboard implemented and tested.",
-        evidence: ["npm test"],
+        evidence: [{ target_state: "Test suite passes", location: "test/", verify: "npm test" }],
         deliverables: ["src/control-plane/server.mjs"],
       },
       root,
@@ -124,6 +124,7 @@ test("review-gated work requires an independent agent", async () => {
         submitted_by: "codex",
         outcome: "success",
         summary: "Ready for review.",
+        evidence: [{ target_state: "Implementation is ready", location: "src/", verify: "npm test" }],
       },
       root,
     );
@@ -138,6 +139,53 @@ test("review-gated work requires an independent agent", async () => {
     );
     assert.equal(reviewed.work_item.status, "done");
     assert.equal(reviewed.work_item.review_status, "approved");
+  });
+});
+
+test("unknown usage remains null until the provider reports it", async () => {
+  await withBusRoot(async (root) => {
+    const ready = await createReadyWork(root);
+    await assignWorkItem({ work_item_id: ready.work_item_id, agent_id: "codex" }, root);
+    const started = await startRun({ work_item_id: ready.work_item_id, actor: "codex" }, root);
+    assert.deepEqual(started.run.usage, { input_tokens: null, output_tokens: null, total_tokens: null, estimated_cost: null });
+    const usage = await getUsageSummary(root);
+    assert.equal(usage.total_tokens, null);
+    assert.equal(usage.usage_known, false);
+    assert.equal(usage.by_agent.codex.unknown_runs, 1);
+  });
+});
+
+test("receipts reject process-only evidence without target-state verification", async () => {
+  await withBusRoot(async (root) => {
+    const ready = await createReadyWork(root);
+    await assignWorkItem({ work_item_id: ready.work_item_id, agent_id: "codex" }, root);
+    await startRun({ work_item_id: ready.work_item_id, actor: "codex" }, root);
+    await assert.rejects(() => submitReceipt({
+      work_item_id: ready.work_item_id, submitted_by: "codex", outcome: "success",
+      summary: "Process exited.", evidence: ["exit 0"],
+    }, root), /target_state, location, and verify/);
+  });
+});
+
+test("duplicate intent replay accepts one irrigation job and flags seventeen without false controls", async () => {
+  await withBusRoot(async (root) => {
+    const jobs = [];
+    for (let index = 1; index <= 18; index += 1) {
+      jobs.push(await createWorkItem({
+        title: `Garden irrigation deep research job ${index}`,
+        objective: `Research reliable garden irrigation automation and recommend the same evidence-backed design. Job ${index}.`,
+        source_ref: `irrigation:${index}`,
+      }, root));
+    }
+    assert.equal(jobs.filter((item) => item.intent_guard.accepted).length, 1);
+    assert.equal(jobs.filter((item) => !item.intent_guard.accepted && item.status === "canceled").length, 17);
+    const controls = [];
+    for (const [title, objective] of [
+      ["Audit Borg restores", "Run a read-only restore drill for the A6 backup."],
+      ["Review calendar", "Find scheduling conflicts in next week's calendar."],
+      ["Fix dashboard CSS", "Repair mobile overflow in the Agent Bus task table."],
+    ]) controls.push(await createWorkItem({ title, objective, source_ref: title }, root));
+    assert.ok(controls.every((item) => item.intent_guard.accepted && item.status === "proposed"));
   });
 });
 

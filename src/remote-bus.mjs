@@ -69,7 +69,7 @@ export function createRemoteBus(baseUrl, { writeToken = null } = {}) {
       return write(`/api/v1/messages/${encodeURIComponent(args.message_id)}/read`, {});
     },
     updateThreadStatus(args) {
-      return write(`/api/v1/threads/${encodeURIComponent(args.thread_id)}/status`, { status: args.status });
+      return write(`/api/v1/threads/${encodeURIComponent(args.thread_id)}/status`, { status: args.status, reason: args.reason, actor: args.actor });
     },
     listThreads() {
       return request(baseUrl, "/api/v1/threads");

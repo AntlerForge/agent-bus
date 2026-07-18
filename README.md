@@ -112,6 +112,10 @@ approve and assign each recommendation in the dashboard.
 
 ## Web Control Plane
 
+Run `npm run state:lint` for deterministic ledger/thread integrity checks. Unknown provider
+token usage remains `null`; completion receipts require target-state, location, and read-only
+verification evidence. See `docs/agent-work-ledger.md` for the full outcome contract.
+
 Run the dashboard locally:
 
 ```bash
