@@ -1,0 +1,27 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0005-evaluate-outcomes-on-a6-with-a-read-only-mac-probe
+namespace: project:agent-bus
+title: "Evaluate outcome contracts on A6 and probe Mac state over SSH"
+status: active
+owner: tony
+properties:
+  date: 2026-07-18
+  component: outcome-truth-sentinel
+  tags: [stage-1, outcomes, monitoring, cross-host]
+  context: |
+    Stage 1 requires semantic checks spanning A6 and the Mac. A Mac-side reporter would add
+    another scheduled writer and another silent-failure mode. A6 already owns the durable
+    project runtime and can reach the Mac through the existing private SSH relationship.
+  decision: |
+    Run the declarative outcome sentinel and its card store on A6. For Mac-only facts, execute
+    one bounded, read-only probe over SSH and consume its JSON result. Install no Mac daemon,
+    writer, credential, or listening port. Run a separate A6 systemd dead-man timer that checks
+    the sentinel heartbeat without depending on the sentinel process, matrix evaluator, or
+    card store. Notify through the existing Home Assistant ALERT/INFO channel only.
+  consequences:
+    positive: "A6 remains the single inspectable authority and the Mac footprint is zero-install and reversible."
+    negative: "Mac checks depend on the existing private SSH path and distinguish probe failure from semantic failure."
+    neutral: "SpanielBus slots are reserved but disabled; HA entity availability and auto-remediation remain excluded."
+  supersedes: null
+  superseded_by: null
