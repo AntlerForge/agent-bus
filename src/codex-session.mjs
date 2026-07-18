@@ -124,7 +124,7 @@ async function readIfPresent(filePath) {
 
 async function recoverDetachedTurn({ outputFile, sessionFile, closedAt, options, log }) {
   const timeoutMs = Number(options.detachedRecoveryTimeoutMs || 10 * 60 * 1000);
-  const quietMs = Number(options.detachedQuietMs || 15 * 1000);
+  const quietMs = Number(options.detachedQuietMs || 90 * 1000);
   const deadline = Date.now() + timeoutMs;
   let lastAdvance = closedAt;
   let previousMtime = 0;

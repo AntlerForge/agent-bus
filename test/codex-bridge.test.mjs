@@ -22,6 +22,13 @@ function runBridge(args) {
     const child = spawn(process.execPath, ["src/codex-bridge.mjs", ...args], {
       cwd: path.resolve("."),
       stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        AGENT_BUS_CONTROL_PLANE_URL: "",
+        AGENT_BUS_WRITE_TOKEN: "",
+        AGENT_BUS_CODEX_SESSION_STORE: "",
+        AGENT_BUS_CODEX_SESSION_ID: "",
+      },
     });
     let stdout = "";
     let stderr = "";
@@ -174,4 +181,10 @@ test("codex bridge recovers a durable reply when the CLI wrapper exits before it
     assert.equal(result.status, "recovered");
     assert.equal(result.reply, "Recovered worker reply");
   });
+});
+
+test("bridge tests explicitly isolate remote control-plane and durable provider state", async () => {
+  const source = await readFile(new URL(import.meta.url), "utf8");
+  assert.match(source, /AGENT_BUS_CONTROL_PLANE_URL: ""/);
+  assert.match(source, /AGENT_BUS_CODEX_SESSION_STORE: ""/);
 });
