@@ -53,9 +53,10 @@ function notificationPayload(options) {
   if (options.className === "ALERT") data.push = { sound: "default", "interruption-level": "time-sensitive" };
   if (options.className === "INFO") data.push = { "interruption-level": "passive" };
   if (options.className === "APPROVAL") {
+    data.subtitle = "Press and hold this notification to reveal YES / NO";
     data.actions = [
-      { action: actionName("YES", options.id), title: "YES" },
-      { action: actionName("NO", options.id), title: "NO", destructive: true },
+      { action: actionName("YES", options.id), title: "YES", icon: "sfsymbols:checkmark.circle" },
+      { action: actionName("NO", options.id), title: "NO", destructive: true, icon: "sfsymbols:xmark.circle" },
     ];
   }
   return { title: titles[options.className], message: options.message, data };

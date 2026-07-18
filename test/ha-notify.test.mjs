@@ -18,6 +18,7 @@ test("notifier distinguishes classes and atomically deduplicates stable ids", as
     const second = await notifyTony(options, { fetchImpl: async () => { throw new Error("duplicate must not send"); } });
     assert.equal(first.deduplicated, false); assert.equal(second.deduplicated, true); assert.equal(requests.length, 1);
     assert.match(requests[0].body.title, /APPROVAL 1/); assert.equal(requests[0].body.data.actions.length, 2);
+    assert.match(requests[0].body.data.subtitle, /Press and hold/);
     assert.deepEqual(decodeAction(requests[0].body.data.actions[0].action), { decision: "YES", id: "approval-123" });
     assert.equal(JSON.parse(await readFile(path.join(stateDirectory, `${Buffer.from("approval-123").toString("base64url")}.json`), "utf8")).id, "approval-123");
   } finally { await rm(root, { recursive: true, force: true }); }

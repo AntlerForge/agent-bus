@@ -8,6 +8,9 @@ returns the original result with `deduplicated: true` and sends nothing.
 APPROVAL notifications contain one-tap YES and NO actions. The A6 listener
 subscribes to `mobile_app_notification_action` and writes the decision to
 `runtime/ha-notify/responses/<base64url-id>.json` for the control plane to read.
+On iOS the buttons are revealed by pressing and holding the notification (or
+swiping left and choosing View on the Lock Screen); the approval subtitle states
+this explicitly. Category registration is not required for modern inline actions.
 
 Secrets are not copied into this repository. Both processes read Tony's existing
 `~/Developer/ha-agent-pilot/.env` on A6, which must be owned by `ajbarfoot` and
