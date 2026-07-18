@@ -192,7 +192,7 @@ owner: tony
 status: active
 properties:
   type: http
-  version: "1"
+  version: "1.1"
 ---
 apiVersion: arch.kv/v1
 kind: Interface

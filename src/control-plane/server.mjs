@@ -24,7 +24,7 @@ import {
   updateRun,
 } from "../work-ledger/store.mjs";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const STATIC_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "public");
 const STATIC_FILES = {
   "/": ["index.html", "text/html; charset=utf-8"],
