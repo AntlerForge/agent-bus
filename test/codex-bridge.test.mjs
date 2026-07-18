@@ -7,6 +7,15 @@ import assert from "node:assert/strict";
 import { listThreads, readInbox, sendMessage } from "../src/mailbox.mjs";
 import { ensureBusLayout } from "../src/paths.mjs";
 
+// Tests own temporary stores. Never allow an inherited production bridge environment to
+// redirect directly imported mailbox calls or spawned bridge processes to the live plane.
+for (const key of [
+  "AGENT_BUS_CONTROL_PLANE_URL",
+  "AGENT_BUS_WRITE_TOKEN",
+  "AGENT_BUS_CODEX_SESSION_STORE",
+  "AGENT_BUS_CODEX_SESSION_ID",
+]) delete process.env[key];
+
 async function withBusRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "agent-bus-bridge-test-"));
   try {

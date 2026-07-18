@@ -19,6 +19,8 @@ A6 timers/services and runtime directory to reverse A6 deployment.
 The independent dead-man timer reads only the heartbeat and calls the HA notifier directly.
 It neither invokes nor imports the sentinel evaluator. SpanielBus slots are reserved and
 disabled; van-offline failures and Home Assistant entity availability are deliberately ignored.
+The heartbeat threshold is 35 minutes and the independent timer runs every 10 minutes, giving
+a worst-case detection bound of 45 minutes.
 
 The daily-synthesis contract reads the authoritative automation run ledger and passes only when
 the latest terminal event is `run_completed`; `run_warning` remains failed even when a process

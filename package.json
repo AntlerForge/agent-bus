@@ -23,7 +23,7 @@
     "selector:check": "node src/model-selector-check.mjs",
     "state:lint": "node src/state-lint.mjs",
     "ha:notify": "node scripts/ha-notify-tony.mjs",
-    "test": "node --test"
+    "test": "node --import ./test/isolate-env.mjs --test"
   },
   "repository": {
     "type": "git",
