@@ -1,0 +1,9 @@
+[Unit]
+Description=Independently check outcome sentinel heartbeat
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=10min
+Persistent=true
+[Install]
+WantedBy=timers.target
+

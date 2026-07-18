@@ -1,0 +1,12 @@
+[Unit]
+Description=Evaluate semantic outcome contracts
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ajbarfoot
+WorkingDirectory=/srv/projects/Personal/agent-bus/app
+Environment=OUTCOME_STATE_DIR=/srv/projects/Personal/agent-bus/runtime/outcome-truth
+EnvironmentFile=/home/ajbarfoot/Developer/ha-agent-pilot/.env
+ExecStart=/usr/bin/node scripts/outcome-truth-sentinel.mjs
+

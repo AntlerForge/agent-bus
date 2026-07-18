@@ -1,0 +1,17 @@
+{
+  "doctor": {"status":"fail"},
+  "borg": {"newest_archive_age_minutes":42},
+  "rsync": {"latest_exit_code":23},
+  "mac": {
+    "report_age_minutes": 1,
+    "mount_present": false,
+    "launchagents": {
+      "share_mount":{"age_minutes":23040},
+      "runtime_check":{"age_minutes":28800},
+      "developer_mirrors":{"age_minutes":30240},
+      "project_store":{"age_minutes":53280}
+    }
+  },
+  "synthesis":{"latest_clean":false},
+  "noise":{"kv_spanielbus_sync_failures":854,"ha_unavailable_entities":119}
+}

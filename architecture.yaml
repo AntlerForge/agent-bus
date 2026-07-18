@@ -87,6 +87,33 @@ relations:
 ---
 apiVersion: arch.kv/v1
 kind: Component
+id: outcome-truth-sentinel
+namespace: project:agent-bus
+title: "Outcome-truth exception sentinel"
+description: |
+  Does: evaluate versioned semantic outcome contracts on A6, persist deduplicated cards,
+  consume a read-only Mac snapshot, and notify state transitions through Home Assistant.
+  Does not: remediate failures, monitor HA entity availability, implement SpanielBus checks,
+  or use APPROVAL notifications.
+owner: tony
+status: active
+properties:
+  path: "src/outcome-truth/"
+  tech: "Node.js, YAML, systemd and a minimal macOS LaunchAgent reporter"
+  responsibilities:
+    - "Evaluate declared semantic recovery contracts"
+    - "Persist stable exception cards and transition-only notifications"
+    - "Expose an independently monitored heartbeat"
+  non_responsibilities:
+    - "Auto-remediation, telemetry monitoring or approval authority"
+relations:
+  - to: Component:project:agent-bus/ha-notification-channel
+    type: depends-on
+  - to: DataStore:project:agent-bus/outcome-card-files
+    type: writes-to
+---
+apiVersion: arch.kv/v1
+kind: Component
 id: agent-directory
 namespace: project:agent-bus
 title: "Agent Directory"
@@ -255,6 +282,18 @@ properties:
 ---
 apiVersion: arch.kv/v1
 kind: DataStore
+id: outcome-card-files
+namespace: project:agent-bus
+title: "Outcome exception cards"
+description: "Atomic A6 JSON records containing stable cards, semantic state, recurrence and recovery evidence."
+owner: tony
+status: active
+properties:
+  format: "JSON"
+  authority: "Outcome-truth sentinel state; source systems remain authoritative for observed facts"
+---
+apiVersion: arch.kv/v1
+kind: DataStore
 id: llm-selector-v3
 namespace: project:agent-bus
 title: "Knowledge Vault LLM selector v3"
@@ -330,6 +369,28 @@ status: active
 properties:
   code: P-006
   statement: "A selector recommendation or workflow template may prefill a proposal, but it cannot approve, assign, dispatch or complete work."
+---
+apiVersion: arch.kv/v1
+kind: Flow
+id: outcome-evaluation-to-card-transition
+namespace: project:agent-bus
+title: "Semantic outcome evaluation to exception transition"
+owner: tony
+status: active
+properties:
+  trigger: "A6 outcome timer fires every 15 minutes"
+  steps:
+    - "Mac reporter atomically publishes its read-only snapshot to A6"
+    - "Sentinel evaluates every enabled matrix contract against authoritative observations"
+    - "Card store opens, deduplicates or closes a stable card based on semantic state"
+    - "Only new hard failures and recoveries emit HA ALERT transitions"
+    - "Independent dead-man timer verifies sentinel heartbeat freshness"
+  data: [matrix_version, observation, card_id, semantic_state, transition]
+relations:
+  - to: Component:project:agent-bus/outcome-truth-sentinel
+    type: depends-on
+  - to: Component:project:agent-bus/ha-notification-channel
+    type: depends-on
 ---
 apiVersion: arch.kv/v1
 kind: Flow
