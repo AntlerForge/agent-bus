@@ -11,6 +11,11 @@ shared/
 archive/
 dist/
 coverage/
+runtime/
+_programme/
+img/
+a08-draft_2.md
+draft_2.md
 *.log
 *.local.*
 .cowork-test.txt

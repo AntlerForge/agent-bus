@@ -1,16 +1,19 @@
 #!/usr/bin/env node
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import {
   ackMessage,
+  getThread,
   markRead,
   readInbox,
   replyMessage,
   sendMessage,
   updateThreadStatus,
 } from "./mailbox.mjs";
+import { registerAgent } from "./agents.mjs";
 import { ensureBusLayout, getBusRoot } from "./paths.mjs";
 import {
   buildAgentBusPrompt,
@@ -19,15 +22,19 @@ import {
 } from "./codex-bridge-prompts.mjs";
 import { DEFAULT_CODEX_HOME, getPersistentSession, runPersistentTurn } from "./codex-session.mjs";
 import { createQueue } from "./task-queue.mjs";
+import { configuredRemoteBus } from "./remote-bus.mjs";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(MODULE_DIR, "..");
-const DEFAULT_MODEL = "gpt-5.2";
+const DEFAULT_MODEL = "gpt-5.6-sol";
 const DEFAULT_POLL_MS = 2000;
 const DEFAULT_SANDBOX = "workspace-write";
 
 function parseArgs(argv) {
   const root = getBusRoot();
+  const defaultStateDirectory = process.env.AGENT_BUS_CONTROL_PLANE_URL
+    ? path.join(os.homedir(), "Library", "Application Support", "Agent Bus", "codex")
+    : root;
   const args = {
     once: false,
     noInput: false,
@@ -36,11 +43,13 @@ function parseArgs(argv) {
     pollMs: Number.parseInt(process.env.AGENT_BUS_CODEX_POLL_MS || String(DEFAULT_POLL_MS), 10),
     codexCommand: process.env.AGENT_BUS_CODEX_COMMAND || "codex",
     codexHome: process.env.CODEX_HOME || DEFAULT_CODEX_HOME,
+    ignoreUserConfig: process.env.AGENT_BUS_CODEX_IGNORE_USER_CONFIG !== "0",
     projectRoot: process.env.AGENT_BUS_PROJECT_ROOT || PROJECT_ROOT,
+    profile: process.env.AGENT_BUS_CODEX_PROFILE || null,
     root,
     sandbox: process.env.AGENT_BUS_CODEX_SANDBOX || DEFAULT_SANDBOX,
     sessionId: process.env.AGENT_BUS_CODEX_SESSION_ID || null,
-    sessionStore: process.env.AGENT_BUS_CODEX_SESSION_STORE || path.join(root, "_codex_bridge_session.json"),
+    sessionStore: process.env.AGENT_BUS_CODEX_SESSION_STORE || path.join(defaultStateDirectory, "sessions.json"),
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -59,8 +68,12 @@ function parseArgs(argv) {
       args.codexCommand = argv[++index];
     } else if (arg === "--codex-home") {
       args.codexHome = argv[++index];
+    } else if (arg === "--use-user-config") {
+      args.ignoreUserConfig = false;
     } else if (arg === "--project-root") {
       args.projectRoot = argv[++index];
+    } else if (arg === "--profile") {
+      args.profile = argv[++index];
     } else if (arg === "--root") {
       args.root = argv[++index];
       if (!process.env.AGENT_BUS_CODEX_SESSION_STORE) {
@@ -95,7 +108,9 @@ Options:
   --poll-ms <ms>          Watch interval in milliseconds. Default: ${DEFAULT_POLL_MS}
   --codex-command <cmd>   Codex command path. Default: codex
   --codex-home <path>     Codex home for session discovery. Default: ~/.codex
+  --use-user-config       Load the normal Codex config and MCP integrations (off by default).
   --project-root <path>   Working repository for Codex CLI.
+  --profile <name>        Codex config profile, useful for an isolated bridge runtime.
   --root <path>           Agent Bus root. Default: AGENT_BUS_ROOT or built-in root.
   --session-id <uuid>     Resume this Codex session instead of reading the session store.
   --session-store <path>  JSON file used to remember the bridge session.
@@ -110,19 +125,15 @@ function log(message) {
   console.log(`[${now()}] ${message}`);
 }
 
-async function readThreadMarkdown(root, threadId) {
-  if (!threadId) {
-    return "";
-  }
-
-  try {
-    return await readFile(path.join(root, "threads", `${threadId}.md`), "utf8");
-  } catch (error) {
-    if (error.code === "ENOENT") {
-      return "";
-    }
-    throw error;
-  }
+async function registerHeartbeat(options) {
+  const args = {
+    agent_id: "codex",
+    display_name: "Codex Auto Bridge",
+    type: "codex-cli-bridge",
+    capabilities: ["coding", "debugging", "review", "local-tools", "agent-bus-auto-response", "persistent-session"],
+  };
+  const remote = configuredRemoteBus();
+  return remote ? remote.registerAgent(args) : registerAgent(args, options.root);
 }
 
 async function handleMessage(message, options, session) {
@@ -130,8 +141,14 @@ async function handleMessage(message, options, session) {
   await ackMessage({ message_id: message.message_id }, options.root);
 
   try {
-    const threadMarkdown = await readThreadMarkdown(options.root, message.thread_id);
-    const rawReply = await runPersistentTurn(buildAgentBusPrompt(message, threadMarkdown, options), options, session, log);
+    const remote = configuredRemoteBus();
+    const [thread, artifacts] = await Promise.all([
+      getThread({ thread_id: message.thread_id }, options.root),
+      remote
+        ? remote.materializeMessageArtifacts(message, path.join(path.dirname(options.sessionStore), "artifacts", message.thread_id))
+        : Promise.resolve((message.artifact_paths || []).map((artifactPath) => ({ local_path: artifactPath, filename: path.basename(artifactPath) }))),
+    ]);
+    const rawReply = await runPersistentTurn(buildAgentBusPrompt(message, thread.body, options, artifacts), options, session, log);
     if (!rawReply) {
       throw new Error("Codex produced an empty reply.");
     }
@@ -294,12 +311,16 @@ function startTerminalInput(options, session, queue) {
 const options = parseArgs(process.argv.slice(2));
 const active = new Set();
 const queue = createQueue({ log });
-await ensureBusLayout(options.root);
-await mkdir(path.join(options.root, "inbox", "codex"), { recursive: true });
 await mkdir(path.dirname(options.sessionStore), { recursive: true });
+if (!configuredRemoteBus()) {
+  await ensureBusLayout(options.root);
+  await mkdir(path.join(options.root, "inbox", "codex"), { recursive: true });
+}
+await registerHeartbeat(options);
 
 const session = await getPersistentSession(options, log);
-log(`Agent Bus Codex bridge watching ${path.join(options.root, "inbox", "codex")}`);
+const remoteBus = configuredRemoteBus();
+log(`Agent Bus Codex bridge watching ${remoteBus ? `${process.env.AGENT_BUS_CONTROL_PLANE_URL}/api/v1/inbox/codex` : path.join(options.root, "inbox", "codex")}`);
 log(`Using Codex command "${options.codexCommand}" with model ${options.model}.`);
 log(`Persistent session: ${session.session_id}`);
 log(`Session store: ${options.sessionStore}`);
@@ -315,4 +336,9 @@ if (options.once) {
       log(`Poll failed: ${error instanceof Error ? error.message : String(error)}`);
     });
   }, options.pollMs);
+  setInterval(() => {
+    registerHeartbeat(options).catch((error) => {
+      log(`Heartbeat failed: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }, 30000);
 }

@@ -204,6 +204,9 @@ test("agent registry bootstraps defaults and registers new agents", async () => 
     assert.ok(defaults.find((agent) => agent.agent_id === "claude"));
     assert.ok(defaults.find((agent) => agent.agent_id === "claude-code"));
     assert.ok(defaults.find((agent) => agent.agent_id === "codex"));
+    assert.ok(defaults.find((agent) => agent.agent_id === "cursor"));
+    assert.ok(defaults.find((agent) => agent.agent_id === "antigravity"));
+    assert.ok(defaults.find((agent) => agent.agent_id === "openai-desktop"));
 
     const agent = await registerAgent(
       { agent_id: "reviewer", display_name: "Reviewer", type: "test", capabilities: ["review"] },
@@ -211,6 +214,15 @@ test("agent registry bootstraps defaults and registers new agents", async () => 
     );
     assert.equal(agent.display_name, "Reviewer");
     assert.ok(agent.last_seen);
+  });
+});
+
+test("concurrent bridge heartbeats preserve every registered agent", async () => {
+  await withBusRoot(async (root) => {
+    const ids = Array.from({ length: 12 }, (_, index) => `bridge-${index}`);
+    await Promise.all(ids.map((agent_id) => registerAgent({ agent_id, type: "test-bridge" }, root)));
+    const agents = await listAgents(root);
+    for (const agentId of ids) assert.ok(agents.find((agent) => agent.agent_id === agentId));
   });
 });
 

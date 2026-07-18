@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.antlerforge.agent-bus-cursor-bridge</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>/Users/YOU/Developer/personal/agent-bus/src/cursor-bridge.mjs</string>
+    <string>--model</string><string>cursor-grok-4.5-high</string>
+    <string>--workspace</string><string>/Users/YOU</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/YOU/Developer/personal/agent-bus</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/Users/YOU/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>AGENT_BUS_CONTROL_PLANE_URL</key><string>http://127.0.0.1:18091/agent-bus</string>
+    <key>AGENT_BUS_CURSOR_STATE_DIR</key><string>/Users/YOU/Library/Application Support/Agent Bus/cursor</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>/Users/YOU/var/log/home-platform/agent-bus/cursor-bridge.jsonl</string>
+  <key>StandardErrorPath</key><string>/Users/YOU/var/log/home-platform/agent-bus/cursor-bridge.err.log</string>
+</dict>
+</plist>

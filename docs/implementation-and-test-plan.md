@@ -355,12 +355,13 @@ Exit criteria:
 
 - Add `src/codex-bridge.mjs` as a visible terminal bridge backed by Codex CLI.
 - Create or resume one dedicated Codex CLI session and store its id in
-  `~/AgentBus/_codex_bridge_session.json`.
+  `~/Library/Application Support/Agent Bus/codex/sessions.json`.
 - Send both Agent Bus messages and user terminal input into that same Codex session so
   responder context persists.
 - Add a terminal `/send claude-code | Subject | Body` command for Codex-to-Claude Code
   task initiation from the same visible bridge window.
-- Check `~/AgentBus/inbox/codex` on a short local interval.
+- Poll the configured A6 control-plane inbox on a short interval; use the local inbox only
+  in explicit standalone-development mode.
 - Process only unread messages addressed to `codex` where `requires_response: true`.
 - Acknowledge, resume the persistent Codex session on the delegated task, reply in-thread,
   mark read, and update lifecycle status.

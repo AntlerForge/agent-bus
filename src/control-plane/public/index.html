@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="agent-bus-base-path" content="__AGENT_BUS_BASE_PATH__">
+    <title>Agent Control Plane</title>
+    <link rel="stylesheet" href="__AGENT_BUS_BASE_PATH__/styles.css">
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">AB</span>
+          <div><strong>Agent Bus</strong><small>Control plane</small></div>
+        </div>
+        <nav aria-label="Dashboard sections">
+          <button class="nav-item active" data-view="overview"><span>Overview</span><kbd>1</kbd></button>
+          <button class="nav-item" data-view="tasks"><span>Tasks</span><kbd>2</kbd></button>
+          <button class="nav-item" data-view="agents"><span>Agents</span><kbd>3</kbd></button>
+          <button class="nav-item" data-view="models"><span>Model routes</span><kbd>4</kbd></button>
+          <button class="nav-item" data-view="reviews"><span>Reviews</span><kbd>5</kbd></button>
+          <button class="nav-item" data-view="usage"><span>Usage</span><kbd>6</kbd></button>
+          <button class="nav-item" data-view="routes"><span>Messages</span><kbd>7</kbd></button>
+        </nav>
+        <div class="boundary-note">
+          <span class="status-dot"></span>
+          <div><strong>A6 ledger</strong><small>Agent Bus carries messages.<br>Ledger owns task status.</small></div>
+        </div>
+      </aside>
+
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="view-eyebrow">CONTROL PLANE</p>
+            <h1 id="view-title">Overview</h1>
+          </div>
+          <div class="top-actions">
+            <button class="button secondary" id="refresh-button">Refresh</button>
+            <button class="button primary" id="new-task-button">New task</button>
+          </div>
+        </header>
+        <div id="notice" class="notice" hidden></div>
+        <section id="content" aria-live="polite"><div class="loading">Loading ledger…</div></section>
+      </main>
+    </div>
+
+    <dialog id="task-dialog">
+      <form method="dialog" id="task-form">
+        <div class="dialog-header"><div><p class="eyebrow">NEW WORK ITEM</p><h2>Propose a task</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+        <p class="form-help">New tasks enter the proposal inbox. They do not dispatch themselves.</p>
+        <label>Title<input name="title" required maxlength="140" placeholder="Review the routing implementation"></label>
+        <label>Objective<textarea name="objective" required rows="4" placeholder="Describe the outcome, not just an activity."></textarea></label>
+        <div class="form-grid">
+          <label>Source reference<input name="source_ref" required placeholder="BL119, T123 or GitHub issue URL"></label>
+          <label>Project<input name="project" value="agent-bus"></label>
+          <label>Review policy<select name="review_policy"><option value="none">No gate</option><option value="human">Human approval</option><option value="independent_agent">Independent agent</option></select></label>
+          <label>Token budget<input name="budget_tokens" type="number" min="0" step="1000" placeholder="Optional"></label>
+        </div>
+        <label>Acceptance criteria<textarea name="acceptance_criteria" rows="3" placeholder="One criterion per line"></textarea></label>
+        <div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="submit">Create proposal</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="task-detail-dialog" class="detail-dialog"><div id="task-detail"></div></dialog>
+    <dialog id="workflow-dialog">
+      <form method="dialog" id="workflow-form">
+        <div class="dialog-header"><div><p class="eyebrow">ROUTING TEMPLATE</p><h2>Propose a review workflow</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+        <p class="form-help">This creates linked proposals only. You still approve and assign each work item.</p>
+        <label>Workflow template<select name="template_id" id="workflow-template" required></select></label>
+        <label>Subject<input name="subject" required placeholder="Chapter 38"></label>
+        <div class="form-grid">
+          <label>Source reference<input name="source_ref" required placeholder="the-correction:chapter-38"></label>
+          <label>Context reference<input name="context_ref" placeholder="Path to the frozen chapter or review packet"></label>
+          <label>Project<input name="project" value="the-correction"></label>
+        </div>
+        <div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="submit">Create proposals</button></div>
+      </form>
+    </dialog>
+    <script type="module" src="__AGENT_BUS_BASE_PATH__/app.js"></script>
+  </body>
+</html>

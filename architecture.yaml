@@ -1,0 +1,465 @@
+apiVersion: arch.kv/v1
+kind: Project
+id: agent-bus
+namespace: project:agent-bus
+title: "Agent Bus and Agent Work Ledger"
+description: |
+  Local-first transport and an adjacent control plane for Tony and trusted agents.
+  Does: exchange durable agent messages, track delegated work, expose a private dashboard,
+  preserve auditable receipts and surface advisory model-routing guidance.
+  Does not: replace provider runtimes, absorb the Knowledge Vault or become the authority for every human task.
+owner: tony
+status: active
+tags: [nodejs, mcp, agents, home-platform]
+relations:
+  - to: Platform:platform/home-platform
+    type: supports
+source: architecture.yaml
+last_verified: "2026-07-15"
+---
+apiVersion: arch.kv/v1
+kind: Component
+id: bus-core
+namespace: project:agent-bus
+title: "Agent Bus Core"
+description: |
+  Does: persist messages, threads, agents and artifacts and expose MCP transport tools.
+  Does not: own delegated-work lifecycle or infer task completion from message delivery.
+owner: tony
+status: active
+properties:
+  path: "src/mailbox.mjs"
+  tech: "Node.js, Markdown and JSON"
+  responsibilities:
+    - "Persist human-readable agent messages and threads"
+    - "Expose bounded MCP messaging tools"
+  non_responsibilities:
+    - "Task authority, scheduling or review policy"
+relations:
+  - to: Interface:project:agent-bus/agent-bus-mcp
+    type: exposes
+  - to: DataStore:project:agent-bus/bus-runtime-files
+    type: writes-to
+---
+apiVersion: arch.kv/v1
+kind: Component
+id: agent-adapters
+namespace: project:agent-bus
+title: "Agent Runtime Adapters"
+description: |
+  Does: connect provider-native sessions to Agent Bus on the host where each runtime lives.
+  Does not: become the durable task store or require every agent runtime to execute on A6.
+owner: tony
+status: active
+properties:
+  path: "src/codex-bridge.mjs"
+  tech: "Node.js provider adapters"
+  responsibilities:
+    - "Resume or create provider-native execution sessions"
+    - "Relay requests and receipts through Agent Bus"
+    - "Heartbeat live bridges and preserve one provider session per message thread"
+    - "Materialize remote artifacts into bounded host-local bridge storage"
+  non_responsibilities:
+    - "Durable work-item authority"
+---
+apiVersion: arch.kv/v1
+kind: Component
+id: agent-directory
+namespace: project:agent-bus
+title: "Agent Directory"
+description: |
+  Does: register known agent identities and their declared capabilities for routing and display.
+  Does not: prove runtime availability, select a model or authorize an assignment.
+owner: tony
+status: active
+properties:
+  path: "src/agents.mjs"
+  tech: "Node.js and JSON"
+  responsibilities:
+    - "Persist known agent identities and declared capabilities"
+    - "Expose agent metadata to messaging and dashboard views"
+  non_responsibilities:
+    - "Runtime health, model selection or assignment authority"
+relations:
+  - to: DataStore:project:agent-bus/bus-runtime-files
+    type: writes-to
+---
+apiVersion: arch.kv/v1
+kind: Component
+id: work-ledger
+namespace: project:agent-bus
+title: "Agent Work Ledger"
+description: |
+  Does: own work items, assignments, runs, append-only events, receipts, review gates and usage records.
+  Does not: duplicate source-task authority or store private model reasoning.
+owner: tony
+status: active
+properties:
+  path: "src/work-ledger/"
+  tech: "Node.js, Markdown and JSON"
+  responsibilities:
+    - "Validate and persist delegated-work lifecycle records"
+    - "Calculate current state from auditable records"
+  non_responsibilities:
+    - "Message transport, provider execution or source backlog ownership"
+relations:
+  - to: DataStore:project:agent-bus/work-ledger-files
+    type: writes-to
+---
+apiVersion: arch.kv/v1
+kind: Component
+id: control-plane
+namespace: project:agent-bus
+title: "Web Control Plane"
+description: |
+  Does: expose the localhost HTTP API, dashboard and bounded agent controls for ledger data.
+  Does not: write ledger files directly or expose an unauthenticated public service.
+owner: tony
+status: active
+properties:
+  path: "src/control-plane/"
+  tech: "Node.js HTTP and browser-native HTML/CSS/JavaScript"
+  responsibilities:
+    - "Serve task, agent, review, usage and routing views"
+    - "Translate authenticated user and agent actions into ledger operations"
+    - "Expose health and version endpoints"
+  non_responsibilities:
+    - "Direct storage mutation or provider-specific execution"
+relations:
+  - to: Interface:project:agent-bus/control-plane-http
+    type: exposes
+  - to: Interface:project:agent-bus/work-ledger-api
+    type: exposes
+  - to: Interface:project:agent-bus/model-selector-api
+    type: exposes
+---
+apiVersion: arch.kv/v1
+kind: Component
+id: model-selector-adapter
+namespace: project:agent-bus
+title: "Model Selector Adapter"
+description: |
+  Does: validate and expose the read-only Knowledge Vault selector v3 snapshot.
+  Does not: score models, mutate the Knowledge Vault, choose a provider runtime or dispatch work.
+owner: tony
+status: active
+properties:
+  path: "src/model-selector.mjs"
+  tech: "Node.js and versioned JSON"
+  responsibilities:
+    - "Validate selector contract version, model references and evidence references"
+    - "Return a degraded but inspectable state when selector data is missing or stale"
+    - "Resolve advisory routes and independent-review templates"
+  non_responsibilities:
+    - "Knowledge Vault selector authority, external research or autonomous dispatch"
+relations:
+  - to: DataStore:project:agent-bus/llm-selector-v3
+    type: reads-from
+  - to: Interface:project:agent-bus/model-selector-api
+    type: exposes
+---
+apiVersion: arch.kv/v1
+kind: Interface
+id: agent-bus-mcp
+namespace: project:agent-bus
+title: "Agent Bus MCP tools"
+description: "stdio MCP interface for messaging, agent registration and bounded work-ledger operations."
+owner: tony
+status: active
+properties:
+  type: mcp
+  version: "1"
+---
+apiVersion: arch.kv/v1
+kind: Interface
+id: control-plane-http
+namespace: project:agent-bus
+title: "Control plane dashboard HTTP"
+description: "Private localhost web dashboard, health and version interface hosted on A6."
+owner: tony
+status: active
+properties:
+  type: http
+  version: "1.1"
+---
+apiVersion: arch.kv/v1
+kind: Interface
+id: work-ledger-api
+namespace: project:agent-bus
+title: "Agent Work Ledger API"
+description: "Versioned JSON API for work items, agents, events, receipts, reviews and usage."
+owner: tony
+status: active
+properties:
+  type: http
+  version: "1"
+---
+apiVersion: arch.kv/v1
+kind: Interface
+id: model-selector-api
+namespace: project:agent-bus
+title: "Advisory model selector API"
+description: "Read-only versioned JSON API for model, surface, evidence, routing and workflow-template views."
+owner: tony
+status: active
+properties:
+  type: http
+  version: "1"
+---
+apiVersion: arch.kv/v1
+kind: DataStore
+id: bus-runtime-files
+namespace: project:agent-bus
+title: "Agent Bus runtime files"
+description: "Human-readable mailbox, thread, agent and artifact records outside the source repository."
+owner: tony
+status: active
+properties:
+  format: "Markdown and JSON"
+  authority: "Agent Bus transport state"
+---
+apiVersion: arch.kv/v1
+kind: DataStore
+id: work-ledger-files
+namespace: project:agent-bus
+title: "Agent Work Ledger runtime files"
+description: "Human-readable work items and receipts plus append-only JSON Lines events outside the source repository."
+owner: tony
+status: active
+properties:
+  format: "Markdown, JSON and JSON Lines"
+  authority: "Delegated agent-work lifecycle only"
+---
+apiVersion: arch.kv/v1
+kind: DataStore
+id: llm-selector-v3
+namespace: project:agent-bus
+title: "Knowledge Vault LLM selector v3"
+description: "Read-only mounted snapshot containing models, access surfaces, evidence and advisory routing policy."
+owner: tony
+status: active
+properties:
+  format: "Versioned JSON documents"
+  authority: "Knowledge Vault model-selection guidance; never task or dispatch authority"
+---
+apiVersion: arch.kv/v1
+kind: Invariant
+id: p-001
+namespace: project:agent-bus
+title: "Transport and work authority stay separate"
+owner: tony
+status: active
+properties:
+  code: P-001
+  statement: "Agent Bus owns message transport. Agent Work Ledger owns delegated-work lifecycle. Message or thread status must never be treated as task status."
+---
+apiVersion: arch.kv/v1
+kind: Invariant
+id: p-002
+namespace: project:agent-bus
+title: "Human source tasks remain authoritative"
+owner: tony
+status: active
+properties:
+  code: P-002
+  statement: "Every imported or delegated work item links to its KV, software backlog or GitHub source through source_ref without silently replacing that authority."
+---
+apiVersion: arch.kv/v1
+kind: Invariant
+id: p-003
+namespace: project:agent-bus
+title: "Agent proposals require policy approval"
+owner: tony
+status: active
+properties:
+  code: P-003
+  statement: "An agent may propose work, but a proposal cannot dispatch itself unless an explicit trusted policy permits that transition."
+---
+apiVersion: arch.kv/v1
+kind: Invariant
+id: p-004
+namespace: project:agent-bus
+title: "Completion requires a receipt"
+owner: tony
+status: active
+properties:
+  code: P-004
+  statement: "A work item cannot enter done until it has a receipt recording outcome, evidence, deliverables, limitations and known usage."
+---
+apiVersion: arch.kv/v1
+kind: Invariant
+id: p-005
+namespace: project:agent-bus
+title: "Runtime state stays inspectable and recoverable"
+owner: tony
+status: active
+properties:
+  code: P-005
+  statement: "Authoritative runtime records use atomic or append-only file operations and remain understandable without the dashboard. Raw chain-of-thought is never stored."
+---
+apiVersion: arch.kv/v1
+kind: Invariant
+id: p-006
+namespace: project:agent-bus
+title: "Model routes remain advisory"
+owner: tony
+status: active
+properties:
+  code: P-006
+  statement: "A selector recommendation or workflow template may prefill a proposal, but it cannot approve, assign, dispatch or complete work."
+---
+apiVersion: arch.kv/v1
+kind: Flow
+id: proposal-to-ready-work
+namespace: project:agent-bus
+title: "Proposal to approved work"
+owner: tony
+status: active
+properties:
+  trigger: "Tony or a trusted agent proposes delegated work"
+  steps:
+    - "Control plane validates the proposal"
+    - "Work Ledger records the proposed work item and creation event"
+    - "Tony or an explicit policy promotes the item to ready"
+  data: [work_item, source_ref, context_ref, budget, review_policy]
+relations:
+  - to: Component:project:agent-bus/control-plane
+    type: depends-on
+  - to: Component:project:agent-bus/work-ledger
+    type: depends-on
+---
+apiVersion: arch.kv/v1
+kind: Flow
+id: assignment-to-agent-run
+namespace: project:agent-bus
+title: "Assignment to agent execution"
+owner: tony
+status: active
+properties:
+  trigger: "Approved work is assigned to an agent"
+  steps:
+    - "Work Ledger records assignment and queued run"
+    - "Agent Bus transports the bounded request"
+    - "A host-local adapter acknowledges delivery and materializes referenced artifacts"
+    - "The adapter starts or resumes the provider-native session for that thread"
+    - "The adapter returns the provider reply on the same thread and records terminal transport status"
+    - "Run events and usage are returned to the ledger"
+  data: [work_item_id, assignment_id, run_id, thread_id, provider_session_ref]
+relations:
+  - to: Component:project:agent-bus/work-ledger
+    type: depends-on
+  - to: Component:project:agent-bus/bus-core
+    type: depends-on
+  - to: Component:project:agent-bus/agent-adapters
+    type: depends-on
+---
+apiVersion: arch.kv/v1
+kind: Flow
+id: receipt-to-reviewed-completion
+namespace: project:agent-bus
+title: "Receipt to reviewed completion"
+owner: tony
+status: active
+properties:
+  trigger: "An agent submits its work result"
+  steps:
+    - "Work Ledger stores a completion receipt and submitted event"
+    - "Configured human or independent-agent review runs"
+    - "Approved work enters done and remains linked to its source task"
+  data: [receipt, evidence, artifacts, usage, review_decision]
+relations:
+  - to: Component:project:agent-bus/work-ledger
+    type: depends-on
+  - to: Component:project:agent-bus/control-plane
+    type: depends-on
+---
+apiVersion: arch.kv/v1
+kind: Flow
+id: selector-to-routing-proposal
+namespace: project:agent-bus
+title: "Selector guidance to reviewed work proposal"
+owner: tony
+status: active
+properties:
+  trigger: "Tony or an agent asks how to route a task or selects a workflow template"
+  steps:
+    - "Model Selector Adapter reads and validates the read-only KV selector snapshot"
+    - "Control Plane presents current models, access surfaces, evidence confidence and advisory routes"
+    - "Tony or an agent may prefill a proposed work item from a route or workflow template"
+    - "Work Ledger applies its normal approval and assignment gates before any provider session starts"
+  data: [selector_version, model_id, surface_id, evidence_refs, route_id, work_item_proposal]
+relations:
+  - to: Component:project:agent-bus/model-selector-adapter
+    type: depends-on
+  - to: Component:project:agent-bus/control-plane
+    type: depends-on
+  - to: Component:project:agent-bus/work-ledger
+    type: depends-on
+---
+apiVersion: arch.kv/v1
+kind: FitnessCheck
+id: full-test-suite
+namespace: project:agent-bus
+title: "Agent Bus and Work Ledger tests pass"
+owner: tony
+status: active
+properties:
+  mode: executable
+  command: "npm test"
+  expected: "All transport, ledger, API and architecture-boundary tests pass"
+relations:
+  - to: Invariant:project:agent-bus/p-001
+    type: checks
+  - to: Invariant:project:agent-bus/p-004
+    type: checks
+  - to: Invariant:project:agent-bus/p-005
+    type: checks
+---
+apiVersion: arch.kv/v1
+kind: FitnessCheck
+id: private-service-contract
+namespace: project:agent-bus
+title: "A6 service remains private and observable"
+owner: tony
+status: active
+properties:
+  mode: manual
+  command: "Verify localhost binding, registered port, /healthz, /version, standard logs and private proxy authentication"
+  expected: "No direct public listener or unregistered platform dependency"
+relations:
+  - to: Interface:project:agent-bus/control-plane-http
+    type: checks
+---
+apiVersion: arch.kv/v1
+kind: FitnessCheck
+id: selector-contract-validation
+namespace: project:agent-bus
+title: "Selector contract and advisory-boundary tests pass"
+owner: tony
+status: active
+properties:
+  mode: executable
+  command: "node --test test/model-selector.test.mjs test/control-plane.test.mjs"
+  expected: "Invalid, stale or unavailable selector data degrades safely and no selector action bypasses ledger approval"
+relations:
+  - to: Invariant:project:agent-bus/p-003
+    type: checks
+  - to: Invariant:project:agent-bus/p-006
+    type: checks
+---
+apiVersion: arch.kv/v1
+kind: FitnessCheck
+id: provider-bridge-round-trip
+namespace: project:agent-bus
+title: "Provider bridges complete text and artifact round trips"
+owner: tony
+status: active
+properties:
+  mode: executable
+  command: "npm run bridge:test -- --target codex --target cursor --target antigravity --artifact"
+  expected: "Every live bridge acknowledges the request, replies in the same thread, reaches completed status and returns the artifact nonce"
+relations:
+  - to: Component:project:agent-bus/agent-adapters
+    type: checks
+  - to: Invariant:project:agent-bus/p-005
+    type: checks

@@ -89,10 +89,15 @@ async function findCreatedSession(beforeFiles, options, startedAtMs) {
 }
 
 function buildCodexArgs(options, outputFile, sessionId) {
-  const args = [
+  const args = [];
+  if (options.profile) args.push("--profile", options.profile);
+  args.push(
     "-a",
     "never",
     "exec",
+  );
+  if (options.ignoreUserConfig) args.push("--ignore-user-config");
+  args.push(
     "--json",
     "--color",
     "never",
@@ -102,7 +107,7 @@ function buildCodexArgs(options, outputFile, sessionId) {
     outputFile,
     "-C",
     options.projectRoot,
-  ];
+  );
 
   if (sessionId) {
     args.push("resume", "-c", `model=${quoteConfigValue(options.model)}`, sessionId, "-");

@@ -1,0 +1,27 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0001-separate-ledger-and-a6-control-plane
+namespace: project:agent-bus
+title: "Keep the work ledger adjacent and host the control plane on A6"
+status: active
+owner: tony
+properties:
+  date: 2026-07-10
+  component: global
+  tags: [architecture, agent-work-ledger, a6]
+  supersedes: null
+  superseded_by: null
+  context: |
+    Agent Bus began as a local Markdown mailbox and already has working provider bridges.
+    Tony now needs persistent task visibility, independent reviews, token accountability and both web and conversational control.
+    Folding those responsibilities into message threads would make delivery state and work state ambiguous, while moving all provider runtimes to A6 would lose access to desktop-native authenticated sessions.
+  decision: |
+    Keep Agent Bus as transport and add an adjacent Agent Work Ledger for delegated-work lifecycle.
+    Host the durable ledger, private HTTP API and dashboard on A6; keep provider adapters on the hosts where their native runtimes and sessions live.
+  consequences:
+    positive: "Clear ownership, durable task history, private always-on visibility and portable provider integrations."
+    negative: "A small distributed boundary remains between A6 and host-local adapters and must be monitored explicitly."
+    neutral: "Existing KV, software backlog and GitHub tasks remain source authorities linked through source_ref."
+  alternatives: |
+    Treating threads as tasks was rejected because delivery and work lifecycle differ.
+    Running every agent on A6 was rejected because Codex Desktop, Cursor and Antigravity depend on Mac-local application state.

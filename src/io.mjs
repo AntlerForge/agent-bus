@@ -1,4 +1,5 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 export async function readJsonFile(filePath, fallback) {
@@ -20,8 +21,17 @@ export async function writeJsonFileAtomic(filePath, value) {
 export async function writeFileAtomic(filePath, content) {
   const tempPath = path.join(
     path.dirname(filePath),
-    `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`,
+    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
   );
   await writeFile(tempPath, content, "utf8");
+  await rename(tempPath, filePath);
+}
+
+export async function writeBufferAtomic(filePath, content) {
+  const tempPath = path.join(
+    path.dirname(filePath),
+    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
+  );
+  await writeFile(tempPath, content);
   await rename(tempPath, filePath);
 }

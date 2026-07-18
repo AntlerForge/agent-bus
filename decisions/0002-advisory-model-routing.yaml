@@ -1,0 +1,33 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0002-advisory-model-routing
+namespace: project:agent-bus
+title: "Expose Knowledge Vault model routing as an advisory control-plane contract"
+status: active
+owner: tony
+properties:
+  date: 2026-07-10
+  component: control-plane
+  tags: [architecture, model-routing, knowledge-vault, review-gate]
+  supersedes: null
+  superseded_by: null
+  context: |
+    The existing LLM selector mixes model facts, access surfaces, evidence and
+    recommendations in one stale YAML file. Tony wants agents and the dashboard
+    to use current routing guidance without allowing recommendations to become
+    an unreviewed dispatcher or a second source of truth.
+  decision: |
+    Keep selector v3 authoritative in the Knowledge Vault as four versioned,
+    human-readable JSON documents: models, surfaces, evidence and routing.
+    Mount that directory read-only into the A6 Agent Bus service. Add a bounded
+    adapter and API that validate and expose the snapshot. Treat all routes as
+    advisory: an agent may propose a work item from a route or template, but the
+    Work Ledger's existing approval and assignment gates remain mandatory.
+  consequences:
+    positive: "Current model availability, evidence and routing become visible to Tony and agents without duplicating task authority."
+    negative: "The Agent Bus service gains a read-only dependency on a versioned KV data contract and must degrade cleanly when it is unavailable."
+    neutral: "Provider-native sessions still execute on ChatGPT, Claude, Cursor, Antigravity or other host-local runtimes."
+  alternatives: |
+    Copying recommendations into Agent Bus runtime state was rejected because it
+    would create a competing authority. Direct autonomous dispatch was rejected
+    because it would violate the proposal approval invariant.

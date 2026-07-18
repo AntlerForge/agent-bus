@@ -12,6 +12,7 @@ import {
 } from "./markdown.mjs";
 import { ensureBusLayout } from "./paths.mjs";
 import { assertNoObviousSecrets } from "./security.mjs";
+import { configuredRemoteBus } from "./remote-bus.mjs";
 
 const ALLOWED_STATUSES = new Set([
   "open",
@@ -71,6 +72,10 @@ export async function sendMessage(
   },
   root,
 ) {
+  const remote = configuredRemoteBus();
+  if (remote) return remote.sendMessage({
+    from, to, subject, body, thread_id, priority, ack_required, requires_response, artifact_paths, idempotency_key,
+  });
   if (!from || !to || !subject || !body) {
     throw new Error("from, to, subject, and body are required");
   }
@@ -172,6 +177,8 @@ export async function replyMessage(
   { from, to, thread_id, body, priority = "normal", ack_required = false, requires_response = false, artifact_paths = [] },
   root,
 ) {
+  const remote = configuredRemoteBus();
+  if (remote) return remote.replyMessage({ from, to, thread_id, body, priority, ack_required, requires_response, artifact_paths });
   const paths = await ensureBusLayout(root);
   const thread = await readThread(paths, thread_id);
   const subject = thread.data.subject || `Reply to ${thread_id}`;
@@ -185,6 +192,8 @@ async function readInboxFile(filePath) {
 }
 
 export async function readInbox({ agent, include_read = false }, root) {
+  const remote = configuredRemoteBus();
+  if (remote) return remote.readInbox({ agent, include_read });
   if (!agent) {
     throw new Error("agent is required");
   }
@@ -215,6 +224,10 @@ export async function readInbox({ agent, include_read = false }, root) {
       priority: message.data.priority,
       ack_required: message.data.ack_required,
       requires_response: message.data.requires_response,
+      acknowledged: message.data.acknowledged || null,
+      read: message.data.read || null,
+      artifact_paths: message.data.artifact_paths || [],
+      artifacts: message.data.artifacts || [],
       file: message.filePath,
       body: message.body.trim(),
     });
@@ -244,6 +257,8 @@ async function findMessageFile(messageId, root) {
 }
 
 export async function ackMessage({ message_id }, root) {
+  const remote = configuredRemoteBus();
+  if (remote) return remote.ackMessage({ message_id });
   const message = await findMessageFile(message_id, root);
   const acknowledged = nowIso();
   message.data.status = message.data.status === "read" ? "read" : "acknowledged";
@@ -266,6 +281,8 @@ export async function ackMessage({ message_id }, root) {
 }
 
 export async function markRead({ message_id }, root) {
+  const remote = configuredRemoteBus();
+  if (remote) return remote.markRead({ message_id });
   const message = await findMessageFile(message_id, root);
   const read = nowIso();
   message.data.status = "read";
@@ -275,6 +292,8 @@ export async function markRead({ message_id }, root) {
 }
 
 export async function updateThreadStatus({ thread_id, status }, root) {
+  const remote = configuredRemoteBus();
+  if (remote) return remote.updateThreadStatus({ thread_id, status });
   if (!ALLOWED_STATUSES.has(status)) {
     throw new Error(`Unsupported thread status: ${status}`);
   }
@@ -289,6 +308,8 @@ export async function updateThreadStatus({ thread_id, status }, root) {
 }
 
 export async function listThreads(root) {
+  const remote = configuredRemoteBus();
+  if (remote) return remote.listThreads();
   const paths = await ensureBusLayout(root);
   const entries = await readdir(paths.threads, { withFileTypes: true });
   const threads = [];
@@ -312,4 +333,24 @@ export async function listThreads(root) {
   }
   threads.sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
   return threads;
+}
+
+export async function getThread({ thread_id }, root) {
+  const remote = configuredRemoteBus();
+  if (remote) return remote.getThread({ thread_id });
+  if (!thread_id) {
+    throw new Error("thread_id is required");
+  }
+  const paths = await ensureBusLayout(root);
+  const thread = await readThread(paths, thread_id);
+  return {
+    thread_id: thread.data.id,
+    subject: thread.data.subject,
+    status: thread.data.status,
+    participants: thread.data.participants || [],
+    created: thread.data.created,
+    updated: thread.data.updated,
+    next_seq: thread.data.next_seq,
+    body: thread.body.trim(),
+  };
 }

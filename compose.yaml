@@ -1,0 +1,24 @@
+services:
+  agent-bus-control-plane:
+    build: .
+    container_name: agent-bus-control-plane
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      AGENT_BUS_ROOT: /data
+      AGENT_BUS_HOST: 127.0.0.1
+      AGENT_BUS_PORT: 8091
+      AGENT_BUS_BASE_PATH: /agent-bus
+      AGENT_BUS_LOG_DIR: /logs
+      AGENT_BUS_SELECTOR_PATH: /selector
+    volumes:
+      - ${AGENT_BUS_DATA_DIR:-../runtime}:/data
+      - ${HOME}/var/log/home-platform/agent-bus:/logs
+      - ${AGENT_BUS_SELECTOR_DIR:-/srv/kv/vault/it-setup/llm-selector/v3}:/selector:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

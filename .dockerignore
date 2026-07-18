@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+runtime
+test
+docs
+skills
+*.png
+*.log
+.env*
+.agent-bus.local.json

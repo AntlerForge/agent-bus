@@ -34,6 +34,8 @@ export function getPaths(root = getBusRoot()) {
     agentsFile: path.join(busRoot, "_agents.json"),
     idempotencyFile: path.join(busRoot, "_idempotency.json"),
     artifactManifest: path.join(busRoot, "shared", "_artifacts.json"),
+    workLedger: path.join(busRoot, "work-ledger"),
+    workItems: path.join(busRoot, "work-ledger", "items"),
   };
 }
 
@@ -45,6 +47,7 @@ export async function ensureBusLayout(root = getBusRoot()) {
     mkdir(paths.threads, { recursive: true }),
     mkdir(paths.shared, { recursive: true }),
     mkdir(paths.archive, { recursive: true }),
+    mkdir(paths.workItems, { recursive: true }),
   ]);
   return paths;
 }

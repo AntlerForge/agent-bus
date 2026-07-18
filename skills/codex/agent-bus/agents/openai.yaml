@@ -1,4 +1,4 @@
 interface:
   display_name: "Agent Bus"
-  short_description: "Use local Agent Bus mailbox for Claude-Codex task handoff."
-  default_prompt: "Use Agent Bus to check your inbox, answer actionable messages, and send replies through the mailbox."
+  short_description: "Coordinate governed work across agent runtimes"
+  default_prompt: "Use $agent-bus to coordinate this work through the A6 control plane and report the next approval or bridge action."

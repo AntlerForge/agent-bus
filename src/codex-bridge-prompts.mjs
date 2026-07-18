@@ -17,15 +17,15 @@ export function buildBootstrapPrompt(options) {
     "- Use local tools only when needed for the actual task.",
     "- Keep replies direct and suitable for forwarding when the bridge gives you an Agent Bus task.",
     "",
-    `Agent Bus root: ${options.root}`,
-    `Shared artifact directory: ${path.join(options.root, "shared")}`,
+    `Agent Bus authority: ${process.env.AGENT_BUS_CONTROL_PLANE_URL || options.root}`,
+    `Materialized artifact directory: ${path.join(path.dirname(options.sessionStore), "artifacts")}`,
     `Project root: ${options.projectRoot}`,
     "",
     "Reply exactly: CODEX_BRIDGE_SESSION_READY",
   ].join("\n");
 }
 
-export function buildAgentBusPrompt(message, threadMarkdown, options) {
+export function buildAgentBusPrompt(message, threadMarkdown, options, artifacts = []) {
   return [
     "Agent Bus inbound message delivered into your persistent Codex bridge session.",
     "",
@@ -43,8 +43,11 @@ export function buildAgentBusPrompt(message, threadMarkdown, options) {
     "- If the optional STATUS line is omitted, the bridge will mark the thread completed.",
     "- Do not ask the user what to do unless the task is genuinely blocked or needs their judgment.",
     "",
-    `Agent Bus root: ${options.root}`,
-    `Shared artifact directory: ${path.join(options.root, "shared")}`,
+    `Agent Bus authority: ${process.env.AGENT_BUS_CONTROL_PLANE_URL || options.root}`,
+    "Materialized artifacts:",
+    ...(artifacts.length
+      ? artifacts.map((artifact) => `- ${artifact.local_path || artifact.path} (${artifact.filename || artifact.artifact_id})`)
+      : ["- none"]),
     "",
     `From: ${message.from}`,
     `To: ${message.to}`,

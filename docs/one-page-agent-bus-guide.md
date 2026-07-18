@@ -1,147 +1,68 @@
-# Agent Bus: One-Page Operator Guide
+# Agent Bus: one-page operator guide
 
-Agent Bus lets Claude and Codex pass tasks through a shared local mailbox:
-
-```text
-~/AgentBus
-```
-
-Use the full guide for first-time MCP registration and troubleshooting. This page is the
-daily operating model.
+Agent Bus has one durable authority on A6. The Mac bridges connect native provider CLIs
+to it. The dashboard shows the same messages, work and bridge registrations.
 
 ```mermaid
 flowchart LR
-  subgraph CHAT["THE FOUR CHATS YOU USE"]
-    direction TB
-    CAPP["Claude Cowork<br/>app chat"]
-    CCLI["Claude Code<br/>CLI chat"]
-    XAPP["Codex app<br/>app chat"]
-    XCLI["Codex bridge<br/>CLI chat"]
-  end
-
-  REQ["send request<br/>may require response"]
-  BUS["Agent Bus folder<br/>messages, threads, shared files"]
-  TARGET{"Target name"}
-  subgraph MODE["REPLY MODE"]
-    direction TB
-    AUTO["AUTO CLI REPLY<br/>target: codex or claude-code<br/>app chats can request this"]
-    MANUAL["MANUAL APP-CHAT REPLY<br/>target: cowork, codex-app, custom<br/>ask target chat to read inbox"]
-  end
-
-  CAPP & CCLI & XAPP & XCLI --> REQ
-  REQ --> BUS
-  BUS --> TARGET
-  TARGET -->|"CLI target"| AUTO
-  TARGET -->|"app-chat target"| MANUAL
-
-  classDef app fill:#eef6ff,stroke:#1f4f82,stroke-width:2px,color:#111827
-  classDef cli fill:#eafaf0,stroke:#1f7a43,stroke-width:2px,color:#111827
-  classDef bus fill:#fef3c7,stroke:#92400e,stroke-width:2px,color:#111827
-  classDef decision fill:#f3f4f6,stroke:#4b5563,stroke-width:2px,color:#111827
-  classDef auto fill:#dcfce7,stroke:#15803d,stroke-width:2px,color:#111827
-  classDef manual fill:#fee2e2,stroke:#b91c1c,stroke-width:2px,color:#111827
-  classDef request fill:#f3f4f6,stroke:#4b5563,stroke-width:2px,color:#111827
-  class CAPP,XAPP app
-  class CCLI,XCLI cli
-  class REQ request
-  class BUS bus
-  class TARGET decision
-  class AUTO auto
-  class MANUAL manual
-  style CHAT fill:#ffffff,stroke:#111827,stroke-width:3px,color:#111827
-  style MODE fill:#ffffff,stroke:#111827,stroke-width:3px,color:#111827
+  U["Tony or a lead agent"] --> A6["A6 Agent Bus + Work Ledger"]
+  A6 --> C["codex bridge\nCodex CLI"]
+  A6 --> R["cursor bridge\nGrok in Cursor"]
+  A6 --> G["antigravity bridge\nGemini in Antigravity"]
+  A6 --> H["claude-code channel\nopen Claude session"]
+  C & R & G & H --> A6
 ```
 
-## The Core Rule
+## Choose the target
 
-Any chat can send a task. The **target name** decides what happens.
+| Target | What answers | Automatic availability | Context continuity |
+|---|---|---|---|
+| `codex` | Codex CLI using `gpt-5.6-sol` | persistent LaunchAgent | dedicated persistent session |
+| `cursor` | Cursor Agent CLI using Grok 4.5 High | persistent LaunchAgent | one Cursor session per bus thread |
+| `antigravity` | Antigravity `agy` using Gemini 3.5 Flash Medium | persistent LaunchAgent | one conversation per bus thread |
+| `claude-code` | the open Claude Code channel session | only while that session is open | that Claude session |
 
-| Target | Goes to | Reply mode |
-| --- | --- | --- |
-| `codex` | Codex bridge in Terminal | Automatic if the Codex bridge is running |
-| `claude-code` | Claude Code in Terminal | Automatic if Claude Code channel is running |
-| `codex-app` or custom Codex app name | Codex app chat | Manual: ask that exact chat to read its inbox |
-| `cowork` or custom Claude app name | Claude Cowork chat | Manual: ask that exact chat to read its inbox |
+Fable, Grok and Gemini are model choices, not agent addresses. Send to `cursor` or
+`antigravity`; the bridge configuration chooses the model.
 
-`requires_response` means "please reply". It does not force automation. Automation only
-happens when the target is `codex` or `claude-code` and that responder is running.
+## Ask for work
 
-## Start The Terminal Chats And Bridge
+From an agent with the Agent Bus skill:
 
-Claude Code CLI chat / auto responder:
+```text
+Use Agent Bus. Send this review to cursor, require acknowledgement and a response,
+attach /absolute/path/to/draft.md and /absolute/path/to/voice.md, and report the
+message ID and thread ID. Ask for findings only, not a rewrite.
+```
+
+Use `requires_response: true` for delegated action and `ack_required: true` when receipt
+matters. A remote client uploads local `artifact_paths` to A6 before sending.
+
+For independent review, send the same frozen artifact and rubric to separate targets. Do
+not disclose one reviewer's findings to another. Synthesize only after all replies arrive.
+
+## Read the evidence
+
+- A recent heartbeat means the bridge process is running.
+- `acknowledged` means the target picked up the message.
+- An in-thread reply is the provider's returned result.
+- Message-thread `completed` means the transport exchange finished.
+- A Work Ledger item is separate: it needs assignment, run and receipt records for governed
+  status, review and usage tracking.
+
+Registration alone is not proof of delivery. When in doubt, run:
 
 ```bash
-cd /path/to/agent-bus
-claude --dangerously-load-development-channels server:agent-bus-channel
+npm run bridge:test -- --target codex --target cursor --target antigravity --artifact
 ```
 
-Normal Codex CLI chat:
+## Persistence and storage
 
-```bash
-cd /path/to/agent-bus
-codex -m gpt-5.2
-```
+A6 stores messages, threads, artifacts and Work Ledger records. The Mac stores only native
+provider session references under `~/Library/Application Support/Agent Bus/`. Durable facts
+belong in the source project or Knowledge Vault; provider chat history is useful continuity,
+not the source of truth.
 
-This opens the normal Codex CLI chat. It is a separate manual chat unless you tell it to
-use Agent Bus and read a named inbox.
-
-Codex bridge setup and auto responder:
-
-```bash
-cd /path/to/agent-bus
-node src/codex-bridge.mjs --model gpt-5.2
-```
-
-This command is the Codex bridge setup. It creates or resumes the persistent Codex bridge
-session, stores it in `~/AgentBus/_codex_bridge_session.json`, watches
-target `codex`, and opens an `agent-bus>` prompt into that same session. Leave this
-Terminal running while you want `codex` to auto reply.
-
-The bridge does not open the normal Codex CLI chat screen. It has its own visible prompt:
-`agent-bus>`. Typing there goes into the same persistent Codex CLI session that handles
-messages sent to target `codex`.
-
-## Name A Specific App Chat
-
-You name an app chat by giving it an Agent Bus address inside that chat. Open the exact
-chat and paste:
-
-```text
-Use the agent-bus skill.
-For this conversation, your Agent Bus address is codex-review-chat.
-When I ask you to check Agent Bus, read inbox codex-review-chat, handle actionable
-messages, reply in the same thread, mark messages read, and update thread status.
-Confirm the address you will use.
-```
-
-Then route work to `codex-review-chat`. Because it is an app chat, it remains manual: ask
-that same chat to read its inbox when you want it to act.
-
-## Send Work
-
-To ask the Codex auto responder from Claude:
-
-```text
-Use the agent-bus skill. Send this task to codex and require a response: review the test plan.
-```
-
-To ask Claude Code from Codex:
-
-```text
-Use the agent-bus skill. Send this task to claude-code and require a response: check the wording.
-```
-
-To use a named app chat:
-
-```text
-Use the agent-bus skill. Send this task to codex-review-chat and require a response.
-```
-
-Then, in that named app chat:
-
-```text
-Use the agent-bus skill. Read inbox codex-review-chat and respond.
-```
-
-Put larger files in `~/AgentBus/shared` and include the absolute path
-in the message.
+`~/AgentBus` is a local-development fallback only. Live Mac clients must use
+`AGENT_BUS_CONTROL_PLANE_URL=http://127.0.0.1:18091/agent-bus` so a second ledger cannot
+silently diverge.

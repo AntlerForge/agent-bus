@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { formatChannelContent, channelMeta, readPendingAgentMessages } from "./channel-messages.mjs";
 import { ensureBusLayout, getBusRoot } from "./paths.mjs";
+import { configuredRemoteBus } from "./remote-bus.mjs";
 
 const root = getBusRoot();
 const channelAgent = process.env.AGENT_BUS_CHANNEL_AGENT || "claude-code";
@@ -56,7 +57,7 @@ async function emitPending(mcp, { force = false } = {}) {
   return { agent: channelAgent, emitted_count: emitted.length, emitted, pending_count: messages.length };
 }
 
-await ensureBusLayout(root);
+if (!configuredRemoteBus()) await ensureBusLayout(root);
 
 const mcp = new Server(
   { name: "agent-bus-channel", version: "0.1.0" },
