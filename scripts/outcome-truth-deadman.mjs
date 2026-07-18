@@ -9,7 +9,6 @@ let heartbeat = 0;
 try { heartbeat = Date.parse((await fs.readFile(`${dir}/heartbeat`, "utf8")).trim()); } catch {}
 if (!heartbeat || Date.now() - heartbeat > maxMs) {
   const bucket = new Date().toISOString().slice(0, 13);
-  await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", "ALERT", "--id", `outcome-sentinel-dead-${bucket}`, "--title", "ALERT: outcome sentinel silent", "--message", `No sentinel heartbeat within ${maxMs / 60000} minutes.`]);
+  await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", "ALERT", "--id", `outcome-sentinel-dead-${bucket}`, "--message", `Sentinel silent: no heartbeat within ${maxMs / 60000} minutes.`]);
   process.exitCode = 1;
 }
-

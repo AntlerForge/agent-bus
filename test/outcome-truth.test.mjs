@@ -36,6 +36,7 @@ test("sentinel emits only ALERT transition requests and daily INFO is separate",
   assert.equal(sources.join("\n").includes('"--class", "APPROVAL"'), false);
   assert.match(sources[0], /"--class", "INFO"/);
   assert.match(sources[1], /"--class", "ALERT"/);
+  assert.equal(sources.join("\n").includes('"--title"'), false);
 });
 
 test("an induced sandbox fault opens once and semantic recovery closes it", () => {
