@@ -37,3 +37,16 @@ test("sentinel emits only ALERT transition requests and daily INFO is separate",
   assert.match(sources[1], /"--class", "ALERT"/);
 });
 
+test("an induced sandbox fault opens once and semantic recovery closes it", () => {
+  const healthy = structuredClone(july);
+  healthy.doctor.status = "pass"; healthy.rsync.latest_exit_code = 0; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
+  for (const item of Object.values(healthy.mac.launchagents)) item.age_minutes = 1;
+  const baseline = applyEvaluation({ matrix, snapshot: healthy, now: "2026-07-18T12:00:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
+  const fault = structuredClone(healthy); fault.sandbox.ok = false;
+  const failed = applyEvaluation({ matrix, snapshot: fault, previous: baseline.cards, now: "2026-07-18T12:15:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
+  assert.deepEqual(failed.transitions.map((t) => [t.type, t.card.check_id, t.notify]), [["opened", "sentinel-sandbox-contract", true]]);
+  const repeated = applyEvaluation({ matrix, snapshot: fault, previous: failed.cards, now: "2026-07-18T12:30:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
+  assert.equal(repeated.transitions.length, 0);
+  const recovered = applyEvaluation({ matrix, snapshot: healthy, previous: repeated.cards, now: "2026-07-18T12:45:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
+  assert.deepEqual(recovered.transitions.map((t) => [t.type, t.card.check_id, t.notify]), [["recovered", "sentinel-sandbox-contract", true]]);
+});

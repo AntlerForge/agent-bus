@@ -53,7 +53,7 @@ checks:
     source: mac.launchagents.share_mount.age_minutes
     operator: at_most
     expected: 480
-    recovery: the agent outcome timestamp becomes fresh for two scheduled intervals
+    recovery: a later agent outcome timestamp is fresh for its declared schedule
   - id: mac-launchagent-runtime-check
     area: mac
     owner: tony
@@ -61,7 +61,7 @@ checks:
     source: mac.launchagents.runtime_check.age_minutes
     operator: at_most
     expected: 120
-    recovery: the agent outcome timestamp becomes fresh for two scheduled intervals
+    recovery: a later agent outcome timestamp is fresh for its declared schedule
   - id: mac-launchagent-developer-mirrors
     area: mac
     owner: tony
@@ -69,7 +69,7 @@ checks:
     source: mac.launchagents.developer_mirrors.age_minutes
     operator: at_most
     expected: 720
-    recovery: the agent outcome timestamp becomes fresh for two scheduled intervals
+    recovery: a later agent outcome timestamp is fresh for its declared schedule
   - id: mac-launchagent-project-store
     area: mac
     owner: tony
@@ -77,7 +77,7 @@ checks:
     source: mac.launchagents.project_store.age_minutes
     operator: at_most
     expected: 240
-    recovery: the agent outcome timestamp becomes fresh for two scheduled intervals
+    recovery: a later agent outcome timestamp is fresh for its declared schedule
   - id: kv-daily-synthesis-clean
     area: synthesis
     owner: tony
@@ -86,6 +86,14 @@ checks:
     operator: equals
     expected: true
     recovery: a later scheduled synthesis completes with zero warnings
+  - id: sentinel-sandbox-contract
+    area: sentinel
+    owner: tony
+    severity: hard
+    source: sandbox.ok
+    operator: equals
+    expected: true
+    recovery: a later evaluation observes the induced contract healthy
 reserved_checks:
   - id: spanielbus-bm2-freshness
     enabled: false

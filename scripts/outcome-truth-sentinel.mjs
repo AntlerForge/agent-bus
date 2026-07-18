@@ -32,6 +32,7 @@ async function collect() {
     rsync: { latest_exit_code: codes.length ? Number(codes.at(-1)[1]) : null },
     mac,
     synthesis: { latest_clean: synthesisOutcome?.event === "run_completed" },
+    sandbox: { ok: true },
   };
 }
 
@@ -53,6 +54,7 @@ await saveCards(cardsFile, outcome.cards);
 await fs.writeFile(`${stateDir}/heartbeat`, `${now}\n`, { mode: 0o600 });
 for (const transition of outcome.transitions) await notify(transition);
 if (process.env.OUTCOME_DAILY_INFO === "1" && outcome.results.every((r) => r.state === "pass")) {
-  await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", "INFO", "--id", `outcome-all-clear-${now.slice(0,10)}`, "--title", "Outcome truth all-clear", "--message", "All enabled semantic contracts are healthy."]);
+  const message = process.env.OUTCOME_INFO_MESSAGE || "All enabled semantic contracts are healthy.";
+  await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", "INFO", "--id", `outcome-all-clear-${now.slice(0,10)}`, "--message", message]);
 }
 console.log(JSON.stringify(outcome));
