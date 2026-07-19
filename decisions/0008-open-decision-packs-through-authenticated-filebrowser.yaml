@@ -1,0 +1,27 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0008-open-decision-packs-through-authenticated-filebrowser
+namespace: project:agent-bus
+title: "Open decision packs through the existing authenticated FileBrowser"
+status: active
+owner: tony
+properties:
+  date: 2026-07-19
+  component: decision-queue
+  tags: [stage-2, mobile, home-assistant, filebrowser]
+  context: |
+    Home Assistant notifications announce the decision pack but do not expose a tap target.
+    The pack contains personal operational context and must not be placed on a public or
+    unauthenticated URL. A new web service would add another port, process and auth boundary.
+  decision: |
+    Use Home Assistant Companion data.url to open the pack through the existing A6
+    FileBrowser on port 8088. The URL uses the antler-a6 tailnet hostname and FileBrowser's
+    existing login; HA configuration and public routes remain unchanged. FileBrowser's
+    responsive Markdown view supplies the v0 phone rendering. Queue notifications pass an
+    explicit URL; notifier callers without one retain the existing HA dashboard fallback.
+  consequences:
+    positive: "No new service, secret, public exposure or HA-side configuration is required."
+    negative: "The phone must be on Tailscale and hold or establish a FileBrowser session."
+    neutral: "A later dedicated read-only view still requires a separate architecture decision."
+  supersedes: null
+  superseded_by: null
