@@ -11,10 +11,30 @@ const specs = {
   project_store: ["Library/Logs/AntlerForge/kv-project-store-sync.out.log", "Library/Logs/AntlerForge/kv-project-store-sync.err.log"],
 };
 const launchagents = {};
+const markerNames = {
+  share_mount: "a6-share-mount.json",
+  runtime_check: "kv-mac-runtime-check.json",
+  developer_mirrors: "kv-developer-mirrors-sync.json",
+};
 for (const [label, candidates] of Object.entries(specs)) {
+  let completedAt = null;
+  let exitCode = null;
+  const marker = markerNames[label] && path.join(home, "Library/Application Support/AntlerForge/outcome-truth", markerNames[label]);
+  if (marker && fs.existsSync(marker)) {
+    const parsed = JSON.parse(fs.readFileSync(marker, "utf8"));
+    completedAt = parsed.completed_at;
+    exitCode = parsed.exit_code;
+  } else if (label === "project_store") {
+    const bridgeLog = path.join(home, "Documents/Admin/knowledge-vault/logs/project-store-sync-bridge.log");
+    if (fs.existsSync(bridgeLog)) {
+      const matches = [...fs.readFileSync(bridgeLog, "utf8").matchAll(/^(\S+) bridge end rc=(\d+)$/gm)];
+      if (matches.length) [completedAt, exitCode] = [matches.at(-1)[1], Number(matches.at(-1)[2])];
+    }
+  }
   const files = candidates.map((p) => path.join(home, p)).filter(fs.existsSync);
-  const mtime = files.length ? Math.max(...files.map((f) => fs.statSync(f).mtimeMs)) : 0;
-  launchagents[label] = { age_minutes: mtime ? (Date.now() - mtime) / 60000 : null };
+  const fallbackMtime = files.length ? Math.max(...files.map((f) => fs.statSync(f).mtimeMs)) : 0;
+  const observedMs = completedAt ? Date.parse(completedAt) : fallbackMtime;
+  launchagents[label] = { age_minutes: observedMs ? (Date.now() - observedMs) / 60000 : null, exit_code: exitCode, completed_at: completedAt };
 }
 const localBusRoot = path.join(os.homedir(), "AgentBus");
 const quarantine = "_misrouted-quarantine-20260719";
