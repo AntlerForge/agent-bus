@@ -132,6 +132,7 @@ try { previous = JSON.parse(await fs.readFile(`${outputDir}/state.json`, "utf8")
 const breachedIds = queue.filter((row) => row.breached).map((row) => row.id);
 const newBreaches = previous.initialized ? breachedIds.filter((id) => !previous.breached_ids.includes(id)) : [];
 await atomic(`${outputDir}/state.json`, `${JSON.stringify({ initialized: true, evaluated_at: now.toISOString(), breached_ids: breachedIds }, null, 2)}\n`);
+await atomic(`${outputDir}/last-evaluation.json`, `${JSON.stringify({ evaluated_at: now.toISOString(), new_breaches: newBreaches }, null, 2)}\n`);
 
 const notify = async (klass, id, message) => {
   if (argv.has("--no-notify")) return;
