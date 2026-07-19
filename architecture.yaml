@@ -114,28 +114,6 @@ relations:
 ---
 apiVersion: arch.kv/v1
 kind: Component
-id: decision-queue
-namespace: project:agent-bus
-title: "Waiting-on-Tony decision queue"
-description: |
-  Does: read authoritative A6 stores, normalise age/SLA state, and produce a bounded
-  decision pack. Does not: approve work, mutate KV records, or integrate with the KV dashboard.
-owner: tony
-status: active
-properties:
-  path: "scripts/decision-queue.mjs"
-  tech: "Node.js, YAML and systemd"
-  responsibilities:
-    - "Aggregate declared waiting states without changing their source stores"
-    - "Emit transition-only SLA alerts and a weekly INFO decision pack"
-  non_responsibilities:
-    - "Approval authority, automatic expiry, or dashboard integration"
-relations:
-  - to: Component:project:agent-bus/ha-notification-channel
-    type: depends-on
----
-apiVersion: arch.kv/v1
-kind: Component
 id: agent-directory
 namespace: project:agent-bus
 title: "Agent Directory"
