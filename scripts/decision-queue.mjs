@@ -16,14 +16,7 @@ const config = YAML.parse(await fs.readFile(process.env.DECISION_QUEUE_CONFIG ||
 const hoursSince = (value) => Math.max(0, (now - new Date(value)) / 36e5);
 const frontmatter = (text) => {
   const match = text.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return {};
-  try { return YAML.parse(match[1]); }
-  catch {
-    // Historical holding-pen packets include malformed quoted multiline fields.
-    // Recover only the bounded scalar routing fields; do not reinterpret content.
-    return Object.fromEntries(match[1].split("\n").map((line) => line.match(/^([a-z_]+):\s*["']?([^"'].*?)["']?\s*$/))
-      .filter(Boolean).map((parts) => [parts[1], parts[2]]));
-  }
+  return match ? YAML.parse(match[1]) : {};
 };
 const listFiles = async (dir, suffix = "") => (await fs.readdir(dir, { withFileTypes: true }))
   .filter((entry) => entry.isFile() && entry.name.endsWith(suffix)).map((entry) => path.join(dir, entry.name));
