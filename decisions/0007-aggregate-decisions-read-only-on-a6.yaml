@@ -1,0 +1,27 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0007-aggregate-decisions-read-only-on-a6
+namespace: project:agent-bus
+title: "Aggregate Tony's decision queue read-only on A6"
+status: active
+owner: tony
+properties:
+  date: 2026-07-19
+  component: decision-queue
+  tags: [stage-2, decisions, read-only, cross-boundary]
+  context: |
+    Decisions waiting on Tony are distributed across Agent Bus and canonical KV stores.
+    Surfacing each source independently does not provide one age-ranked queue or an
+    actionable bounded weekly pack.
+  decision: |
+    A nightly A6 process reads each authoritative store without mutating it, normalises
+    waiting records under a versioned SLA policy, and atomically writes a runtime snapshot.
+    Sunday packs contain at most twenty one-line actions and are delivered as a file plus
+    an INFO notification. New SLA transitions alone use ALERT. Expiry actions remain draft
+    text; any later approved KV mutation must use ingest.py or board.py.
+  consequences:
+    positive: "One inspectable queue covers all declared authorities without creating a new source of truth."
+    negative: "Source parsers must track their existing storage contracts."
+    neutral: "Dashboard integration and automatic approvals remain excluded from v0."
+  supersedes: null
+  superseded_by: null
