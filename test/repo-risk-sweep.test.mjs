@@ -29,3 +29,10 @@ test("repo-risk sweep is propose-only and prepares, but never executes, checkpoi
     assert.equal((await git(repo, ["status", "--porcelain=v1"])).stdout, beforeStatus);
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
+
+test("existing Mac reporter owns the seven-day refresh; no new scheduler is introduced", async () => {
+  const reporter = await fs.readFile("scripts/outcome-truth-mac-report.sh", "utf8");
+  assert.match(reporter, /604800/);
+  assert.match(reporter, /repo-risk-sweep\.mjs/);
+  assert.doesNotMatch(reporter, /launchctl|crontab/);
+});
