@@ -4,6 +4,7 @@
   "rsync": {"latest_exit_code":23},
   "mac": {
     "report_age_minutes": 1,
+    "repo_sweep": {"age_minutes":1},
     "mount_present": false,
     "launchagents": {
       "share_mount":{"age_minutes":23040},

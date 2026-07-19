@@ -24,4 +24,5 @@ test("decision queue is read-only toward source authorities", () => {
   assert.match(source, /expiry_draft/);
   assert.match(source, /newBreaches/);
   assert.match(source, /phoneUrl\("queue\.json"\)/);
+  assert.match(source, /collectRepoRisks/);
 });

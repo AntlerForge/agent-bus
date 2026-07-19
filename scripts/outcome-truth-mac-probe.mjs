@@ -15,4 +15,10 @@ for (const [label, candidates] of Object.entries(specs)) {
   const mtime = files.length ? Math.max(...files.map((f) => fs.statSync(f).mtimeMs)) : 0;
   launchagents[label] = { age_minutes: mtime ? (Date.now() - mtime) / 60000 : null };
 }
-console.log(JSON.stringify({ observed_at: new Date().toISOString(), mount_present: fs.existsSync("/Volumes/share"), launchagents }));
+let repo_sweep = { observed_at: null, age_minutes: null, findings: [], counts: {}, propose_only: null };
+const repoSweepFile = process.env.REPO_RISK_OUTPUT || path.join(home, "Library/Application Support/Agent Bus/repo-risk/latest.json");
+if (fs.existsSync(repoSweepFile)) {
+  repo_sweep = JSON.parse(fs.readFileSync(repoSweepFile, "utf8"));
+  repo_sweep.age_minutes = (Date.now() - Date.parse(repo_sweep.observed_at)) / 60000;
+}
+console.log(JSON.stringify({ observed_at: new Date().toISOString(), mount_present: fs.existsSync("/Volumes/share"), launchagents, repo_sweep }));

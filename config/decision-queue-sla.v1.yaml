@@ -9,6 +9,7 @@ slas_hours:
   overdue_task: 0
   day_board: 48
   funnel_approval: 72
+  repo_risk: 168
 expiry_multiple: 2
 weekly_limit: 20
 delivery:

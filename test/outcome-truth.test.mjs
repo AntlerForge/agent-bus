@@ -10,6 +10,7 @@ test("July replay catches named failures and ignores van and HA noise", () => {
   const out = applyEvaluation({ matrix, snapshot: july, now: "2026-07-18T12:00:00Z", shadowStartedAt: "2026-07-19T00:00:00Z" });
   const ids = out.results.filter((r) => r.state === "fail").map((r) => r.id);
   assert.ok(ids.includes("kv-doctor-overall"));
+  assert.ok(matrix.checks.some((check) => check.id === "mac-repo-risk-sweep-freshness"));
   assert.ok(ids.includes("a6-legacy-rsync-semantic-outcome"));
   for (const id of ["mac-launchagent-share-mount", "mac-launchagent-runtime-check", "mac-launchagent-developer-mirrors", "mac-launchagent-project-store"]) assert.ok(ids.includes(id));
   assert.equal(ids.some((id) => /spaniel|home.assistant|entity/.test(id)), false);

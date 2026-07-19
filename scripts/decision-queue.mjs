@@ -113,7 +113,17 @@ async function collectFunnel() {
     row.audit_id, `${row.tool} approval for ${row.persona}`, row.timestamp, `Approve or reject funnel action ${row.audit_id}`, file));
 }
 
-const queue = (await Promise.all([collectCards(), collectWork(), collectHoldingPen(), collectFlags(), collectTasks(), collectDayBoard(), collectFunnel()]))
+async function collectRepoRisks() {
+  const file = `${root}/outcome-truth/mac-snapshot.json`;
+  let snapshot;
+  try { snapshot = JSON.parse(await fs.readFile(file, "utf8")); } catch { return []; }
+  const sweep = snapshot.repo_sweep;
+  if (!sweep?.propose_only || !Array.isArray(sweep.findings)) return [];
+  return sweep.findings.map((finding) => item("repo_risk", finding.path, `${finding.repo}: repository recovery risk`, sweep.observed_at,
+    finding.prepared_action, file));
+}
+
+const queue = (await Promise.all([collectCards(), collectWork(), collectHoldingPen(), collectFlags(), collectTasks(), collectDayBoard(), collectFunnel(), collectRepoRisks()]))
   .flat().sort((a, b) => b.age_hours - a.age_hours || a.id.localeCompare(b.id));
 const percentile = (values, p) => values.length ? values[Math.min(values.length - 1, Math.ceil(values.length * p) - 1)] : 0;
 const ages = queue.map((row) => row.age_hours).sort((a, b) => a - b);

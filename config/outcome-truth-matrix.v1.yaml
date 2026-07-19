@@ -46,6 +46,14 @@ checks:
     operator: at_most
     expected: 30
     recovery: a new Mac snapshot is observed within 30 minutes
+  - id: mac-repo-risk-sweep-freshness
+    area: repositories
+    owner: tony
+    severity: hard
+    source: mac.repo_sweep.age_minutes
+    operator: at_most
+    expected: 11520
+    recovery: the existing Mac reporter uploads a successful sweep no more than eight days old
   - id: mac-launchagent-share-mount
     area: mac
     owner: tony
