@@ -15,8 +15,7 @@ const now = process.env.OUTCOME_NOW || new Date().toISOString();
 async function collect() {
   if (snapshotFile) return JSON.parse(await fs.readFile(snapshotFile, "utf8"));
   const doctor = JSON.parse(await fs.readFile("/srv/kv/vault/dashboard/doctor.json", "utf8"));
-  const backup = await fs.readFile("/home/ajbarfoot/backup.log", "utf8");
-  const codes = [...backup.matchAll(/(?:rsync[^\n]*?(?:code|exit(?:ed)?(?: with)?)\s*[:=]?\s*)(\d+)/gi)];
+  const borgScript = await fs.readFile("/usr/local/sbin/antler-a6-borg-backup.sh", "utf8");
   const { stdout: borgOut } = await execFile("systemctl", ["show", "antler-a6-borg-backup.service", "-p", "ExecMainExitTimestamp", "--value"]);
   const borgTime = Date.parse(borgOut.trim());
   const macFile = process.env.OUTCOME_MAC_SNAPSHOT || `${stateDir}/mac-snapshot.json`;
@@ -27,9 +26,14 @@ async function collect() {
   const mac = JSON.parse(macOut);
   mac.report_age_minutes = (Date.now() - Date.parse(mac.observed_at)) / 60000;
   return {
-    doctor: { status: String(doctor.status).toLowerCase() },
-    borg: { newest_archive_age_minutes: (Date.now() - borgTime) / 60000 },
-    rsync: { latest_exit_code: codes.length ? Number(codes.at(-1)[1]) : null },
+    doctor: {
+      status: doctor.checks?.some((check) => check.status === "fail") ? "fail" : "pass",
+      report_status: String(doctor.status).toLowerCase(),
+    },
+    borg: {
+      newest_archive_age_minutes: (Date.now() - borgTime) / 60000,
+      full_legacy_coverage: /(^|\s)\/share(\s|$)/m.test(borgScript) && /(^|\s)\/srv(\s|$)/m.test(borgScript),
+    },
     mac,
     synthesis: { latest_clean: synthesisOutcome?.event === "run_completed" },
     sandbox: { ok: true },
