@@ -8,7 +8,7 @@ const CLASSES = new Set(["ALERT", "APPROVAL", "INFO"]);
 
 function parseArgs(argv) {
   const options = {
-    className: null, id: null, message: null, approvalNumber: null,
+    className: null, id: null, message: null, approvalNumber: null, url: null,
     envFile: process.env.HA_NOTIFY_ENV_FILE || "/home/ajbarfoot/Developer/ha-agent-pilot/.env",
     configFile: process.env.HA_NOTIFY_CONFIG || "/srv/projects/Personal/agent-bus/runtime/ha-notify/config.json",
     stateDirectory: process.env.HA_NOTIFY_STATE_DIR || "/srv/projects/Personal/agent-bus/runtime/ha-notify/sends",
@@ -19,6 +19,7 @@ function parseArgs(argv) {
     else if (key === "--id") { options.id = value; index += 1; }
     else if (key === "--message") { options.message = value; index += 1; }
     else if (key === "--approval-number") { options.approvalNumber = value; index += 1; }
+    else if (key === "--url") { options.url = value; index += 1; }
     else if (key === "--env-file") { options.envFile = value; index += 1; }
     else if (key === "--config") { options.configFile = value; index += 1; }
     else throw new Error(`Unsupported argument: ${key}`);
@@ -26,6 +27,11 @@ function parseArgs(argv) {
   if (!CLASSES.has(options.className)) throw new Error("--class must be ALERT, APPROVAL, or INFO");
   if (!options.id || !/^[A-Za-z0-9._:-]{3,160}$/.test(options.id)) throw new Error("--id must be a stable 3-160 character identifier");
   if (!options.message || /[\r\n]/.test(options.message)) throw new Error("--message must be one line");
+  if (options.url) {
+    let parsed;
+    try { parsed = new URL(options.url); } catch { throw new Error("--url must be an absolute URL"); }
+    if (!["http:", "https:", "homeassistant:"].includes(parsed.protocol)) throw new Error("--url must use http, https, or homeassistant");
+  }
   if (options.className === "APPROVAL" && !options.approvalNumber) throw new Error("APPROVAL requires --approval-number");
   return options;
 }
@@ -49,7 +55,7 @@ function notificationPayload(options) {
     APPROVAL: `✅ APPROVAL ${options.approvalNumber} — tap YES or NO`,
     INFO: "ℹ️ INFO — all clear",
   };
-  const data = { tag: `agent-bus:${options.id}`, group: "agent-bus", url: "/lovelace/default_view" };
+  const data = { tag: `agent-bus:${options.id}`, group: "agent-bus", url: options.url || "/lovelace/default_view" };
   if (options.className === "ALERT") data.push = { sound: "default", "interruption-level": "time-sensitive" };
   if (options.className === "INFO") data.push = { "interruption-level": "passive" };
   if (options.className === "APPROVAL") {
@@ -87,7 +93,7 @@ export async function notifyTony(options, { fetchImpl = fetch } = {}) {
       if (!response.ok) throw new Error(`HA notify service ${service} failed (${response.status})`);
       deliveries.push({ service, accepted_at: new Date().toISOString() });
     }
-    const result = { id: options.id, class: options.className, started_at: startedAt, sent_at: new Date().toISOString(), deduplicated: false, deliveries };
+    const result = { id: options.id, class: options.className, url: options.url || null, started_at: startedAt, sent_at: new Date().toISOString(), deduplicated: false, deliveries };
     await claim.writeFile(`${JSON.stringify(result, null, 2)}\n`); await claim.sync(); await claim.close(); claim = null;
     return result;
   } catch (error) {
