@@ -11,6 +11,9 @@ slas_hours:
   funnel_approval: 72
 expiry_multiple: 2
 weekly_limit: 20
+delivery:
+  phone_base_url: http://antler-a6:8088/Projects/Personal/agent-bus/runtime/decision-queue/
+  auth_posture: "Private tailnet route plus FileBrowser login; no public or unauthenticated URL"
 baseline_oracle:
   date: 2026-07-18
   sentinel_cards: 8

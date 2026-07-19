@@ -150,11 +150,14 @@ const newBreaches = previous.initialized ? breachedIds.filter((id) => !previous.
 await atomic(`${outputDir}/state.json`, `${JSON.stringify({ initialized: true, evaluated_at: now.toISOString(), breached_ids: breachedIds }, null, 2)}\n`);
 await atomic(`${outputDir}/last-evaluation.json`, `${JSON.stringify({ evaluated_at: now.toISOString(), new_breaches: newBreaches }, null, 2)}\n`);
 
-const notify = async (klass, id, message) => {
+const notify = async (klass, id, message, url) => {
   if (argv.has("--no-notify")) return;
-  await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", klass, "--id", id, "--message", message]);
+  const args = ["scripts/ha-notify-tony.mjs", "--class", klass, "--id", id, "--message", message];
+  if (url) args.push("--url", url);
+  await execFile(process.execPath, args);
 };
-if (newBreaches.length) await notify("ALERT", `decision-queue-breach-${now.toISOString().slice(0, 13)}`, `${newBreaches.length} waiting-on-Tony item(s) newly breached SLA. See ${outputDir}/queue.json`);
+const phoneUrl = (file) => new URL(file, config.delivery.phone_base_url).href;
+if (newBreaches.length) await notify("ALERT", `decision-queue-breach-${now.toISOString().slice(0, 13)}`, `${newBreaches.length} waiting-on-Tony item(s) newly breached SLA. Tap to open the queue.`, phoneUrl("queue.json"));
 
 if (argv.has("--weekly") || now.getUTCDay() === 0) {
   const selected = queue.slice(0, config.weekly_limit);
@@ -162,6 +165,6 @@ if (argv.has("--weekly") || now.getUTCDay() === 0) {
   const pack = `# DECISION PACK — ${now.toISOString().slice(0, 10)}\n\n${lines.join("\n")}\n`;
   const packFile = `${outputDir}/decision-pack-${now.toISOString().slice(0, 10)}.md`;
   await atomic(packFile, pack);
-  await notify("INFO", `decision-pack-${now.toISOString().slice(0, 10)}`, `${selected.length} decisions ready: ${packFile}`);
+  await notify("INFO", `decision-pack-${now.toISOString().slice(0, 10)}`, `${selected.length} decisions ready — tap to open.`, phoneUrl(path.basename(packFile)));
 }
 console.log(JSON.stringify(snapshot));
