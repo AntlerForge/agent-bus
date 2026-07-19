@@ -34,10 +34,10 @@ checks:
     area: backup
     owner: tony
     severity: hard
-    source: rsync.latest_exit_code
+    source: borg.full_legacy_coverage
     operator: equals
-    expected: 0
-    recovery: a later nightly run records exit code 0
+    expected: true
+    recovery: Borg is fresh and its declared source set covers all paths formerly protected by rsync
   - id: mac-a6-share-mount
     area: mac
     owner: tony

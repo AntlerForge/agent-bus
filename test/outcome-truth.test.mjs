@@ -24,7 +24,7 @@ test("cards deduplicate and close only after semantic recovery", () => {
   assert.equal(repeated.transitions.length, 0);
   assert.equal(repeated.cards[cardId(matrix.matrix_id,"kv-doctor-overall")].occurrences, 2);
   const healthy = structuredClone(july);
-  healthy.doctor.status = "pass"; healthy.rsync.latest_exit_code = 0; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
+  healthy.doctor.status = "pass"; healthy.borg.full_legacy_coverage = true; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
   healthy.mac.local_bus.unexpected_write_count = 0;
   for (const item of Object.values(healthy.mac.launchagents)) item.age_minutes = 1;
   const recovered = applyEvaluation({ matrix, snapshot: healthy, previous: repeated.cards, now: "2026-07-18T12:30:00Z", shadowStartedAt: "2026-07-18T12:00:00Z" });
@@ -44,7 +44,7 @@ test("sentinel emits only ALERT transition requests and daily INFO is separate",
 
 test("an induced sandbox fault opens once and semantic recovery closes it", () => {
   const healthy = structuredClone(july);
-  healthy.doctor.status = "pass"; healthy.rsync.latest_exit_code = 0; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
+  healthy.doctor.status = "pass"; healthy.borg.full_legacy_coverage = true; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
   healthy.mac.local_bus.unexpected_write_count = 0;
   for (const item of Object.values(healthy.mac.launchagents)) item.age_minutes = 1;
   const baseline = applyEvaluation({ matrix, snapshot: healthy, now: "2026-07-18T12:00:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });

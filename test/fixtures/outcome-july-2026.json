@@ -1,6 +1,6 @@
 {
   "doctor": {"status":"fail"},
-  "borg": {"newest_archive_age_minutes":42},
+  "borg": {"newest_archive_age_minutes":42,"full_legacy_coverage":false},
   "rsync": {"latest_exit_code":23},
   "mac": {
     "report_age_minutes": 1,
