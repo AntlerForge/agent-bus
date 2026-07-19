@@ -34,6 +34,9 @@ await execFile("sudo", ["borg", "extract", "--list", `${repository}::${archive}`
   cwd: restoreRoot,
   maxBuffer: 32 * 1024 * 1024,
 });
+// Borg faithfully restores root-owned parent directories. Make only the isolated copy
+// readable by the verifier; no production ownership is touched.
+await execFile("sudo", ["chown", "-R", `${process.getuid()}:${process.getgid()}`, restoreRoot]);
 
 const restoredHashes = Object.fromEntries(await Promise.all(assets.map(async (file) => [file, await hash(restorePath(restoreRoot, file))])));
 const hashMatches = Object.fromEntries(assets.map((file) => [file, productionBefore[file] === restoredHashes[file]]));
@@ -72,6 +75,11 @@ const result = {
   hash_matches: hashMatches,
   functional_smoke: { json_parse: true, yaml_parse: true, executable_syntax: true, loopback_serve_and_fetch: true },
   share_coverage: { asset: assets[4], restored: true, hash_match: hashMatches[assets[4]] },
+  prior_failed_attempt: process.env.RESTORE_DRILL_PRIOR_FAILED_ROOT ? {
+    restore_root: process.env.RESTORE_DRILL_PRIOR_FAILED_ROOT,
+    reason: "Borg restored root-owned parent directories; verifier received EACCES before any hash or smoke result was claimed.",
+    production_touched: false,
+  } : null,
 };
 if (!productionUntouched || !Object.values(hashMatches).every(Boolean)) throw new Error(`Restore verification failed: ${JSON.stringify(result)}`);
 await writeJsonFileAtomic(path.join(stateBase, "w3.2-20260719-result.json"), result, { mode: 0o600 });
