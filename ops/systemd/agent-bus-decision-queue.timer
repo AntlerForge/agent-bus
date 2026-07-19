@@ -1,0 +1,10 @@
+[Unit]
+Description=Build the waiting-on-Tony queue nightly
+
+[Timer]
+OnCalendar=*-*-* 06:20:00
+Persistent=true
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target
