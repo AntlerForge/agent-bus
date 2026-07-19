@@ -1,0 +1,48 @@
+schema_version: 1
+inventory_id: estate-critical-assets-v1
+review_interval_days: 30
+assets:
+  - id: a6-vault
+    location: /srv/kv/vault
+    host: antler-a6
+    criticality: critical
+    protection: "Hourly Borg via /srv; Mac emergency mirror is secondary"
+    status: protected
+  - id: a6-project-store
+    location: /srv/projects
+    host: antler-a6
+    criticality: critical
+    protection: "Hourly Borg via /srv"
+    status: protected
+  - id: agent-bus-ledger-runtime
+    location: /srv/projects/Personal/agent-bus/runtime
+    host: antler-a6
+    criticality: critical
+    protection: "Hourly Borg via /srv; includes ledger, cards, queue and receipts"
+    status: protected
+  - id: a6-human-share
+    location: /share
+    host: antler-a6
+    criticality: critical
+    protection: "Hourly Borg direct /share source since 2026-07-19"
+    status: protected
+  - id: mac-developer-working-copies
+    location: /Users/antonybarfoot/Developer
+    host: mac
+    criticality: high
+    protection: "Mixed: Git remotes and selected /srv/developer-mirrors only; weekly sweep identifies gaps"
+    status: partially_protected
+    gap: "No-remote, dirty-only and corrupt working copies are not uniformly recoverable"
+  - id: home-assistant-config
+    location: /mnt/ha-config
+    host: air11-via-antler-a6
+    criticality: critical
+    protection: "Live CIFS mount only; outside current Borg /share and /srv source set"
+    status: unprotected
+    gap: "No verified scheduled HA backup copied into a Borg-protected A6 path"
+  - id: workshop-pc-backups
+    location: /srv/projects/workshop-pc-backups
+    host: antler-a6
+    criticality: high
+    protection: "Hourly Borg via /srv; current LightBurn baseline present"
+    status: protected
