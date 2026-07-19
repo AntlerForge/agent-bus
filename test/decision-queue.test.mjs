@@ -10,6 +10,7 @@ test("decision queue keeps the audit baseline and bounded weekly contract", () =
   assert.deepEqual(config.baseline_oracle.required_flag_ids, ["F001", "F002"]);
   assert.equal(config.baseline_oracle.sentinel_cards, 8);
   assert.equal(config.baseline_oracle.bus_items, 5);
+  assert.equal(config.baseline_oracle.bus_item_ids.length, 5);
   assert.equal(config.baseline_oracle.overdue_tasks, 14);
   assert.ok(config.weekly_limit <= 20);
 });

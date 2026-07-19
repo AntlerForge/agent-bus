@@ -15,7 +15,14 @@ baseline_oracle:
   date: 2026-07-18
   sentinel_cards: 8
   bus_items: 5
+  bus_item_ids:
+    - work_20260713_060703_f7f9
+    - work_20260711_100835_ed5c
+    - work_20260710_205058_91a3
+    - work_20260710_205058_9056
+    - work_20260710_205058_2f93
   holding_pen_approx: 54
   required_flag_ids: [F001, F002]
   overdue_tasks: 14
   day_board_breach: 1
+  evidence_ref: /srv/projects/Personal/automation-opportunity-discovery/runs/2026-07-18/2026-07-draft-variant__anthropic-claude-opus-4-8__claude-code-desktop__r1/raw-response.md

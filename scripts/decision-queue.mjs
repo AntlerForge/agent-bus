@@ -118,9 +118,25 @@ const queue = (await Promise.all([collectCards(), collectWork(), collectHoldingP
 const percentile = (values, p) => values.length ? values[Math.min(values.length - 1, Math.ceil(values.length * p) - 1)] : 0;
 const ages = queue.map((row) => row.age_hours).sort((a, b) => a - b);
 const by_type = Object.fromEntries([...new Set(queue.map((row) => row.type))].map((type) => [type, queue.filter((row) => row.type === type).length]));
+const baseline = config.baseline_oracle;
+const queueIds = new Set(queue.map((row) => row.source_id));
+const baseline_reconciliation = {
+  status: "accounted_for",
+  evidence_ref: baseline.evidence_ref,
+  note: "The oracle records the 2026-07-18 audit. Active counts may increase or decrease after semantic recovery and source processing; required identities and minimum/approximate populations are checked here.",
+  checks: {
+    historical_sentinel_cards_declared: baseline.sentinel_cards === 8,
+    required_bus_items_present: baseline.bus_item_ids.every((id) => queueIds.has(id)),
+    holding_pen_population_reconciled: Math.abs((by_type.holding_pen || 0) - baseline.holding_pen_approx) <= 2,
+    required_flags_present: baseline.required_flag_ids.every((id) => queueIds.has(id)),
+    overdue_population_at_least_audit: (by_type.overdue_task || 0) >= baseline.overdue_tasks,
+    day_board_breach_present: (by_type.day_board || 0) === baseline.day_board_breach,
+  },
+};
+baseline_reconciliation.status = Object.values(baseline_reconciliation.checks).every(Boolean) ? "accounted_for" : "mismatch";
 const snapshot = { schema_version: 1, queue_id: config.queue_id, generated_at: now.toISOString(), read_only: true,
   metrics: { count: queue.length, breached: queue.filter((row) => row.breached).length, p50_age_hours: percentile(ages, .5), p90_age_hours: percentile(ages, .9), by_type },
-  baseline_oracle: config.baseline_oracle, items: queue };
+  baseline_oracle: config.baseline_oracle, baseline_reconciliation, items: queue };
 
 await fs.mkdir(outputDir, { recursive: true, mode: 0o700 });
 const atomic = async (file, content) => { const tmp = `${file}.${process.pid}.tmp`; await fs.writeFile(tmp, content, { mode: 0o600 }); await fs.rename(tmp, file); };
