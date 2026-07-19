@@ -17,7 +17,7 @@ test("decision queue keeps the audit baseline and bounded weekly contract", () =
 test("decision queue is read-only toward source authorities", () => {
   for (const required of ["outcome-truth/cards.json", "work-ledger/items", "holding-pen", "agent-flags.md", "todo-list.md", "day-board.md", "pending-approvals.jsonl"])
     assert.match(source, new RegExp(required.replaceAll(".", "\\.")));
-  assert.doesNotMatch(source, /execFile\([^\n]*(ingest\.py|board\.py)|writeFile\([^)]*vault|"--class",\s*"APPROVAL"/);
+  assert.doesNotMatch(source, /ingest\.py|board\.py|writeFile\([^)]*vault|APPROVAL/);
   assert.match(source, /expiry_draft/);
   assert.match(source, /newBreaches/);
 });
