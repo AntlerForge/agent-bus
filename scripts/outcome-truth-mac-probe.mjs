@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 const home = process.env.HOME;
@@ -21,4 +22,19 @@ if (fs.existsSync(repoSweepFile)) {
   repo_sweep = JSON.parse(fs.readFileSync(repoSweepFile, "utf8"));
   repo_sweep.age_minutes = (Date.now() - Date.parse(repo_sweep.observed_at)) / 60000;
 }
-console.log(JSON.stringify({ observed_at: new Date().toISOString(), mount_present: fs.existsSync("/Volumes/share"), launchagents, repo_sweep }));
+const localBusRoot = path.join(os.homedir(), "AgentBus");
+const quarantine = "_misrouted-quarantine-20260719";
+const unexpectedLocalWrites = [];
+if (fs.existsSync(localBusRoot)) {
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (dir === localBusRoot && entry.name === quarantine) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else unexpectedLocalWrites.push(path.relative(localBusRoot, full));
+    }
+  };
+  walk(localBusRoot);
+}
+console.log(JSON.stringify({ observed_at: new Date().toISOString(), mount_present: fs.existsSync("/Volumes/share"), launchagents,
+  repo_sweep, local_bus: { unexpected_write_count: unexpectedLocalWrites.length, unexpected_paths: unexpectedLocalWrites.slice(0, 20) } }));

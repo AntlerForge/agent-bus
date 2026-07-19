@@ -6,6 +6,9 @@
     "report_age_minutes": 1,
     "repo_sweep": {"age_minutes":1},
     "mount_present": false,
+    "local_bus": {
+      "unexpected_write_count": 0
+    },
     "launchagents": {
       "share_mount":{"age_minutes":23040},
       "runtime_check":{"age_minutes":28800},

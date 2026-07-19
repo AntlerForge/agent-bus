@@ -6,6 +6,14 @@ shadow:
   days: 14
   alert_policy: new_hard_failures_only
 checks:
+  - id: mac-retired-local-bus-write
+    area: authority
+    owner: tony
+    severity: hard
+    source: mac.local_bus.unexpected_write_count
+    operator: equals
+    expected: 0
+    recovery: unexpected local files are quarantined with an audit note and a later probe reports zero
   - id: kv-doctor-overall
     area: doctor
     owner: tony
