@@ -5,12 +5,15 @@ import os from "node:os";
 import path from "node:path";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
-import { writeJsonFileAtomic } from "../src/io.mjs";
+import { writeFileAtomic, writeJsonFileAtomic } from "../src/io.mjs";
+import YAML from "yaml";
 
 const execFile = promisify(execFileCb);
 const scanRoot = path.resolve(process.env.REPO_RISK_ROOT || path.join(os.homedir(), "Developer"));
 const output = process.env.REPO_RISK_OUTPUT || path.join(os.homedir(), "Library/Application Support/Agent Bus/repo-risk/latest.json");
 const now = new Date(process.env.REPO_RISK_NOW || Date.now());
+const baselineFile = process.env.REPO_RISK_BASELINE || "config/repo-risk-baseline-20260718.yaml";
+const baseline = YAML.parse(await fs.readFile(baselineFile, "utf8"));
 const skill = "/Users/antonybarfoot/Documents/Admin/knowledge-vault/vault/skills-catalog/knowledge-vault/tools/github_sync.py";
 
 async function findRepos(root) {
@@ -100,6 +103,23 @@ const inspected = [];
 for (const repo of repos) inspected.push(await inspect(repo));
 const findings = inspected.filter((repo) => repo.corrupt || repo.no_remote || repo.dirty_over_7d || repo.ahead > 0)
   .sort((a, b) => b.risk_score - a.risk_score || a.path.localeCompare(b.path));
+const byName = Object.fromEntries(inspected.map((repo) => [repo.repo, repo]));
+const baseline_reconciliation = {
+  audit_date: baseline.audit_date,
+  status: "accounted_for",
+  checks: {
+    agent_bus_dirty_resolved: (byName["agent-bus"]?.dirty_count || 0) === 0,
+    knowledge_vault_dirty_count: byName["knowledge-vault"]?.dirty_count === baseline.dirty_counts["knowledge-vault"],
+    energy_points_ahead: byName.EnergyPoints?.ahead === baseline.ahead_counts.EnergyPoints,
+    known_no_remote_present: baseline.no_remote.every((name) => byName[name]?.no_remote === true),
+    known_corrupt_present: baseline.corrupt.every((name) => byName[name]?.corrupt === true),
+  },
+  updates: {
+    EnergyPoints: { corrupt: byName.EnergyPoints?.corrupt || false },
+    additional_corrupt: findings.filter((repo) => repo.corrupt && !baseline.corrupt.includes(repo.repo)).map((repo) => repo.repo),
+  },
+};
+baseline_reconciliation.status = Object.values(baseline_reconciliation.checks).every(Boolean) ? "accounted_for" : "mismatch";
 const result = {
   schema_version: 1,
   sweep_id: `repo-risk-${now.toISOString().slice(0,10)}`,
@@ -117,9 +137,21 @@ const result = {
     no_remote: findings.filter((repo) => repo.no_remote).length,
     corrupt: findings.filter((repo) => repo.corrupt).length,
   },
+  baseline_reconciliation,
   findings,
   inspected,
 };
 await fs.mkdir(path.dirname(output), { recursive: true, mode: 0o700 });
 await writeJsonFileAtomic(output, result, { mode: 0o600 });
+const table = [
+  "# Weekly repository risk sweep",
+  "",
+  `Observed: ${result.observed_at} · scanned ${result.repositories_scanned} · findings ${result.counts.findings} · propose-only`,
+  "",
+  "| Rank | Repository | Score | Dirty / age | Ahead | No remote | Corrupt | Prepared action |",
+  "| ---: | --- | ---: | --- | ---: | --- | --- | --- |",
+  ...findings.map((repo, index) => `| ${index + 1} | ${repo.repo} | ${repo.risk_score} | ${repo.dirty_count} / ${repo.dirty_age_days === null ? "n/a" : `${repo.dirty_age_days.toFixed(1)}d`} | ${repo.ahead} | ${repo.no_remote ? "yes" : "no"} | ${repo.corrupt ? "yes" : "no"} | ${repo.prepared_action.replaceAll("|", "\\|")} |`),
+  "",
+];
+await writeFileAtomic(output.replace(/\.json$/, ".md"), `${table.join("\n")}\n`);
 console.log(JSON.stringify(result));
