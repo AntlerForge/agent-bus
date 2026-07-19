@@ -1,0 +1,21 @@
+schema_version: 1
+queue_id: waiting-on-tony-v1
+slas_hours:
+  sentinel: 72
+  bus_work: 72
+  bus_thread: 72
+  holding_pen: 336
+  agent_flag: 336
+  overdue_task: 0
+  day_board: 48
+  funnel_approval: 72
+expiry_multiple: 2
+weekly_limit: 20
+baseline_oracle:
+  date: 2026-07-18
+  sentinel_cards: 8
+  bus_items: 5
+  holding_pen_approx: 54
+  required_flag_ids: [F001, F002]
+  overdue_tasks: 14
+  day_board_breach: 1
