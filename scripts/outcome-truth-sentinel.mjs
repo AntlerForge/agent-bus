@@ -26,6 +26,25 @@ async function collect() {
   const synthesisRun = ledger.filter((row) => row.event === "run_started").at(-1);
   const mac = JSON.parse(macOut);
   mac.report_age_minutes = (Date.now() - Date.parse(mac.observed_at)) / 60000;
+  const { stdout: tailscaleOut } = await execFile("tailscale", ["status", "--json"]);
+  const tailscale = JSON.parse(tailscaleOut);
+  const peerName = process.env.OUTCOME_MAC_TAILSCALE_NAME || "antonys-macbook-air";
+  const macPeer = Object.values(tailscale.Peer || {}).find((peer) =>
+    String(peer.DNSName || peer.HostName || "").toLowerCase().includes(peerName.toLowerCase()));
+  const hostOnline = Boolean(macPeer?.Online);
+  const healthyWhileAvailable = (healthy) => !hostOnline || Boolean(healthy);
+  mac.availability = {
+    online: hostOnline,
+    source: "tailscale",
+    peer: macPeer?.DNSName || macPeer?.HostName || null,
+  };
+  mac.contracts = {
+    reporter: { healthy: healthyWhileAvailable(mac.report_age_minutes <= 30) },
+    share_mount: { healthy: healthyWhileAvailable(mac.mount_present) },
+    runtime_check: { healthy: healthyWhileAvailable(mac.launchagents?.runtime_check?.age_minutes <= 120) },
+    developer_mirrors: { healthy: healthyWhileAvailable(mac.launchagents?.developer_mirrors?.age_minutes <= 720) },
+    project_store: { healthy: healthyWhileAvailable(mac.launchagents?.project_store?.age_minutes <= 240) },
+  };
   return {
     doctor: {
       status: doctor.checks?.some((check) => check.status === "fail") ? "fail" : "pass",
