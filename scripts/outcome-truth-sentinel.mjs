@@ -23,6 +23,7 @@ async function collect() {
   const ledger = (await fs.readFile("/srv/kv/vault/_cache/automations/run-ledger.jsonl", "utf8"))
     .trim().split("\n").map((line) => JSON.parse(line)).filter((row) => row.automation_id === "kv-daily-synthesis");
   const synthesisOutcome = ledger.filter((row) => row.event !== "run_started").at(-1);
+  const synthesisRun = ledger.filter((row) => row.event === "run_started").at(-1);
   const mac = JSON.parse(macOut);
   mac.report_age_minutes = (Date.now() - Date.parse(mac.observed_at)) / 60000;
   return {
@@ -35,7 +36,10 @@ async function collect() {
       full_legacy_coverage: /(^|\s)\/share(\s|$)/m.test(borgScript) && /(^|\s)\/srv(\s|$)/m.test(borgScript),
     },
     mac,
-    synthesis: { latest_clean: synthesisOutcome?.event === "run_completed" },
+    synthesis: {
+      latest_clean: synthesisOutcome?.event === "run_completed",
+      latest_run_age_minutes: synthesisRun ? (Date.now() - Date.parse(synthesisRun.ts)) / 60000 : Number.POSITIVE_INFINITY,
+    },
     sandbox: { ok: true },
   };
 }

@@ -16,7 +16,7 @@
       "project_store":{"age_minutes":53280}
     }
   },
-  "synthesis":{"latest_clean":false},
+  "synthesis":{"latest_clean":false,"latest_run_age_minutes":600},
   "sandbox":{"ok":true},
   "noise":{"kv_spanielbus_sync_failures":854,"ha_unavailable_entities":119}
 }

@@ -102,6 +102,14 @@ checks:
     operator: equals
     expected: true
     recovery: a later scheduled synthesis completes with zero warnings
+  - id: kv-daily-synthesis-run-freshness
+    area: synthesis
+    owner: tony
+    severity: hard
+    source: synthesis.latest_run_age_minutes
+    operator: at_most
+    expected: 1800
+    recovery: a later synthesis run starts within the 30-hour daily schedule allowance
   - id: sentinel-sandbox-contract
     area: sentinel
     owner: tony

@@ -12,6 +12,7 @@ test("July replay catches named failures and ignores van and HA noise", () => {
   assert.ok(ids.includes("kv-doctor-overall"));
   assert.ok(matrix.checks.some((check) => check.id === "mac-repo-risk-sweep-freshness"));
   assert.ok(matrix.checks.some((check) => check.id === "mac-retired-local-bus-write"));
+  assert.ok(matrix.checks.some((check) => check.id === "kv-daily-synthesis-run-freshness"));
   assert.ok(ids.includes("a6-legacy-rsync-semantic-outcome"));
   for (const id of ["mac-launchagent-share-mount", "mac-launchagent-runtime-check", "mac-launchagent-developer-mirrors", "mac-launchagent-project-store"]) assert.ok(ids.includes(id));
   assert.equal(ids.some((id) => /spaniel|home.assistant|entity/.test(id)), false);
