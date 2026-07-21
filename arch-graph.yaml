@@ -1,0 +1,7 @@
+sources:
+  projects:
+    - path: .
+cache:
+  path: /tmp/arch-graph-agent-bus.json
+drift:
+  languages: [javascript]
