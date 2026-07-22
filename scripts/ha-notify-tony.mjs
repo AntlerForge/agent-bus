@@ -31,6 +31,7 @@ function parseArgs(argv) {
     let parsed;
     try { parsed = new URL(options.url); } catch { throw new Error("--url must be an absolute URL"); }
     if (!["http:", "https:", "homeassistant:"].includes(parsed.protocol)) throw new Error("--url must use http, https, or homeassistant");
+    if (/\.json$/i.test(parsed.pathname)) throw new Error("--url must not point at machine-readable JSON");
   }
   if (options.className === "APPROVAL" && !options.approvalNumber) throw new Error("APPROVAL requires --approval-number");
   return options;
@@ -49,13 +50,13 @@ function actionName(decision, id) {
   return `AGENT_BUS_APPROVAL_${decision}_${Buffer.from(id).toString("base64url")}`;
 }
 
-function notificationPayload(options) {
+function notificationPayload(options, resolvedUrl) {
   const titles = {
     ALERT: "🚨 ALERT — action needed",
     APPROVAL: `✅ APPROVAL ${options.approvalNumber} — tap YES or NO`,
     INFO: "ℹ️ INFO — all clear",
   };
-  const data = { tag: `agent-bus:${options.id}`, group: "agent-bus", url: options.url || "/lovelace/default_view" };
+  const data = { tag: `agent-bus:${options.id}`, group: "agent-bus", url: resolvedUrl };
   if (options.className === "ALERT") data.push = { sound: "default", "interruption-level": "time-sensitive" };
   if (options.className === "INFO") data.push = { "interruption-level": "passive" };
   if (options.className === "APPROVAL") {
@@ -84,7 +85,9 @@ export async function notifyTony(options, { fetchImpl = fetch } = {}) {
     const config = JSON.parse(await readFile(options.configFile, "utf8"));
     const services = Array.isArray(config.services) ? config.services : [];
     if (!env.HASS_URL || !env.HASS_TOKEN || !services.length) throw new Error("HA URL, token, and notification services are required");
-    const payload = notificationPayload(options);
+    const resolvedUrl = options.url || config.default_url || "/lovelace/default_view";
+    if (/\.json(?:$|[?#])/i.test(resolvedUrl)) throw new Error("Notification URL must not point at machine-readable JSON");
+    const payload = notificationPayload(options, resolvedUrl);
     const deliveries = [];
     for (const service of services) {
       const response = await fetchImpl(`${env.HASS_URL.replace(/\/+$/, "")}/api/services/notify/${encodeURIComponent(service)}`, {
@@ -93,7 +96,7 @@ export async function notifyTony(options, { fetchImpl = fetch } = {}) {
       if (!response.ok) throw new Error(`HA notify service ${service} failed (${response.status})`);
       deliveries.push({ service, accepted_at: new Date().toISOString() });
     }
-    const result = { id: options.id, class: options.className, url: options.url || null, started_at: startedAt, sent_at: new Date().toISOString(), deduplicated: false, deliveries };
+    const result = { id: options.id, class: options.className, url: resolvedUrl, started_at: startedAt, sent_at: new Date().toISOString(), deduplicated: false, deliveries };
     await claim.writeFile(`${JSON.stringify(result, null, 2)}\n`); await claim.sync(); await claim.close(); claim = null;
     return result;
   } catch (error) {

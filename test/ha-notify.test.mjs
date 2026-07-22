@@ -42,3 +42,19 @@ test("INFO and ALERT notifications carry an explicit tap URL without weakening d
     }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("notifier defaults to Estate Status and rejects raw JSON URLs", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ha-notify-status-test-"));
+  try {
+    const envFile = path.join(root, ".env"); const configFile = path.join(root, "config.json"); const stateDirectory = path.join(root, "sends");
+    const defaultUrl = "http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md";
+    await writeFile(envFile, "HASS_URL=http://ha.test\nHASS_TOKEN=test-only\n");
+    await writeFile(configFile, JSON.stringify({ services: ["mobile_app_phone"], default_url: defaultUrl }));
+    const requests = [];
+    const options = { className: "INFO", id: "estate-status-default", message: "Status updated", envFile, configFile, stateDirectory };
+    const result = await notifyTony(options, { fetchImpl: async (_url, request) => { requests.push(JSON.parse(request.body)); return { ok: true }; } });
+    assert.equal(result.url, defaultUrl);
+    assert.equal(requests[0].data.url, defaultUrl);
+    await assert.rejects(() => notifyTony({ ...options, id: "raw-json-rejected", url: "http://antler-a6/private/queue.json" }, { fetchImpl: async () => ({ ok: true }) }), /must not point at machine-readable JSON/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

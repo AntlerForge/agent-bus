@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { applyEvaluation, loadCards, loadMatrix, saveCards } from "../src/outcome-truth/core.mjs";
+import { renderEstateStatus } from "../src/estate-status/render.mjs";
 
 const execFile = promisify(execFileCb);
 const args = Object.fromEntries(process.argv.slice(2).map((v, i, a) => v.startsWith("--") ? [v.slice(2), a[i + 1]] : null).filter(Boolean));
@@ -11,6 +12,8 @@ const stateDir = process.env.OUTCOME_STATE_DIR || "/srv/projects/Personal/agent-
 const cardsFile = `${stateDir}/cards.json`;
 const snapshotFile = args.snapshot || process.env.OUTCOME_SNAPSHOT;
 const now = process.env.OUTCOME_NOW || new Date().toISOString();
+const runtimeRoot = process.env.AGENT_BUS_RUNTIME || "/srv/projects/Personal/agent-bus/runtime";
+const statusUrl = process.env.ESTATE_STATUS_URL || "http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md";
 
 async function collect() {
   if (snapshotFile) return JSON.parse(await fs.readFile(snapshotFile, "utf8"));
@@ -67,7 +70,7 @@ async function notify(transition) {
   if (!transition.notify || process.env.OUTCOME_NO_NOTIFY === "1") return;
   const recovered = transition.type === "recovered";
   const body = `${recovered ? "RECOVERED" : "FAILED"}: ${transition.card.check_id}${recovered ? " passed its semantic recovery contract" : " requires attention"}`;
-  await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", "ALERT", "--id", `outcome-${transition.card.card_id}-${transition.type}-${transition.card.last_seen}`, "--message", body]);
+  await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", "ALERT", "--id", `outcome-${transition.card.card_id}-${transition.type}-${transition.card.last_seen}`, "--message", body, "--url", statusUrl]);
 }
 
 const matrix = await loadMatrix(matrixFile);
@@ -79,9 +82,11 @@ catch { await fs.mkdir(stateDir, { recursive: true, mode: 0o700 }); await fs.wri
 const outcome = applyEvaluation({ matrix, snapshot, previous, now, shadowStartedAt });
 await saveCards(cardsFile, outcome.cards);
 await fs.writeFile(`${stateDir}/heartbeat`, `${now}\n`, { mode: 0o600 });
+await renderEstateStatus({ runtimeRoot, generatedAt: now, statusUrl });
 for (const transition of outcome.transitions) await notify(transition);
 if (process.env.OUTCOME_DAILY_INFO === "1" && outcome.results.every((r) => r.state === "pass")) {
   const message = process.env.OUTCOME_INFO_MESSAGE || "All enabled semantic contracts are healthy.";
   await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", "INFO", "--id", `outcome-all-clear-${now.slice(0,10)}`, "--message", message]);
 }
+await renderEstateStatus({ runtimeRoot, generatedAt: now, statusUrl });
 console.log(JSON.stringify(outcome));
