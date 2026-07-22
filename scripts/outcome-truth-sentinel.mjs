@@ -19,8 +19,11 @@ async function collect() {
   if (snapshotFile) return JSON.parse(await fs.readFile(snapshotFile, "utf8"));
   const doctor = JSON.parse(await fs.readFile("/srv/kv/vault/dashboard/doctor.json", "utf8"));
   const borgScript = await fs.readFile("/usr/local/sbin/antler-a6-borg-backup.sh", "utf8");
-  const { stdout: borgOut } = await execFile("systemctl", ["show", "antler-a6-borg-backup.service", "-p", "ExecMainExitTimestamp", "--value"]);
-  const borgTime = Date.parse(borgOut.trim());
+  const { stdout: borgOut } = await execFile("systemctl", ["show", "antler-a6-borg-backup.service", "-p", "ActiveState", "-p", "ExecMainStartTimestamp", "-p", "ExecMainExitTimestamp", "-p", "Result"]);
+  const borgState = Object.fromEntries(borgOut.trim().split("\n").map((line) => line.split(/=(.*)/s).slice(0, 2)));
+  const borgRunning = ["active", "activating"].includes(borgState.ActiveState);
+  const borgTime = Date.parse(borgRunning ? borgState.ExecMainStartTimestamp : borgState.ExecMainExitTimestamp);
+  const borgAgeMinutes = (Date.now() - borgTime) / 60000;
   const macFile = process.env.OUTCOME_MAC_SNAPSHOT || `${stateDir}/mac-snapshot.json`;
   const macOut = await fs.readFile(macFile, "utf8");
   const ledger = (await fs.readFile("/srv/kv/vault/_cache/automations/run-ledger.jsonl", "utf8"))
@@ -35,18 +38,22 @@ async function collect() {
   const macPeer = Object.values(tailscale.Peer || {}).find((peer) =>
     String(peer.DNSName || peer.HostName || "").toLowerCase().includes(peerName.toLowerCase()));
   const hostOnline = Boolean(macPeer?.Online);
-  const healthyWhileAvailable = (healthy) => !hostOnline || Boolean(healthy);
+  const reportFresh = mac.report_age_minutes <= 30;
+  const localHour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", hour12: false }).format(new Date()));
+  const daytimeExpected = localHour >= 7 && localHour < 23;
+  const interactiveAvailable = reportFresh && Boolean(mac.interactive?.active);
+  const healthyWhileInteractive = (healthy) => !interactiveAvailable || Boolean(healthy);
   mac.availability = {
     online: hostOnline,
     source: "tailscale",
     peer: macPeer?.DNSName || macPeer?.HostName || null,
   };
   mac.contracts = {
-    reporter: { healthy: healthyWhileAvailable(mac.report_age_minutes <= 30) },
-    share_mount: { healthy: healthyWhileAvailable(mac.mount_present) },
-    runtime_check: { healthy: healthyWhileAvailable(mac.launchagents?.runtime_check?.age_minutes <= 120) },
-    developer_mirrors: { healthy: healthyWhileAvailable(mac.launchagents?.developer_mirrors?.age_minutes <= 720) },
-    project_store: { healthy: healthyWhileAvailable(mac.launchagents?.project_store?.age_minutes <= 240) },
+    reporter: { healthy: !hostOnline || !daytimeExpected || reportFresh },
+    share_mount: { healthy: healthyWhileInteractive(mac.mount_present) },
+    runtime_check: { healthy: healthyWhileInteractive(mac.launchagents?.runtime_check?.age_minutes <= 120 && mac.launchagents?.runtime_check?.exit_code === 0) },
+    developer_mirrors: { healthy: healthyWhileInteractive(mac.launchagents?.developer_mirrors?.age_minutes <= 720 && mac.launchagents?.developer_mirrors?.exit_code === 0) },
+    project_store: { healthy: healthyWhileInteractive(mac.launchagents?.project_store?.age_minutes <= 240 && mac.launchagents?.project_store?.exit_code === 0) },
   };
   return {
     doctor: {
@@ -54,7 +61,9 @@ async function collect() {
       report_status: String(doctor.status).toLowerCase(),
     },
     borg: {
-      newest_archive_age_minutes: (Date.now() - borgTime) / 60000,
+      healthy: Number.isFinite(borgAgeMinutes) && borgAgeMinutes <= 120 && (borgRunning || borgState.Result === "success"),
+      newest_archive_age_minutes: borgAgeMinutes,
+      service_state: borgState.ActiveState,
       full_legacy_coverage: /(^|\s)\/share(\s|$)/m.test(borgScript) && /(^|\s)\/srv(\s|$)/m.test(borgScript),
     },
     mac,

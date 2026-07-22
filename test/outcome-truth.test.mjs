@@ -25,7 +25,7 @@ test("cards deduplicate and close only after semantic recovery", () => {
   assert.equal(repeated.transitions.length, 0);
   assert.equal(repeated.cards[cardId(matrix.matrix_id,"kv-doctor-overall")].occurrences, 2);
   const healthy = structuredClone(july);
-  healthy.doctor.status = "pass"; healthy.borg.full_legacy_coverage = true; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
+  healthy.doctor.status = "pass"; healthy.borg.healthy = true; healthy.borg.full_legacy_coverage = true; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
   for (const contract of Object.values(healthy.mac.contracts)) contract.healthy = true;
   healthy.mac.local_bus.unexpected_write_count = 0;
   for (const item of Object.values(healthy.mac.launchagents)) item.age_minutes = 1;
@@ -33,7 +33,7 @@ test("cards deduplicate and close only after semantic recovery", () => {
   assert.equal(recovered.transitions.filter((t) => t.type === "recovered").length, 8);
   assert.equal(Object.values(recovered.cards).every((c) => c.status === "closed"), true);
   assert.equal(recovered.cards[cardId(matrix.matrix_id,"kv-doctor-overall")].actual, "pass");
-  assert.equal(recovered.transitions.every((t) => t.notify), true);
+  assert.equal(recovered.transitions.every((t) => !t.notify), true);
 });
 
 test("sentinel emits only ALERT transition requests and daily INFO is separate", async () => {
@@ -46,17 +46,17 @@ test("sentinel emits only ALERT transition requests and daily INFO is separate",
 
 test("an induced sandbox fault opens once and semantic recovery closes it", () => {
   const healthy = structuredClone(july);
-  healthy.doctor.status = "pass"; healthy.borg.full_legacy_coverage = true; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
+  healthy.doctor.status = "pass"; healthy.borg.healthy = true; healthy.borg.full_legacy_coverage = true; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
   for (const contract of Object.values(healthy.mac.contracts)) contract.healthy = true;
   healthy.mac.local_bus.unexpected_write_count = 0;
   for (const item of Object.values(healthy.mac.launchagents)) item.age_minutes = 1;
   const baseline = applyEvaluation({ matrix, snapshot: healthy, now: "2026-07-18T12:00:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
   const fault = structuredClone(healthy); fault.sandbox.ok = false;
   const failed = applyEvaluation({ matrix, snapshot: fault, previous: baseline.cards, now: "2026-07-18T12:15:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
-  assert.deepEqual(failed.transitions.map((t) => [t.type, t.card.check_id, t.notify]), [["opened", "sentinel-sandbox-contract", true]]);
-  const repeated = applyEvaluation({ matrix, snapshot: fault, previous: failed.cards, now: "2026-07-18T12:30:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
-  assert.equal(repeated.transitions.length, 0);
-  const recovered = applyEvaluation({ matrix, snapshot: healthy, previous: repeated.cards, now: "2026-07-18T12:45:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
+  assert.deepEqual(failed.transitions.map((t) => [t.type, t.card.check_id, t.notify]), [["opened", "sentinel-sandbox-contract", false]]);
+  const repeated = applyEvaluation({ matrix, snapshot: fault, previous: failed.cards, now: "2026-07-18T12:45:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
+  assert.deepEqual(repeated.transitions.map((t) => [t.type, t.card.check_id, t.notify]), [["escalated", "sentinel-sandbox-contract", true]]);
+  const recovered = applyEvaluation({ matrix, snapshot: healthy, previous: repeated.cards, now: "2026-07-18T13:00:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
   assert.deepEqual(recovered.transitions.map((t) => [t.type, t.card.check_id, t.notify]), [["recovered", "sentinel-sandbox-contract", true]]);
 });
 
