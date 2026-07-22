@@ -1,0 +1,29 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0012-require-sustained-failure-and-interactive-mac-state
+namespace: project:agent-bus
+title: "Page only sustained failures and evaluate Mac jobs only when interactive"
+status: active
+owner: tony
+properties:
+  date: 2026-07-22
+  component: outcome-truth-sentinel
+  tags: [stage-1, precision, alerts, mac, backup]
+  context: |
+    Short Borg runs temporarily clear systemd's exit timestamp, doctor reports are replaced
+    during maintenance, and macOS Power Nap can make Tailscale report the sleeping Mac online.
+    These measurement transitions produced open/recovered ALERT pairs without durable failure.
+  decision: |
+    Evaluate Borg freshness from the current run start while its oneshot service is active and
+    from its successful completion while inactive. Treat a Mac as evaluable only when a fresh
+    reporter snapshot also says recent interactive HID activity; Power Nap is not interactive
+    availability. Keep an online daytime reporter dead-man so a genuinely awake Mac cannot
+    disappear silently. Require a hard failure to persist for 30 minutes before notifying;
+    recoveries notify only when the opening failure was notified. The card still opens on the
+    first failed evaluation, preserving truth and duration evidence.
+  consequences:
+    positive: "Sub-hour measurement flaps remain recorded but do not page; sustained and real failures still alert."
+    negative: "A genuine outcome failure may page up to 30 minutes later."
+    neutral: "The independently implemented sentinel-process dead-man remains immediate."
+  supersedes: null
+  superseded_by: null
