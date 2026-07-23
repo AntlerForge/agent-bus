@@ -3,7 +3,8 @@ import path from "node:path";
 import { writeFileAtomic } from "../io.mjs";
 
 const DEFAULT_ROOT = "/srv/projects/Personal/agent-bus/runtime";
-const DEFAULT_URL = "http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md";
+const DEFAULT_URL = "https://kv.antlerforge.com/#tasks";
+const FILEBROWSER_URL = "http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md";
 
 async function json(file, fallback) {
   try { return JSON.parse(await fs.readFile(file, "utf8")); }
@@ -34,12 +35,12 @@ export async function renderEstateStatus({ runtimeRoot = DEFAULT_ROOT, outputFil
     .filter(Boolean).filter((row) => row.class === "ALERT").sort((a, b) => String(b.sent_at).localeCompare(String(a.sent_at))).slice(0, 20);
   const packs = (await files(`${runtimeRoot}/decision-queue`, ".md")).filter((name) => name.startsWith("decision-pack-")).sort().reverse();
   const open = Object.values(cards).filter((card) => card.status === "open").sort((a, b) => String(a.first_seen).localeCompare(String(b.first_seen)));
-  const base = statusUrl.replace(/\/estate-status\/estate-status\.md$/, "/decision-queue/");
+  const base = FILEBROWSER_URL.replace(/\/estate-status\/estate-status\.md$/, "/decision-queue/");
   const packUrl = packs[0] ? new URL(packs[0], base).href : null;
   const breachUrl = new URL("breach-summary.md", base).href;
   const lines = [
     "# Estate Status", "", `Generated: ${generatedAt}`, "",
-    "This is the durable landing page for estate alerts. It is read-only; source systems remain authoritative.", "",
+    "This is the durable fallback for estate alerts. The authenticated KV Dashboard Action Centre is primary; source systems remain authoritative.", "", `[Open the Dashboard Action Centre](${statusUrl})`, "",
     "## Open exceptions", "",
   ];
   if (!open.length) lines.push("No open semantic exception cards.", "");
@@ -47,7 +48,7 @@ export async function renderEstateStatus({ runtimeRoot = DEFAULT_ROOT, outputFil
   lines.push("## Waiting-on-Tony queue", "", `- Items: ${queue.metrics?.count ?? "unknown"}`, `- Breached SLA: ${queue.metrics?.breached ?? "unknown"}`, `- Median age: ${queue.metrics?.p50_age_hours == null ? "unknown" : hours(queue.metrics.p50_age_hours)}`, `- 90th-percentile age: ${queue.metrics?.p90_age_hours == null ? "unknown" : hours(queue.metrics.p90_age_hours)}`, `- [Latest breach summary](${breachUrl})`, packUrl ? `- [Latest decision pack](${packUrl})` : "- Latest decision pack: not generated", "", "## Recent alert history", "", "| Time | Alert | Recovery state |", "|---|---|---|");
   if (!sends.length) lines.push("| — | No alerts recorded | — |");
   else for (const send of sends) { const meaning = alertMeaning(send, cards); lines.push(`| ${clean(send.sent_at)} | ${clean(meaning.event)} | ${clean(meaning.state)} |`); }
-  lines.push("", "## Bookmark", "", statusUrl, "");
+  lines.push("", "## Bookmarks", "", `- [Dashboard Action Centre](${statusUrl})`, `- [FileBrowser fallback](${FILEBROWSER_URL})`, "");
   const target = outputFile || `${runtimeRoot}/estate-status/estate-status.md`;
   await writeFileAtomic(target, `${lines.join("\n")}\n`);
   return { output_file: target, status_url: statusUrl, open_cards: open.length, alerts: sends.length };

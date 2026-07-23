@@ -14,7 +14,8 @@ test("decision queue keeps the audit baseline and bounded weekly contract", () =
   assert.equal(config.baseline_oracle.overdue_tasks, 14);
   assert.ok(config.weekly_limit <= 20);
   assert.match(config.delivery.phone_base_url, /^http:\/\/antler-a6:8088\//);
-  assert.match(config.delivery.estate_status_url, /estate-status\.md$/);
+  assert.equal(config.delivery.estate_status_url, "https://kv.antlerforge.com/#tasks");
+  assert.match(config.delivery.filebrowser_status_url, /estate-status\.md$/);
   assert.match(config.delivery.auth_posture, /FileBrowser login/);
 });
 

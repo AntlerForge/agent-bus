@@ -7,7 +7,7 @@ import { renderBreachSummary, renderEstateStatus } from "../src/estate-status/re
 
 test("Estate Status renders cards, queue metrics, alerts and links without JSON", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "estate-status-"));
-  const statusUrl = "http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md";
+  const statusUrl = "https://kv.antlerforge.com/#tasks";
   try {
     await fs.mkdir(path.join(root, "outcome-truth"), { recursive: true });
     await fs.mkdir(path.join(root, "decision-queue"), { recursive: true });

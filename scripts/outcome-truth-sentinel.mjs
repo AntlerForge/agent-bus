@@ -13,7 +13,7 @@ const cardsFile = `${stateDir}/cards.json`;
 const snapshotFile = args.snapshot || process.env.OUTCOME_SNAPSHOT;
 const now = process.env.OUTCOME_NOW || new Date().toISOString();
 const runtimeRoot = process.env.AGENT_BUS_RUNTIME || "/srv/projects/Personal/agent-bus/runtime";
-const statusUrl = process.env.ESTATE_STATUS_URL || "http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md";
+const statusUrl = process.env.ESTATE_STATUS_URL || "https://kv.antlerforge.com/#tasks";
 
 async function collect() {
   if (snapshotFile) return JSON.parse(await fs.readFile(snapshotFile, "utf8"));
