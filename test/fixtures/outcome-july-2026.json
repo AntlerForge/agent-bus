@@ -1,12 +1,13 @@
 {
   "doctor": {"status":"fail"},
-  "borg": {"newest_archive_age_minutes":42,"full_legacy_coverage":false},
+  "borg": {"healthy":true,"newest_archive_age_minutes":42,"full_legacy_coverage":false},
   "rsync": {"latest_exit_code":23},
   "mac": {
     "report_age_minutes": 1,
     "repo_sweep": {"age_minutes":1},
     "mount_present": false,
     "availability":{"online":true,"source":"tailscale"},
+    "interactive":{"active":true,"idle_seconds":1},
     "contracts":{"reporter":{"healthy":true},"share_mount":{"healthy":false},"runtime_check":{"healthy":false},"developer_mirrors":{"healthy":false},"project_store":{"healthy":false}},
     "local_bus": {
       "unexpected_write_count": 0

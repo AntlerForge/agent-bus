@@ -59,6 +59,7 @@ Do |  |
 **Responsibilities:**
 - Deliver visually distinct notifications using stable idempotency identifiers
 - Capture YES/NO mobile actions into bounded A6 runtime records
+- Route every notification to a rendered private status or detail page
 **Non-responsibilities (do NOT do):**
 - Work-item approval decisions or Home Assistant configuration ownership
 **Relations:**
@@ -72,6 +73,7 @@ Do |  |
 - Evaluate declared semantic recovery contracts
 - Persist stable exception cards and transition-only notifications
 - Expose an independently monitored heartbeat
+- Regenerate the durable Estate Status projection after every evaluation
 **Non-responsibilities (do NOT do):**
 - Auto-remediation, telemetry monitoring or approval authority
 **Relations:**
@@ -85,6 +87,7 @@ Do |  |
 **Responsibilities:**
 - Aggregate declared waiting states without changing their source stores
 - Emit transition-only SLA alerts and a weekly INFO decision pack
+- Render queue breach summaries and refresh the shared Estate Status projection
 **Non-responsibilities (do NOT do):**
 - Approval authority, automatic expiry, or dashboard integration
 **Relations:**
@@ -166,6 +169,8 @@ Do |  |
 - **0008-open-decision-packs-through-authenticated-filebrowser**: Open decision packs through the existing authenticated FileBrowser (status: active)
 - **0009-cache-weekly-repo-risk-in-existing-mac-reporter**: Cache the weekly repo-risk sweep through the existing Mac reporter (status: active)
 - **0010-treat-mac-sleep-as-availability-state-and-catch-up-on-wake**: Treat Mac sleep as availability state and catch maintenance up on wake (status: active)
+- **0011-render-one-private-estate-status-surface**: Render one private Estate Status surface for every notification (status: active)
+- **0012-require-sustained-failure-and-interactive-mac-state**: Page only sustained failures and evaluate Mac jobs only when interactive (status: active)
 
 ## Fitness Checks
 

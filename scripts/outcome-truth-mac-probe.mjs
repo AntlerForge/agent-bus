@@ -2,8 +2,15 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 const home = process.env.HOME;
+let idleSeconds = null;
+try {
+  const output = execFileSync("/usr/sbin/ioreg", ["-c", "IOHIDSystem", "-d", "4"], { encoding: "utf8" });
+  const match = output.match(/"HIDIdleTime"\s*=\s*(\d+)/);
+  if (match) idleSeconds = Number(match[1]) / 1e9;
+} catch {}
 const specs = {
   share_mount: ["Library/Logs/AntlerForge/a6-share-mount.out.log", "Library/Logs/AntlerForge/a6-share-mount.err.log"],
   runtime_check: ["Library/Logs/AntlerForge/kv-mac-runtime-check.out.log", "Library/Logs/AntlerForge/kv-mac-runtime-check.err.log"],
@@ -56,5 +63,5 @@ if (fs.existsSync(localBusRoot)) {
   };
   walk(localBusRoot);
 }
-console.log(JSON.stringify({ observed_at: new Date().toISOString(), mount_present: fs.existsSync("/Volumes/share"), launchagents,
+console.log(JSON.stringify({ observed_at: new Date().toISOString(), interactive: { active: idleSeconds !== null && idleSeconds < 1800, idle_seconds: idleSeconds }, mount_present: fs.existsSync("/Volumes/share"), launchagents,
   repo_sweep, local_bus: { unexpected_write_count: unexpectedLocalWrites.length, unexpected_paths: unexpectedLocalWrites.slice(0, 20) } }));

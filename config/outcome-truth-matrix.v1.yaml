@@ -2,6 +2,7 @@ schema_version: 1
 matrix_id: estate-outcome-truth-v1
 evaluation_interval_minutes: 15
 deadman_after_minutes: 35
+alert_after_minutes: 30
 shadow:
   days: 14
   alert_policy: new_hard_failures_only
@@ -26,10 +27,10 @@ checks:
     area: backup
     owner: tony
     severity: hard
-    source: borg.newest_archive_age_minutes
-    operator: at_most
-    expected: 120
-    recovery: a newly observed archive is at most 120 minutes old
+    source: borg.healthy
+    operator: equals
+    expected: true
+    recovery: a successful completed backup or a recently started in-progress backup is observed within 120 minutes
   - id: a6-legacy-rsync-semantic-outcome
     area: backup
     owner: tony
