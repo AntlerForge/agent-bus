@@ -73,6 +73,10 @@ function registerTool(server, name, description, inputSchema, handler) {
 
 const root = getBusRoot();
 const remoteWorkLedgerUrl = process.env.AGENT_BUS_CONTROL_PLANE_URL || null;
+const allowLocal = process.env.AGENT_BUS_ALLOW_LOCAL === "1";
+if (!remoteWorkLedgerUrl && !allowLocal) {
+  throw new Error("Agent Bus authority is not configured: set AGENT_BUS_CONTROL_PLANE_URL, or explicitly set AGENT_BUS_ALLOW_LOCAL=1 for isolated development");
+}
 if (!remoteWorkLedgerUrl) await ensureBusLayout(root);
 const remoteWorkLedger = remoteWorkLedgerUrl
   ? createRemoteWorkLedger(remoteWorkLedgerUrl, { writeToken: process.env.AGENT_BUS_WRITE_TOKEN || null })

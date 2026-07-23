@@ -23,3 +23,38 @@ test("notifier distinguishes classes and atomically deduplicates stable ids", as
     assert.equal(JSON.parse(await readFile(path.join(stateDirectory, `${Buffer.from("approval-123").toString("base64url")}.json`), "utf8")).id, "approval-123");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("INFO and ALERT notifications carry an explicit tap URL without weakening deduplication", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ha-notify-url-test-"));
+  try {
+    const envFile = path.join(root, ".env"); const configFile = path.join(root, "config.json"); const stateDirectory = path.join(root, "sends");
+    await writeFile(envFile, "HASS_URL=http://ha.test\nHASS_TOKEN=test-only\n");
+    await writeFile(configFile, JSON.stringify({ services: ["mobile_app_phone"] }));
+    for (const className of ["INFO", "ALERT"]) {
+      const requests = [];
+      const url = `http://antler-a6:8088/Projects/Personal/agent-bus/runtime/decision-queue/${className.toLowerCase()}.md`;
+      const options = { className, id: `url-${className}`, message: "Tap to open", url, envFile, configFile, stateDirectory };
+      const first = await notifyTony(options, { fetchImpl: async (_url, request) => { requests.push(JSON.parse(request.body)); return { ok: true }; } });
+      const second = await notifyTony(options, { fetchImpl: async () => { throw new Error("duplicate must not send"); } });
+      assert.equal(requests[0].data.url, url);
+      assert.equal(first.url, url);
+      assert.equal(second.deduplicated, true);
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("notifier defaults to Estate Status and rejects raw JSON URLs", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "ha-notify-status-test-"));
+  try {
+    const envFile = path.join(root, ".env"); const configFile = path.join(root, "config.json"); const stateDirectory = path.join(root, "sends");
+    const defaultUrl = "http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md";
+    await writeFile(envFile, "HASS_URL=http://ha.test\nHASS_TOKEN=test-only\n");
+    await writeFile(configFile, JSON.stringify({ services: ["mobile_app_phone"], default_url: defaultUrl }));
+    const requests = [];
+    const options = { className: "INFO", id: "estate-status-default", message: "Status updated", envFile, configFile, stateDirectory };
+    const result = await notifyTony(options, { fetchImpl: async (_url, request) => { requests.push(JSON.parse(request.body)); return { ok: true }; } });
+    assert.equal(result.url, defaultUrl);
+    assert.equal(requests[0].data.url, defaultUrl);
+    await assert.rejects(() => notifyTony({ ...options, id: "raw-json-rejected", url: "http://antler-a6/private/queue.json" }, { fetchImpl: async () => ({ ok: true }) }), /must not point at machine-readable JSON/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>CODEX_HOME</key>
+		<string>/Users/antonybarfoot/.codex</string>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>Label</key>
+	<string>com.antlerforge.kv-mac-runtime-check</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/antonybarfoot/Developer/personal/agent-bus/scripts/outcome-truth-launchagent-wrapper.sh</string>
+		<string>kv-mac-runtime-check</string>
+		<string>/Users/antonybarfoot/Developer/personal/knowledge-vault/scripts/kv_mac_runtime_check.sh</string>
+		<string>--repair</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/Users/antonybarfoot/Library/Logs/AntlerForge/kv-mac-runtime-check.err.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/antonybarfoot/Library/Logs/AntlerForge/kv-mac-runtime-check.out.log</string>
+	<key>StartCalendarInterval</key>
+	<dict><key>Minute</key><integer>20</integer></dict>
+	<key>WorkingDirectory</key>
+	<string>/Users/antonybarfoot/Developer/personal/knowledge-vault</string>
+</dict>
+</plist>

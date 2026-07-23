@@ -1,0 +1,26 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0009-cache-weekly-repo-risk-in-existing-mac-reporter
+namespace: project:agent-bus
+title: "Cache the weekly repo-risk sweep through the existing Mac reporter"
+status: active
+owner: tony
+properties:
+  date: 2026-07-19
+  component: outcome-truth-sentinel
+  tags: [stage-3, mac, repositories, propose-only]
+  context: |
+    Repository risk facts live on the Mac, while A6 owns the decision queue and sentinel.
+    A new weekly LaunchAgent would add another footprint and silent-failure mode.
+  decision: |
+    The existing W1.1 Mac reporter refreshes a read-only repository-risk cache when it is
+    absent or seven days old, then uploads it with the Mac outcome snapshot. The sweep uses
+    only read-only Git commands and proves refs/index/worktree status signatures unchanged.
+    A6 decision-queue projection converts ranked findings into prepared checkpoint proposals;
+    it never invokes the checkpoint workflow. The sentinel checks the uploaded sweep age.
+  consequences:
+    positive: "No new LaunchAgent, credential, port, commit or push path is introduced."
+    negative: "A full ~/Developer scan runs during one reporter cycle each week."
+    neutral: "Tony must explicitly approve any later github_sync.py checkpoint action."
+  supersedes: null
+  superseded_by: null

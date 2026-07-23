@@ -1,0 +1,18 @@
+schema_version: 1
+audit_date: 2026-07-18
+dirty_counts:
+  agent-bus: 55
+  knowledge-vault: 18
+ahead_counts:
+  EnergyPoints: 9
+no_remote:
+  - second-self
+  - ambient-information-dashboard
+  - backdrop-lab
+  - DriftResetSkill
+  - ai-usage-dashboard
+corrupt:
+  - HKWorkbench
+  - EnergyPointsiOS
+  - investment-tracker-old
+  - EW-School

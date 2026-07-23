@@ -5,6 +5,10 @@
 `/srv/projects/Personal/agent-bus/runtime/ha-notify/sends`; replaying an ID
 returns the original result with `deduplicated: true` and sends nothing.
 
+Every notification resolves to a rendered page. The configured default is the
+private Estate Status bookmark documented in `docs/estate-status.md`; `.json`
+notification URLs are rejected before delivery.
+
 APPROVAL notifications contain one-tap YES and NO actions. The A6 listener
 subscribes to `mobile_app_notification_action` and writes the decision to
 `runtime/ha-notify/responses/<base64url-id>.json` for the control plane to read.

@@ -1,0 +1,29 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0011-render-one-private-estate-status-surface
+namespace: project:agent-bus
+title: "Render one private Estate Status surface for every notification"
+status: active
+owner: tony
+properties:
+  date: 2026-07-22
+  component: ha-notification-channel
+  tags: [stage-2, ux, notifications, status-page]
+  context: |
+    Home Assistant notifications were ephemeral and queue breach alerts opened raw JSON.
+    Tony needs a durable, readable destination that works from Mac, iPhone and iPad without
+    adding another service or exposing personal operational data publicly.
+  decision: |
+    Generate a single Markdown Estate Status projection inside the existing authenticated
+    FileBrowser surface. The outcome sentinel regenerates it on every evaluation and the
+    decision queue regenerates it after every queue evaluation. The projection reads, but
+    never replaces, cards, queue state and HA send receipts. Queue breaches additionally
+    generate a rendered breach-summary page. The HA notifier rejects JSON URLs and defaults
+    every notification to the stable Estate Status URL unless a rendered Markdown URL is
+    supplied explicitly.
+  consequences:
+    positive: "Every notification has a durable human-readable landing place and raw operational JSON remains an implementation detail."
+    negative: "The Markdown projection can be briefly stale between source mutation and the next evaluation."
+    neutral: "Access remains tailnet-private and FileBrowser-authenticated; no new port, service or credential is introduced."
+  supersedes: null
+  superseded_by: null

@@ -79,6 +79,7 @@ properties:
   responsibilities:
     - "Deliver visually distinct notifications using stable idempotency identifiers"
     - "Capture YES/NO mobile actions into bounded A6 runtime records"
+    - "Route every notification to a rendered private status or detail page"
   non_responsibilities:
     - "Work-item approval decisions or Home Assistant configuration ownership"
 relations:
@@ -104,6 +105,7 @@ properties:
     - "Evaluate declared semantic recovery contracts"
     - "Persist stable exception cards and transition-only notifications"
     - "Expose an independently monitored heartbeat"
+    - "Regenerate the durable Estate Status projection after every evaluation"
   non_responsibilities:
     - "Auto-remediation, telemetry monitoring or approval authority"
 relations:
@@ -128,6 +130,7 @@ properties:
   responsibilities:
     - "Aggregate declared waiting states without changing their source stores"
     - "Emit transition-only SLA alerts and a weekly INFO decision pack"
+    - "Render queue breach summaries and refresh the shared Estate Status projection"
   non_responsibilities:
     - "Approval authority, automatic expiry, or dashboard integration"
 relations:

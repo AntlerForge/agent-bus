@@ -9,8 +9,14 @@ slas_hours:
   overdue_task: 0
   day_board: 48
   funnel_approval: 72
+  repo_risk: 168
 expiry_multiple: 2
 weekly_limit: 20
+delivery:
+  phone_base_url: http://antler-a6:8088/Projects/Personal/agent-bus/runtime/decision-queue/
+  estate_status_url: https://kv.antlerforge.com/#tasks
+  filebrowser_status_url: http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md
+  auth_posture: "Authenticated KV dashboard is primary; private tailnet plus FileBrowser login is fallback; no unauthenticated personal data"
 baseline_oracle:
   date: 2026-07-18
   sentinel_cards: 8

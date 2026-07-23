@@ -13,6 +13,10 @@ test("decision queue keeps the audit baseline and bounded weekly contract", () =
   assert.equal(config.baseline_oracle.bus_item_ids.length, 5);
   assert.equal(config.baseline_oracle.overdue_tasks, 14);
   assert.ok(config.weekly_limit <= 20);
+  assert.match(config.delivery.phone_base_url, /^http:\/\/antler-a6:8088\//);
+  assert.equal(config.delivery.estate_status_url, "https://kv.antlerforge.com/#tasks");
+  assert.match(config.delivery.filebrowser_status_url, /estate-status\.md$/);
+  assert.match(config.delivery.auth_posture, /FileBrowser login/);
 });
 
 test("decision queue is read-only toward source authorities", () => {
@@ -21,4 +25,8 @@ test("decision queue is read-only toward source authorities", () => {
   assert.doesNotMatch(source, /execFile\([^\n]*(ingest\.py|board\.py)|writeFile\([^)]*vault|"--class",\s*"APPROVAL"/);
   assert.match(source, /expiry_draft/);
   assert.match(source, /newBreaches/);
+  assert.doesNotMatch(source, /phoneUrl\("queue\.json"\)/);
+  assert.match(source, /phoneUrl\("breach-summary\.md"\)/);
+  assert.match(source, /renderEstateStatus/);
+  assert.match(source, /collectRepoRisks/);
 });

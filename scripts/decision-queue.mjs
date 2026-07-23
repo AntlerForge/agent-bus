@@ -4,6 +4,7 @@ import path from "node:path";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import YAML from "yaml";
+import { renderBreachSummary, renderEstateStatus } from "../src/estate-status/render.mjs";
 
 const execFile = promisify(execFileCb);
 const argv = new Set(process.argv.slice(2));
@@ -12,6 +13,7 @@ const root = process.env.AGENT_BUS_RUNTIME || "/srv/projects/Personal/agent-bus/
 const vault = process.env.KV_VAULT_PATH || "/srv/kv/vault";
 const outputDir = process.env.DECISION_QUEUE_DIR || `${root}/decision-queue`;
 const config = YAML.parse(await fs.readFile(process.env.DECISION_QUEUE_CONFIG || "config/decision-queue-sla.v1.yaml", "utf8"));
+const statusUrl = config.delivery.estate_status_url;
 
 const hoursSince = (value) => Math.max(0, (now - new Date(value)) / 36e5);
 const frontmatter = (text) => {
@@ -113,7 +115,17 @@ async function collectFunnel() {
     row.audit_id, `${row.tool} approval for ${row.persona}`, row.timestamp, `Approve or reject funnel action ${row.audit_id}`, file));
 }
 
-const queue = (await Promise.all([collectCards(), collectWork(), collectHoldingPen(), collectFlags(), collectTasks(), collectDayBoard(), collectFunnel()]))
+async function collectRepoRisks() {
+  const file = `${root}/outcome-truth/mac-snapshot.json`;
+  let snapshot;
+  try { snapshot = JSON.parse(await fs.readFile(file, "utf8")); } catch { return []; }
+  const sweep = snapshot.repo_sweep;
+  if (!sweep?.propose_only || !Array.isArray(sweep.findings)) return [];
+  return sweep.findings.map((finding) => item("repo_risk", finding.path, `${finding.repo}: repository recovery risk`, sweep.observed_at,
+    finding.prepared_action, file));
+}
+
+const queue = (await Promise.all([collectCards(), collectWork(), collectHoldingPen(), collectFlags(), collectTasks(), collectDayBoard(), collectFunnel(), collectRepoRisks()]))
   .flat().sort((a, b) => b.age_hours - a.age_hours || a.id.localeCompare(b.id));
 const percentile = (values, p) => values.length ? values[Math.min(values.length - 1, Math.ceil(values.length * p) - 1)] : 0;
 const ages = queue.map((row) => row.age_hours).sort((a, b) => a - b);
@@ -149,19 +161,25 @@ const breachedIds = queue.filter((row) => row.breached).map((row) => row.id);
 const newBreaches = previous.initialized ? breachedIds.filter((id) => !previous.breached_ids.includes(id)) : [];
 await atomic(`${outputDir}/state.json`, `${JSON.stringify({ initialized: true, evaluated_at: now.toISOString(), breached_ids: breachedIds }, null, 2)}\n`);
 await atomic(`${outputDir}/last-evaluation.json`, `${JSON.stringify({ evaluated_at: now.toISOString(), new_breaches: newBreaches }, null, 2)}\n`);
+if (newBreaches.length) await renderBreachSummary({ snapshot, newBreaches, outputFile: `${outputDir}/breach-summary.md`, generatedAt: now.toISOString(), statusUrl });
+await renderEstateStatus({ runtimeRoot: root, generatedAt: now.toISOString(), statusUrl });
 
-const notify = async (klass, id, message) => {
+const notify = async (klass, id, message, url) => {
   if (argv.has("--no-notify")) return;
-  await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", klass, "--id", id, "--message", message]);
+  const args = ["scripts/ha-notify-tony.mjs", "--class", klass, "--id", id, "--message", message];
+  if (url) args.push("--url", url);
+  await execFile(process.execPath, args);
 };
-if (newBreaches.length) await notify("ALERT", `decision-queue-breach-${now.toISOString().slice(0, 13)}`, `${newBreaches.length} waiting-on-Tony item(s) newly breached SLA. See ${outputDir}/queue.json`);
+const phoneUrl = (file) => new URL(file, config.delivery.phone_base_url).href;
+if (newBreaches.length) await notify("ALERT", `decision-queue-breach-${now.toISOString().slice(0, 13)}`, `${newBreaches.length} waiting item(s) crossed their agreement. Tap for ages and actions.`, phoneUrl("breach-summary.md"));
 
 if (argv.has("--weekly") || now.getUTCDay() === 0) {
   const selected = queue.slice(0, config.weekly_limit);
   const lines = selected.map((row) => `- ${row.title} — ${Math.floor(row.age_hours / 24)}d — ${row.action}`);
-  const pack = `# DECISION PACK — ${now.toISOString().slice(0, 10)}\n\n${lines.join("\n")}\n`;
+  const pack = `# DECISION PACK — ${now.toISOString().slice(0, 10)}\n\n[Estate Status](${statusUrl})\n\n${lines.join("\n")}\n`;
   const packFile = `${outputDir}/decision-pack-${now.toISOString().slice(0, 10)}.md`;
   await atomic(packFile, pack);
-  await notify("INFO", `decision-pack-${now.toISOString().slice(0, 10)}`, `${selected.length} decisions ready: ${packFile}`);
+  await notify("INFO", `decision-pack-${now.toISOString().slice(0, 10)}`, `${selected.length} decisions ready — tap to open.`, phoneUrl(path.basename(packFile)));
 }
+await renderEstateStatus({ runtimeRoot: root, generatedAt: now.toISOString(), statusUrl });
 console.log(JSON.stringify(snapshot));

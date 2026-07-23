@@ -10,6 +10,9 @@ test("July replay catches named failures and ignores van and HA noise", () => {
   const out = applyEvaluation({ matrix, snapshot: july, now: "2026-07-18T12:00:00Z", shadowStartedAt: "2026-07-19T00:00:00Z" });
   const ids = out.results.filter((r) => r.state === "fail").map((r) => r.id);
   assert.ok(ids.includes("kv-doctor-overall"));
+  assert.ok(matrix.checks.some((check) => check.id === "mac-repo-risk-sweep-freshness"));
+  assert.ok(matrix.checks.some((check) => check.id === "mac-retired-local-bus-write"));
+  assert.ok(matrix.checks.some((check) => check.id === "kv-daily-synthesis-run-freshness"));
   assert.ok(ids.includes("a6-legacy-rsync-semantic-outcome"));
   for (const id of ["mac-launchagent-share-mount", "mac-launchagent-runtime-check", "mac-launchagent-developer-mirrors", "mac-launchagent-project-store"]) assert.ok(ids.includes(id));
   assert.equal(ids.some((id) => /spaniel|home.assistant|entity/.test(id)), false);
@@ -22,7 +25,9 @@ test("cards deduplicate and close only after semantic recovery", () => {
   assert.equal(repeated.transitions.length, 0);
   assert.equal(repeated.cards[cardId(matrix.matrix_id,"kv-doctor-overall")].occurrences, 2);
   const healthy = structuredClone(july);
-  healthy.doctor.status = "pass"; healthy.rsync.latest_exit_code = 0; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
+  healthy.doctor.status = "pass"; healthy.borg.full_legacy_coverage = true; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
+  for (const contract of Object.values(healthy.mac.contracts)) contract.healthy = true;
+  healthy.mac.local_bus.unexpected_write_count = 0;
   for (const item of Object.values(healthy.mac.launchagents)) item.age_minutes = 1;
   const recovered = applyEvaluation({ matrix, snapshot: healthy, previous: repeated.cards, now: "2026-07-18T12:30:00Z", shadowStartedAt: "2026-07-18T12:00:00Z" });
   assert.equal(recovered.transitions.filter((t) => t.type === "recovered").length, 8);
@@ -41,7 +46,9 @@ test("sentinel emits only ALERT transition requests and daily INFO is separate",
 
 test("an induced sandbox fault opens once and semantic recovery closes it", () => {
   const healthy = structuredClone(july);
-  healthy.doctor.status = "pass"; healthy.rsync.latest_exit_code = 0; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
+  healthy.doctor.status = "pass"; healthy.borg.full_legacy_coverage = true; healthy.mac.mount_present = true; healthy.synthesis.latest_clean = true;
+  for (const contract of Object.values(healthy.mac.contracts)) contract.healthy = true;
+  healthy.mac.local_bus.unexpected_write_count = 0;
   for (const item of Object.values(healthy.mac.launchagents)) item.age_minutes = 1;
   const baseline = applyEvaluation({ matrix, snapshot: healthy, now: "2026-07-18T12:00:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
   const fault = structuredClone(healthy); fault.sandbox.ok = false;
@@ -51,4 +58,14 @@ test("an induced sandbox fault opens once and semantic recovery closes it", () =
   assert.equal(repeated.transitions.length, 0);
   const recovered = applyEvaluation({ matrix, snapshot: healthy, previous: repeated.cards, now: "2026-07-18T12:45:00Z", shadowStartedAt: "2026-07-18T11:00:00Z" });
   assert.deepEqual(recovered.transitions.map((t) => [t.type, t.card.check_id, t.notify]), [["recovered", "sentinel-sandbox-contract", true]]);
+});
+
+test("normal Mac sleep suppresses freshness failures without masking an awake failure", () => {
+  const asleep = structuredClone(july);
+  for (const contract of Object.values(asleep.mac.contracts)) contract.healthy = true;
+  const asleepResult = applyEvaluation({ matrix, snapshot: asleep, now: "2026-07-20T02:30:00Z", shadowStartedAt: "2026-07-18T00:00:00Z" });
+  assert.equal(asleepResult.results.filter((result) => result.id.startsWith("mac-") && result.state === "fail").length, 0);
+  asleep.mac.contracts.reporter.healthy = false;
+  const awakeFailure = applyEvaluation({ matrix, snapshot: asleep, now: "2026-07-20T09:00:00Z", shadowStartedAt: "2026-07-18T00:00:00Z" });
+  assert.equal(awakeFailure.results.find((result) => result.id === "mac-reporter-freshness").state, "fail");
 });

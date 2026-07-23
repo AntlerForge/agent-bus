@@ -4,7 +4,12 @@
   <key>Label</key><string>com.antlerforge.agent-bus-outcome-reporter</string>
   <key>ProgramArguments</key><array><string>/bin/zsh</string><string>/Users/antonybarfoot/Developer/personal/agent-bus/scripts/outcome-truth-mac-report.sh</string></array>
   <key>RunAtLoad</key><true/>
-  <key>StartInterval</key><integer>900</integer>
+  <key>StartCalendarInterval</key><array>
+    <dict><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Minute</key><integer>15</integer></dict>
+    <dict><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Minute</key><integer>45</integer></dict>
+  </array>
   <key>StandardOutPath</key><string>/Users/antonybarfoot/Library/Logs/Agent Bus/outcome-reporter.log</string>
   <key>StandardErrorPath</key><string>/Users/antonybarfoot/Library/Logs/Agent Bus/outcome-reporter.error.log</string>
 </dict></plist>

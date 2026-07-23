@@ -1,0 +1,38 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0010-treat-mac-sleep-as-availability-state-and-catch-up-on-wake
+namespace: project:agent-bus
+title: "Treat Mac sleep as availability state and catch maintenance up on wake"
+status: active
+owner: tony
+properties:
+  date: 2026-07-20
+  component: outcome-truth-sentinel
+  tags: [stage-1, mac, sleep, launchd, reliability]
+  context: |
+    Five interval LaunchAgents repeatedly appeared dead after overnight lid-close even though
+    the Mac had not rebooted and launchd still reported successful exits. A sleeping laptop
+    cannot satisfy wall-clock freshness contracts. A6 cannot initiate the four Mac-only jobs
+    because macOS Remote Login is intentionally unavailable, while share mounting, local
+    runtime inspection and project application bridges inherently require macOS state.
+  decision: |
+    Retain the five jobs on the Mac, but replace StartInterval with StartCalendarInterval and
+    retain RunAtLoad. launchd coalesces calendar events missed during sleep into one execution
+    on wake, providing the required catch-up without waking the laptop. A6 remains the outcome
+    authority and determines Mac availability independently from Tailscale peer state. While
+    the Mac peer is offline, Mac freshness contracts are suspended as normal sleep; while it
+    is online, each contract must meet its existing semantic freshness threshold. The outcome
+    reporter is subject to the same online-only contract and therefore detects an awake Mac
+    whose reporter or maintenance jobs have genuinely stopped.
+  per_job:
+    a6-share-mount: "wake-robust; Mac-only mount state, four-hour calendar cadence"
+    kv-developer-mirrors-sync: "wake-robust; local repositories are not remotely exposed, six-hour calendar cadence"
+    kv-mac-runtime-check: "wake-robust; macOS application/runtime facts, hourly calendar cadence"
+    kv-project-store-sync: "wake-robust; Mac application bridge, two-hour calendar cadence"
+    agent-bus-outcome-reporter: "wake-robust; bounded Mac probe, fifteen-minute calendar cadence"
+  consequences:
+    positive: "Normal sleep is silent, every missed calendar cadence catches up on wake, and awake failures remain visible."
+    negative: "Mac-only work is delayed until the user wakes the laptop; it is not made always-on."
+    neutral: "No inbound Mac service, new credential, or wake request is introduced; all plist changes are reversible."
+  supersedes: null
+  superseded_by: null

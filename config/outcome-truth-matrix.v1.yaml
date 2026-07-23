@@ -6,6 +6,14 @@ shadow:
   days: 14
   alert_policy: new_hard_failures_only
 checks:
+  - id: mac-retired-local-bus-write
+    area: authority
+    owner: tony
+    severity: hard
+    source: mac.local_bus.unexpected_write_count
+    operator: equals
+    expected: 0
+    recovery: unexpected local files are quarantined with an audit note and a later probe reports zero
   - id: kv-doctor-overall
     area: doctor
     owner: tony
@@ -26,58 +34,66 @@ checks:
     area: backup
     owner: tony
     severity: hard
-    source: rsync.latest_exit_code
+    source: borg.full_legacy_coverage
     operator: equals
-    expected: 0
-    recovery: a later nightly run records exit code 0
+    expected: true
+    recovery: Borg is fresh and its declared source set covers all paths formerly protected by rsync
   - id: mac-a6-share-mount
     area: mac
     owner: tony
     severity: hard
-    source: mac.mount_present
+    source: mac.contracts.share_mount.healthy
     operator: equals
     expected: true
-    recovery: a later read-only Mac probe confirms the share is mounted
+    recovery: while the Mac is available, a later read-only probe confirms the share is mounted; normal sleep is suspended
   - id: mac-reporter-freshness
     area: mac
     owner: tony
     severity: hard
-    source: mac.report_age_minutes
+    source: mac.contracts.reporter.healthy
+    operator: equals
+    expected: true
+    recovery: an available Mac uploads a new snapshot within 30 minutes; normal sleep is suspended
+  - id: mac-repo-risk-sweep-freshness
+    area: repositories
+    owner: tony
+    severity: hard
+    source: mac.repo_sweep.age_minutes
     operator: at_most
-    expected: 30
-    recovery: a new Mac snapshot is observed within 30 minutes
+    expected: 11520
+    recovery: the existing Mac reporter uploads a successful sweep no more than eight days old
   - id: mac-launchagent-share-mount
     area: mac
     owner: tony
     severity: hard
-    source: mac.launchagents.share_mount.age_minutes
-    operator: at_most
-    expected: 480
-    recovery: a later agent outcome timestamp is fresh for its declared schedule
+    source: mac.contracts.share_mount.healthy
+    operator: equals
+    expected: true
+    recovery: an available Mac reports the mount healthy; normal sleep is suspended
   - id: mac-launchagent-runtime-check
     area: mac
     owner: tony
     severity: hard
-    source: mac.launchagents.runtime_check.age_minutes
-    operator: at_most
-    expected: 120
-    recovery: a later agent outcome timestamp is fresh for its declared schedule
+    source: mac.contracts.runtime_check.healthy
+    operator: equals
+    expected: true
+    recovery: an available Mac reports a fresh runtime check; normal sleep is suspended
   - id: mac-launchagent-developer-mirrors
     area: mac
     owner: tony
     severity: hard
-    source: mac.launchagents.developer_mirrors.age_minutes
-    operator: at_most
-    expected: 720
-    recovery: a later agent outcome timestamp is fresh for its declared schedule
+    source: mac.contracts.developer_mirrors.healthy
+    operator: equals
+    expected: true
+    recovery: an available Mac reports a fresh developer-mirrors sync; normal sleep is suspended
   - id: mac-launchagent-project-store
     area: mac
     owner: tony
     severity: hard
-    source: mac.launchagents.project_store.age_minutes
-    operator: at_most
-    expected: 240
-    recovery: a later agent outcome timestamp is fresh for its declared schedule
+    source: mac.contracts.project_store.healthy
+    operator: equals
+    expected: true
+    recovery: an available Mac reports a fresh project-store sync; normal sleep is suspended
   - id: kv-daily-synthesis-clean
     area: synthesis
     owner: tony
@@ -86,6 +102,14 @@ checks:
     operator: equals
     expected: true
     recovery: a later scheduled synthesis completes with zero warnings
+  - id: kv-daily-synthesis-run-freshness
+    area: synthesis
+    owner: tony
+    severity: hard
+    source: synthesis.latest_run_age_minutes
+    operator: at_most
+    expected: 1800
+    recovery: a later synthesis run starts within the 30-hour daily schedule allowance
   - id: sentinel-sandbox-contract
     area: sentinel
     owner: tony

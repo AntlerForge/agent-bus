@@ -1,0 +1,28 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0006-fail-closed-on-missing-control-plane-authority
+namespace: project:agent-bus
+title: "Fail closed when the authoritative control plane is not configured"
+status: active
+owner: tony
+properties:
+  date: 2026-07-19
+  component: bus-core
+  tags: [stage-1, authority, mcp, fail-closed]
+  context: |
+    The MCP server treated an absent AGENT_BUS_CONTROL_PLANE_URL as permission to use
+    ~/AgentBus. On 2026-07-19 this silently placed two proposals in a retired shadow
+    ledger while A6 remained the declared authority. A local store is useful for tests
+    and deliberate offline development, but its authority must never be inferred.
+  decision: |
+    The MCP entry point requires AGENT_BUS_CONTROL_PLANE_URL. It may use a local store
+    only when AGENT_BUS_ALLOW_LOCAL=1 is explicitly set. Tests opt into isolated local
+    state; production startup without either authority fails before creating files.
+    The outcome-truth Mac probe reports writes outside the quarantined historical
+    incident directory so any recurrence becomes an exception card.
+  consequences:
+    positive: "Authority loss is visible and cannot silently fork work-ledger state."
+    negative: "Offline/local MCP use requires one explicit environment setting."
+    neutral: "The quarantined 2026-07-19 shadow records remain immutable audit evidence."
+  supersedes: null
+  superseded_by: null

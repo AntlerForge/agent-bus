@@ -8,3 +8,4 @@ for (const key of [
 ]) delete process.env[key];
 
 process.env.NODE_ENV = "test";
+process.env.AGENT_BUS_ALLOW_LOCAL = "1";
