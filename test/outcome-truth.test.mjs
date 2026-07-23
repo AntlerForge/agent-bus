@@ -103,3 +103,15 @@ test("synthesis semantic clean ignores declared non-blocking warnings but not ha
   assert.equal(synthesisSemanticallyClean(warning), false);
   assert.equal(synthesisSemanticallyClean({ event: "run_failed" }), false);
 });
+
+test("shadow probe faults remain recorded without a later recovery notification", () => {
+  const snapshot = structuredClone(july);
+  snapshot.borg.healthy = null;
+  const blind = applyEvaluation({ matrix, snapshot, now: "2026-07-23T10:00:00Z", shadowStartedAt: "2026-07-24T00:00:00Z" });
+  const probe = blind.cards[probeCardId(matrix.matrix_id, "a6-borg-hourly-freshness")];
+  assert.equal(probe.notification_state, "suppressed");
+  assert.equal(blind.transitions.find((t) => t.card.card_id === probe.card_id).notify, false);
+  snapshot.borg.healthy = true;
+  const recovered = applyEvaluation({ matrix, snapshot, previous: blind.cards, now: "2026-07-23T10:15:00Z", shadowStartedAt: "2026-07-24T00:00:00Z" });
+  assert.equal(recovered.transitions.find((t) => t.card.card_id === probe.card_id).notify, false);
+});

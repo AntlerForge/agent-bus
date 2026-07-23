@@ -64,15 +64,17 @@ export function applyEvaluation({ matrix, snapshot, previous = {}, now = new Dat
     const priorProbe = cards[probeId];
     if (result.state === "probe_fault") {
       if (!priorProbe || priorProbe.status === "closed") {
+        const notify = now > shadowStartedAt;
         cards[probeId] = {
           card_id: probeId, card_class: "probe_fault", check_id: `probe-fault:${result.id}`,
           probe_check_id: result.id, probe_source: result.source, owner: result.owner,
           severity: "hard", status: "open", first_seen: now, last_seen: now,
           occurrences: 1, actual: null, expected: "observable typed value",
           recovery_contract: `probe ${result.source} returns a typed value and the contract is evaluated again`,
-          notification_state: "sent", notified_at: now,
+          notification_state: notify ? "sent" : "suppressed",
+          ...(notify ? { notified_at: now } : {}),
         };
-        transitions.push({ type: "probe_fault_opened", card: cards[probeId], notify: now > shadowStartedAt });
+        transitions.push({ type: "probe_fault_opened", card: cards[probeId], notify });
       } else {
         priorProbe.last_seen = now;
         priorProbe.occurrences += 1;
@@ -84,8 +86,9 @@ export function applyEvaluation({ matrix, snapshot, previous = {}, now = new Dat
       priorProbe.recovered_at = now;
       priorProbe.last_seen = now;
       priorProbe.actual = result.actual;
-      priorProbe.notification_state = "recovered";
-      transitions.push({ type: "probe_fault_recovered", card: priorProbe, notify: priorProbe.notified_at != null });
+      const notified = priorProbe.notification_state === "sent";
+      priorProbe.notification_state = notified ? "recovered" : "closed_without_notification";
+      transitions.push({ type: "probe_fault_recovered", card: priorProbe, notify: notified });
     }
     if (result.state === "fail") {
       if (!prior || prior.status === "closed") {
