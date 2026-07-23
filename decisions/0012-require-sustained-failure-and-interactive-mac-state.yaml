@@ -21,6 +21,10 @@ properties:
     disappear silently. Require a hard failure to persist for 30 minutes before notifying;
     recoveries notify only when the opening failure was notified. The card still opens on the
     first failed evaluation, preserving truth and duration evidence.
+    Missing, null or non-finite probe values are never contract failures: open a distinct,
+    immediate `probe_fault` card saying the sentinel cannot see that contract, leave any
+    pre-existing outcome card unchanged, and close the probe-fault card only after the source
+    returns a typed value. Deployment must run the collector/matrix self-test before restart.
   consequences:
     positive: "Sub-hour measurement flaps remain recorded but do not page; sustained and real failures still alert."
     negative: "A genuine outcome failure may page up to 30 minutes later."

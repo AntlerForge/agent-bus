@@ -102,7 +102,7 @@ checks:
     source: synthesis.latest_clean
     operator: equals
     expected: true
-    recovery: a later scheduled synthesis completes with zero warnings
+    recovery: a later scheduled synthesis completes with required adapters, dashboard and semantic doctor checks healthy; review-gated/non-blocking advisories do not fail the contract
   - id: kv-daily-synthesis-run-freshness
     area: synthesis
     owner: tony

@@ -2,7 +2,7 @@
 import fs from "node:fs/promises";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
-import { applyEvaluation, loadCards, loadMatrix, saveCards } from "../src/outcome-truth/core.mjs";
+import { applyEvaluation, evaluateMatrix, loadCards, loadMatrix, saveCards, synthesisSemanticallyClean } from "../src/outcome-truth/core.mjs";
 import { renderEstateStatus } from "../src/estate-status/render.mjs";
 
 const execFile = promisify(execFileCb);
@@ -68,7 +68,8 @@ async function collect() {
     },
     mac,
     synthesis: {
-      latest_clean: synthesisOutcome?.event === "run_completed",
+      latest_clean: synthesisSemanticallyClean(synthesisOutcome),
+      latest_event: synthesisOutcome?.event || null,
       latest_run_age_minutes: synthesisRun ? (Date.now() - Date.parse(synthesisRun.ts)) / 60000 : Number.POSITIVE_INFINITY,
     },
     sandbox: { ok: true },
@@ -77,13 +78,22 @@ async function collect() {
 
 async function notify(transition) {
   if (!transition.notify || process.env.OUTCOME_NO_NOTIFY === "1") return;
-  const recovered = transition.type === "recovered";
-  const body = `${recovered ? "RECOVERED" : "FAILED"}: ${transition.card.check_id}${recovered ? " passed its semantic recovery contract" : " requires attention"}`;
+  const recovered = transition.type === "recovered" || transition.type === "probe_fault_recovered";
+  const probeFault = transition.card.card_class === "probe_fault";
+  const body = probeFault
+    ? `${recovered ? "PROBE RECOVERED" : "PROBE FAULT"}: sentinel ${recovered ? "can see" : "cannot see"} ${transition.card.probe_check_id}`
+    : `${recovered ? "RECOVERED" : "FAILED"}: ${transition.card.check_id}${recovered ? " passed its semantic recovery contract" : " requires attention"}`;
   await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", "ALERT", "--id", `outcome-${transition.card.card_id}-${transition.type}-${transition.card.last_seen}`, "--message", body, "--url", statusUrl]);
 }
 
 const matrix = await loadMatrix(matrixFile);
 const snapshot = await collect();
+if (args["self-test"] != null) {
+  const results = evaluateMatrix(matrix, snapshot);
+  const faults = results.filter((result) => result.state === "probe_fault");
+  console.log(JSON.stringify({ ok: faults.length === 0, checked: results.length, faults, snapshot }, null, 2));
+  process.exitCode = faults.length ? 1 : 0;
+} else {
 const previous = await loadCards(cardsFile);
 let shadowStartedAt = now;
 try { shadowStartedAt = (await fs.readFile(`${stateDir}/shadow-started-at`, "utf8")).trim(); }
@@ -99,3 +109,4 @@ if (process.env.OUTCOME_DAILY_INFO === "1" && outcome.results.every((r) => r.sta
 }
 await renderEstateStatus({ runtimeRoot, generatedAt: now, statusUrl });
 console.log(JSON.stringify(outcome));
+}

@@ -106,6 +106,7 @@ properties:
     - "Persist stable exception cards and transition-only notifications"
     - "Expose an independently monitored heartbeat"
     - "Regenerate the durable Estate Status projection after every evaluation"
+    - "Classify missing or untyped observations as probe faults, distinct from outcome failures"
   non_responsibilities:
     - "Auto-remediation, telemetry monitoring or approval authority"
 relations:

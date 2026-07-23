@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import { applyEvaluation, cardId, loadMatrix } from "../src/outcome-truth/core.mjs";
+import { applyEvaluation, cardId, loadMatrix, probeCardId, synthesisSemanticallyClean } from "../src/outcome-truth/core.mjs";
 
 const matrix = await loadMatrix("config/outcome-truth-matrix.v1.yaml");
 const july = JSON.parse(await fs.readFile("test/fixtures/outcome-july-2026.json", "utf8"));
@@ -68,4 +68,38 @@ test("normal Mac sleep suppresses freshness failures without masking an awake fa
   asleep.mac.contracts.reporter.healthy = false;
   const awakeFailure = applyEvaluation({ matrix, snapshot: asleep, now: "2026-07-20T09:00:00Z", shadowStartedAt: "2026-07-18T00:00:00Z" });
   assert.equal(awakeFailure.results.find((result) => result.id === "mac-reporter-freshness").state, "fail");
+});
+
+test("missing observations open a distinct immediate probe-fault card, not an outcome failure", () => {
+  const healthy = structuredClone(july);
+  healthy.doctor.status = "pass";
+  healthy.borg.healthy = null;
+  healthy.borg.full_legacy_coverage = true;
+  healthy.synthesis.latest_clean = true;
+  for (const contract of Object.values(healthy.mac.contracts)) contract.healthy = true;
+  const blind = applyEvaluation({ matrix, snapshot: healthy, now: "2026-07-23T10:34:00Z", shadowStartedAt: "2026-07-18T00:00:00Z" });
+  assert.equal(blind.results.find((result) => result.id === "a6-borg-hourly-freshness").state, "probe_fault");
+  assert.equal(blind.cards[cardId(matrix.matrix_id, "a6-borg-hourly-freshness")], undefined);
+  const probe = blind.cards[probeCardId(matrix.matrix_id, "a6-borg-hourly-freshness")];
+  assert.equal(probe.card_class, "probe_fault");
+  assert.deepEqual(blind.transitions.map((t) => [t.type, t.notify]), [["probe_fault_opened", true]]);
+  healthy.borg.healthy = true;
+  const visible = applyEvaluation({ matrix, snapshot: healthy, previous: blind.cards, now: "2026-07-23T10:49:00Z", shadowStartedAt: "2026-07-18T00:00:00Z" });
+  assert.equal(visible.cards[probe.card_id].status, "closed");
+  assert.deepEqual(visible.transitions.map((t) => [t.type, t.notify]), [["probe_fault_recovered", true]]);
+});
+
+test("synthesis semantic clean ignores declared non-blocking warnings but not hard failures", () => {
+  const warning = {
+    event: "run_warning",
+    metadata: {
+      intake: { required_adapter_status: "ok", triage: { auto_errors: 0 } },
+      dashboard: { build: "ok", healthz: "ok" },
+      maintenance: { doctor_hard_failures: 0 },
+    },
+  };
+  assert.equal(synthesisSemanticallyClean(warning), true);
+  warning.metadata.maintenance.doctor_hard_failures = 1;
+  assert.equal(synthesisSemanticallyClean(warning), false);
+  assert.equal(synthesisSemanticallyClean({ event: "run_failed" }), false);
 });
