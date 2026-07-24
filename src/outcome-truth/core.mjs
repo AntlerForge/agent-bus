@@ -52,6 +52,25 @@ export function synthesisSemanticallyClean(row) {
     && Number(maintenance.doctor_hard_failures || 0) === 0;
 }
 
+export function scheduledFreshnessHealthy({
+  statusOk,
+  integrityOk,
+  ageMinutes,
+  now = new Date(),
+  firstDueUtc,
+  lastDueUtc,
+  graceMinutes,
+}) {
+  if (!statusOk || !integrityOk || !Number.isFinite(Number(ageMinutes))) return false;
+  if (Number(ageMinutes) <= Number(graceMinutes)) return true;
+  const [firstHour, firstMinute] = firstDueUtc.split(":").map(Number);
+  const [lastHour, lastMinute] = lastDueUtc.split(":").map(Number);
+  const minuteOfDay = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const evaluationStart = firstHour * 60 + firstMinute + Number(graceMinutes);
+  const evaluationEnd = lastHour * 60 + lastMinute + Number(graceMinutes);
+  return minuteOfDay < evaluationStart || minuteOfDay > evaluationEnd;
+}
+
 export function applyEvaluation({ matrix, snapshot, previous = {}, now = new Date().toISOString(), shadowStartedAt = now }) {
   const cards = structuredClone(previous);
   const transitions = [];

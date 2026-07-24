@@ -2,7 +2,7 @@
 import fs from "node:fs/promises";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
-import { applyEvaluation, evaluateMatrix, loadCards, loadMatrix, saveCards, synthesisSemanticallyClean } from "../src/outcome-truth/core.mjs";
+import { applyEvaluation, evaluateMatrix, loadCards, loadMatrix, saveCards, scheduledFreshnessHealthy, synthesisSemanticallyClean } from "../src/outcome-truth/core.mjs";
 import { renderEstateStatus } from "../src/estate-status/render.mjs";
 
 const execFile = promisify(execFileCb);
@@ -35,6 +35,17 @@ async function collect() {
     gristStatus = JSON.parse(await fs.readFile(`${runtimeRoot}/grist-workbench-sync/status.json`, "utf8"));
   } catch {}
   const gristAgeMinutes = gristStatus?.synced_at ? (Date.now() - Date.parse(gristStatus.synced_at)) / 60000 : null;
+  const gristHealthy = gristStatus && Number.isFinite(gristAgeMinutes)
+    ? scheduledFreshnessHealthy({
+        statusOk: gristStatus.status === "ok",
+        integrityOk: gristStatus.protected_before_hash === gristStatus.protected_after_hash,
+        ageMinutes: gristAgeMinutes,
+        now: new Date(),
+        firstDueUtc: "07:00",
+        lastDueUtc: "22:45",
+        graceMinutes: 30,
+      })
+    : null;
   const mac = JSON.parse(macOut);
   mac.report_age_minutes = (Date.now() - Date.parse(mac.observed_at)) / 60000;
   const { stdout: tailscaleOut } = await execFile("tailscale", ["status", "--json"]);
@@ -78,9 +89,7 @@ async function collect() {
       latest_run_age_minutes: synthesisRun ? (Date.now() - Date.parse(synthesisRun.ts)) / 60000 : Number.POSITIVE_INFINITY,
     },
     grist: {
-      healthy: gristStatus && Number.isFinite(gristAgeMinutes)
-        ? gristStatus.status === "ok" && gristAgeMinutes <= 30 && gristStatus.protected_before_hash === gristStatus.protected_after_hash
-        : null,
+      healthy: gristHealthy,
       age_minutes: gristAgeMinutes,
       conflicts: gristStatus?.conflicts ?? null,
     },

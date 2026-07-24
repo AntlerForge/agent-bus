@@ -118,7 +118,14 @@ checks:
     source: grist.healthy
     operator: equals
     expected: true
-    recovery: a later projection succeeds within 30 minutes and proves protected Grist content unchanged
+    producer_schedule:
+      timezone: UTC
+      first_due: "07:00"
+      last_due: "22:45"
+      cadence_minutes: 15
+      freshness_grace_minutes: 30
+      expected_quiet: "23:15–07:30"
+    recovery: during the producer evaluation window a projection succeeds within 30 minutes and proves protected Grist content unchanged; the declared overnight quiet window is healthy when the last projection succeeded with protected content unchanged
   - id: sentinel-sandbox-contract
     area: sentinel
     owner: tony

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import { applyEvaluation, cardId, loadMatrix, probeCardId, synthesisSemanticallyClean } from "../src/outcome-truth/core.mjs";
+import { applyEvaluation, cardId, loadMatrix, probeCardId, scheduledFreshnessHealthy, synthesisSemanticallyClean } from "../src/outcome-truth/core.mjs";
 
 const matrix = await loadMatrix("config/outcome-truth-matrix.v1.yaml");
 const july = JSON.parse(await fs.readFile("test/fixtures/outcome-july-2026.json", "utf8"));
@@ -115,4 +115,19 @@ test("shadow probe faults remain recorded without a later recovery notification"
   snapshot.borg.healthy = true;
   const recovered = applyEvaluation({ matrix, snapshot, previous: blind.cards, now: "2026-07-23T10:15:00Z", shadowStartedAt: "2026-07-24T00:00:00Z" });
   assert.equal(recovered.transitions.find((t) => t.card.card_id === probe.card_id).notify, false);
+});
+
+test("Grist freshness follows its producer calendar without masking daytime failure", () => {
+  const base = {
+    statusOk: true,
+    integrityOk: true,
+    ageMinutes: 36,
+    firstDueUtc: "07:00",
+    lastDueUtc: "22:45",
+    graceMinutes: 30,
+  };
+  assert.equal(scheduledFreshnessHealthy({ ...base, now: new Date("2026-07-24T23:21:13Z") }), true);
+  assert.equal(scheduledFreshnessHealthy({ ...base, now: new Date("2026-07-25T07:15:00Z") }), true);
+  assert.equal(scheduledFreshnessHealthy({ ...base, now: new Date("2026-07-25T12:00:00Z") }), false);
+  assert.equal(scheduledFreshnessHealthy({ ...base, integrityOk: false, now: new Date("2026-07-24T23:21:13Z") }), false);
 });
