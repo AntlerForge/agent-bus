@@ -111,6 +111,14 @@ checks:
     operator: at_most
     expected: 1800
     recovery: a later synthesis run starts within the 30-hour daily schedule allowance
+  - id: grist-workbench-projection-freshness
+    area: workbench
+    owner: tony
+    severity: hard
+    source: grist.healthy
+    operator: equals
+    expected: true
+    recovery: a later projection succeeds within 30 minutes and proves protected Grist content unchanged
   - id: sentinel-sandbox-contract
     area: sentinel
     owner: tony

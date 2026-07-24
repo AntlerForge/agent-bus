@@ -30,6 +30,11 @@ async function collect() {
     .trim().split("\n").map((line) => JSON.parse(line)).filter((row) => row.automation_id === "kv-daily-synthesis");
   const synthesisOutcome = ledger.filter((row) => row.event !== "run_started").at(-1);
   const synthesisRun = ledger.filter((row) => row.event === "run_started").at(-1);
+  let gristStatus = null;
+  try {
+    gristStatus = JSON.parse(await fs.readFile(`${runtimeRoot}/grist-workbench-sync/status.json`, "utf8"));
+  } catch {}
+  const gristAgeMinutes = gristStatus?.synced_at ? (Date.now() - Date.parse(gristStatus.synced_at)) / 60000 : null;
   const mac = JSON.parse(macOut);
   mac.report_age_minutes = (Date.now() - Date.parse(mac.observed_at)) / 60000;
   const { stdout: tailscaleOut } = await execFile("tailscale", ["status", "--json"]);
@@ -71,6 +76,13 @@ async function collect() {
       latest_clean: synthesisSemanticallyClean(synthesisOutcome),
       latest_event: synthesisOutcome?.event || null,
       latest_run_age_minutes: synthesisRun ? (Date.now() - Date.parse(synthesisRun.ts)) / 60000 : Number.POSITIVE_INFINITY,
+    },
+    grist: {
+      healthy: gristStatus && Number.isFinite(gristAgeMinutes)
+        ? gristStatus.status === "ok" && gristAgeMinutes <= 30 && gristStatus.protected_before_hash === gristStatus.protected_after_hash
+        : null,
+      age_minutes: gristAgeMinutes,
+      conflicts: gristStatus?.conflicts ?? null,
     },
     sandbox: { ok: true },
   };
