@@ -1,6 +1,10 @@
 #!/bin/zsh
 set -euo pipefail
 app_dir="${OUTCOME_MAC_APP:-/Users/antonybarfoot/Developer/personal/agent-bus}"
+# launchd starts jobs with $HOME as the working directory. The repository-risk
+# sweep owns a versioned relative config path, so anchor the whole reporter at
+# its declared application checkout before invoking any Node entrypoint.
+cd "$app_dir"
 local_snapshot="${TMPDIR:-/tmp}/agent-bus-outcome-mac-snapshot.json"
 risk_cache="${REPO_RISK_OUTPUT:-$HOME/Library/Application Support/Agent Bus/repo-risk/latest.json}"
 refresh_risk=0
