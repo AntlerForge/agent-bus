@@ -46,6 +46,9 @@ async function collect() {
         graceMinutes: 30,
       })
     : null;
+  const holdingPenEntries = await fs.readdir("/srv/kv/vault/holding-pen", { withFileTypes: true });
+  const holdingPenItemCount = holdingPenEntries.filter((entry) =>
+    entry.isFile() && entry.name.endsWith(".md") && entry.name !== "_index.md").length;
   const mac = JSON.parse(macOut);
   mac.report_age_minutes = (Date.now() - Date.parse(mac.observed_at)) / 60000;
   const { stdout: tailscaleOut } = await execFile("tailscale", ["status", "--json"]);
@@ -93,6 +96,7 @@ async function collect() {
       age_minutes: gristAgeMinutes,
       conflicts: gristStatus?.conflicts ?? null,
     },
+    holding_pen: { item_count: holdingPenItemCount },
     sandbox: { ok: true },
   };
 }

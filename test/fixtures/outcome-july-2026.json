@@ -21,6 +21,7 @@
   },
   "synthesis":{"latest_clean":false,"latest_run_age_minutes":600},
   "grist":{"healthy":true,"age_minutes":1,"conflicts":[]},
+  "holding_pen":{"item_count":0},
   "sandbox":{"ok":true},
   "noise":{"kv_spanielbus_sync_failures":854,"ha_unavailable_entities":119}
 }

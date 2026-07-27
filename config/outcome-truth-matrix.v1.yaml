@@ -126,6 +126,17 @@ checks:
       freshness_grace_minutes: 30
       expected_quiet: "23:15–07:30"
     recovery: during the producer evaluation window a projection succeeds within 30 minutes and proves protected Grist content unchanged; the declared overnight quiet window is healthy when the last projection succeeded with protected content unchanged
+  - id: kv-holding-pen-size
+    area: knowledge-hygiene
+    owner: tony
+    severity: hard
+    source: holding_pen.item_count
+    operator: at_most
+    expected: 25
+    evaluation_schedule:
+      mode: continuous
+      rationale: the source is an immediately observable directory count, not a scheduled producer freshness signal
+    recovery: a later canonical A6 evaluation observes at most 25 holding-pen items after validated drain processing
   - id: sentinel-sandbox-contract
     area: sentinel
     owner: tony

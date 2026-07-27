@@ -131,3 +131,13 @@ test("Grist freshness follows its producer calendar without masking daytime fail
   assert.equal(scheduledFreshnessHealthy({ ...base, now: new Date("2026-07-25T12:00:00Z") }), false);
   assert.equal(scheduledFreshnessHealthy({ ...base, integrityOk: false, now: new Date("2026-07-24T23:21:13Z") }), false);
 });
+
+test("holding-pen beacon opens above 25 and closes only after a later bounded count", () => {
+  const healthy = structuredClone(july);
+  healthy.holding_pen.item_count = 26;
+  const opened = applyEvaluation({ matrix, snapshot: healthy, now: "2026-07-27T12:00:00Z", shadowStartedAt: "2026-07-26T00:00:00Z" });
+  assert.equal(opened.results.find((result) => result.id === "kv-holding-pen-size").state, "fail");
+  healthy.holding_pen.item_count = 25;
+  const closed = applyEvaluation({ matrix, snapshot: healthy, previous: opened.cards, now: "2026-07-27T12:15:00Z", shadowStartedAt: "2026-07-26T00:00:00Z" });
+  assert.equal(closed.cards[cardId(matrix.matrix_id, "kv-holding-pen-size")].status, "closed");
+});
