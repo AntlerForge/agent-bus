@@ -17,6 +17,20 @@ fi
 if (( refresh_risk )); then
   REPO_RISK_OUTPUT="$risk_cache" /usr/local/bin/node "$app_dir/scripts/repo-risk-sweep.mjs" >/dev/null
 fi
+
+# This legacy semantic completion log lives in iCloud Drive and can be evicted
+# between scheduled runs. Materialise the single required file before the Node
+# probe reads it; otherwise macOS reports EAGAIN and the whole outcome snapshot
+# is lost.
+project_store_log="$HOME/Documents/Admin/knowledge-vault/logs/project-store-sync-bridge.log"
+if [[ -x /usr/bin/brctl && -e "$project_store_log" ]]; then
+  /usr/bin/brctl download "$project_store_log" >/dev/null 2>&1 || true
+  for _ in {1..20}; do
+    [[ ! "$(stat -f '%Sf' "$project_store_log" 2>/dev/null)" =~ dataless ]] && break
+    sleep 0.25
+  done
+fi
+
 /usr/local/bin/node "$app_dir/scripts/outcome-truth-mac-probe.mjs" > "$local_snapshot"
 /usr/bin/scp -q "$local_snapshot" ajbarfoot@antler-a6:/srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-snapshot.incoming
 /usr/bin/ssh -o BatchMode=yes ajbarfoot@antler-a6 'chmod 600 /srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-snapshot.incoming && mv /srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-snapshot.incoming /srv/projects/Personal/agent-bus/runtime/outcome-truth/mac-snapshot.json'
