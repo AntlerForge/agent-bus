@@ -13,6 +13,27 @@ Every Mac-hosted MCP server, channel and bridge needs:
 AGENT_BUS_CONTROL_PLANE_URL=http://127.0.0.1:18091/agent-bus
 ```
 
+Claude Desktop uses a separate configuration from Claude Code. Its
+`~/Library/Application Support/Claude/claude_desktop_config.json` entry must
+carry the authority explicitly:
+
+```json
+{
+  "mcpServers": {
+    "agent-bus": {
+      "command": "/usr/local/bin/node",
+      "args": ["/Users/antonybarfoot/Developer/personal/agent-bus/src/server.mjs"],
+      "env": {
+        "AGENT_BUS_CONTROL_PLANE_URL": "http://127.0.0.1:18091/agent-bus"
+      }
+    }
+  }
+}
+```
+
+Without that `env` block, decision 0006 makes the server fail closed rather
+than silently create a second local ledger.
+
 The automatic targets are separate native workers:
 
 | Target ID | Native surface | Default model | Context persistence |
