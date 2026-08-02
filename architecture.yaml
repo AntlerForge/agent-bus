@@ -15,7 +15,7 @@ relations:
   - to: Platform:platform/home-platform
     type: supports
 source: architecture.yaml
-last_verified: "2026-07-15"
+last_verified: "2026-08-02"
 ---
 apiVersion: arch.kv/v1
 kind: Component
@@ -223,6 +223,7 @@ properties:
   tech: "Node.js and versioned JSON"
   responsibilities:
     - "Validate selector contract version, model references and evidence references"
+    - "Validate deployable model-harness pairs, harness capability profiles and model-lineage independence"
     - "Return a degraded but inspectable state when selector data is missing or stale"
     - "Resolve advisory routes and independent-review templates"
   non_responsibilities:
@@ -274,12 +275,12 @@ kind: Interface
 id: model-selector-api
 namespace: project:agent-bus
 title: "Advisory model selector API"
-description: "Read-only versioned JSON API for model, surface, evidence, routing and workflow-template views."
+description: "Read-only versioned JSON API for model lineage, execution-harness capability, evidence, model-harness routing and workflow-template views."
 owner: tony
 status: active
 properties:
   type: http
-  version: "1"
+  version: "1.1"
 ---
 apiVersion: arch.kv/v1
 kind: DataStore
@@ -322,7 +323,7 @@ kind: DataStore
 id: llm-selector-v3
 namespace: project:agent-bus
 title: "Knowledge Vault LLM selector v3"
-description: "Read-only mounted snapshot containing models, access surfaces, evidence and advisory routing policy."
+description: "Read-only mounted snapshot containing intrinsic model capability, model lineage, execution-harness profiles, deployable model-harness pairs, evidence and advisory routing policy."
 owner: tony
 status: active
 properties:
@@ -493,10 +494,10 @@ properties:
   trigger: "Tony or an agent asks how to route a task or selects a workflow template"
   steps:
     - "Model Selector Adapter reads and validates the read-only KV selector snapshot"
-    - "Control Plane presents current models, access surfaces, evidence confidence and advisory routes"
+    - "Control Plane presents current models, execution harnesses, model-harness pairings, evidence confidence and advisory routes"
     - "Tony or an agent may prefill a proposed work item from a route or workflow template"
     - "Work Ledger applies its normal approval and assignment gates before any provider session starts"
-  data: [selector_version, model_id, surface_id, evidence_refs, route_id, work_item_proposal]
+  data: [selector_version, model_id, model_independence_group, surface_id, harness_profile, evidence_refs, route_id, work_item_proposal]
 relations:
   - to: Component:project:agent-bus/model-selector-adapter
     type: depends-on
@@ -549,7 +550,7 @@ status: active
 properties:
   mode: executable
   command: "node --test test/model-selector.test.mjs test/control-plane.test.mjs"
-  expected: "Invalid, stale or unavailable selector data degrades safely and no selector action bypasses ledger approval"
+  expected: "Invalid, stale or unavailable selector data degrades safely; routes reference deployable model-harness pairs; review panels use distinct model lineages; and no selector action bypasses ledger approval"
 relations:
   - to: Invariant:project:agent-bus/p-003
     type: checks

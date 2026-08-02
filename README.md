@@ -101,12 +101,15 @@ Work Ledger tools:
 Agents can propose and operate their assigned runs. Human approval and assignment
 remain dashboard-owner controls in the first release.
 
-Model routing tools are advisory and never dispatch work:
+Model-and-harness routing tools are advisory and never dispatch work:
 
 - `get_model_selector(route_id?, task_category?)`
 - `propose_routing_workflow(template_id, subject, source_ref, ...)`
 
-The selector is a read-only, versioned Knowledge Vault input. Workflow templates
+The selector treats the deployable unit as a model-harness pair, with model
+lineage used for independent-review checks and harness profiles used for
+operational strengths, limitations and tool availability. It is a read-only,
+versioned Knowledge Vault input. Workflow templates
 create linked Work Ledger items in `proposed` state so the user can inspect,
 approve and assign each recommendation in the dashboard.
 

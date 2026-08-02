@@ -5,30 +5,30 @@ export async function writeSelectorFixture(directory, overrides = {}) {
   await mkdir(directory, { recursive: true });
   const documents = {
     "models.json": {
-      schema_version: "3.0",
+      schema_version: "3.2",
       last_verified: "2026-07-10",
       next_review: "2099-01-01",
       task_categories: ["creative_writing"],
       models: [
-        { model_id: "writer", display_name: "Writer", provider: "A", lifecycle: "active", evidence_refs: ["ev"], provisional_categories: [], scores: { creative_writing: 9 } },
-        { model_id: "reviewer", display_name: "Reviewer", provider: "B", lifecycle: "active", evidence_refs: ["ev"], provisional_categories: [], scores: { creative_writing: 8 } },
+        { model_id: "writer", display_name: "Writer", provider: "A", independence_group: "lineage-a", lifecycle: "active", evidence_refs: ["ev"], provisional_categories: [], scores: { creative_writing: 9 } },
+        { model_id: "reviewer", display_name: "Reviewer", provider: "B", independence_group: "lineage-b", lifecycle: "active", evidence_refs: ["ev"], provisional_categories: [], scores: { creative_writing: 8 } },
       ],
     },
     "surfaces.json": {
-      schema_version: "3.0",
+      schema_version: "3.2",
       last_verified: "2026-07-10",
       surfaces: [
-        { surface_id: "surface-a", display_name: "Surface A", access: "available", independence_group: "a", models: ["writer"], evidence_refs: ["ev"] },
-        { surface_id: "surface-b", display_name: "Surface B", access: "available", independence_group: "b", models: ["reviewer"], evidence_refs: ["ev"] },
+        { surface_id: "surface-a", display_name: "Surface A", access: "available", models: ["writer"], evidence_refs: ["ev"], harness: { kind: "coding_agent", execution_location: "local", capabilities: { repository_navigation: "strong" }, strengths: ["Focused edits"], weaknesses: ["No background execution"], best_for: ["Small coding tasks"], evidence_refs: ["ev"] } },
+        { surface_id: "surface-b", display_name: "Surface B", access: "available", models: ["reviewer"], evidence_refs: ["ev"], harness: { kind: "review_agent", execution_location: "cloud", capabilities: { repository_navigation: "available" }, strengths: ["Independent review"], weaknesses: ["Limited local tooling"], best_for: ["Review"], evidence_refs: ["ev"] } },
       ],
     },
     "evidence.json": {
-      schema_version: "3.0",
+      schema_version: "3.2",
       last_verified: "2026-07-10",
       evidence: [{ evidence_id: "ev", publisher: "Fixture", source_type: "test", published: "2026-07-10", url: null, supports: ["writer", "reviewer"], confidence: "high" }],
     },
     "routing.json": {
-      schema_version: "3.0",
+      schema_version: "3.2",
       status: "current",
       last_verified: "2026-07-10",
       next_review: "2099-01-01",

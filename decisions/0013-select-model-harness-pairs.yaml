@@ -1,0 +1,36 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0013-select-model-harness-pairs
+namespace: project:agent-bus
+title: "Select model-harness pairs rather than models in isolation"
+status: active
+owner: tony
+properties:
+  date: 2026-08-02
+  component: model-selector-adapter
+  tags: [architecture, model-routing, harness, independence]
+  supersedes: null
+  superseded_by: null
+  context: |
+    Practical agent capability depends on both the foundation model and the
+    harness that assembles context, exposes tools, applies changes, verifies
+    outcomes, manages parallel work and preserves state. The same model in
+    Codex and Cursor is not operationally equivalent. The previous selector
+    also attached review independence to a surface, which becomes incorrect
+    when a multi-provider harness such as Cursor runs an OpenAI model.
+  decision: |
+    Keep intrinsic reasoning and task scores on model records. Put operational
+    affordances, strengths, weaknesses and constraints in versioned harness
+    profiles within surfaces.json. Treat every route target as a validated
+    model-harness pair. Determine independent-review diversity from model
+    lineage, never from the harness. Keep access and local configuration as a
+    separate eligibility gate so documented provider capability does not imply
+    that Tony can currently dispatch that pairing.
+  consequences:
+    positive: "Recommendations distinguish Sol in Codex from Sol in Cursor and can react to harness-only upgrades such as Antigravity CLI."
+    negative: "Weekly review must monitor harness releases, installed versions and local configuration as well as model releases and prices."
+    neutral: "The selector remains a four-document v3 contract and all routing remains advisory and human-gated."
+  alternatives: |
+    A model-only score was rejected because it hides most agentic execution
+    differences. A single combined score was rejected because it obscures
+    whether a change came from model quality, harness quality or local access.

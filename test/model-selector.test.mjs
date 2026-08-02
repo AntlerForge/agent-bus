@@ -21,9 +21,32 @@ test("selector validates and exposes current advisory routes", async () => {
     const selector = await loadModelSelector(directory, { now: new Date("2026-07-10T12:00:00Z") });
     assert.equal(selector.status, "current");
     assert.equal(selector.summary.model_count, 2);
+    assert.equal(selector.summary.harness_count, 2);
+    assert.equal(selector.summary.model_harness_pair_count, 2);
     assert.equal(selector.summary.available_surface_count, 2);
     assert.equal(getSelectorRoute(selector, { task_category: "creative_writing" }).route_id, "review");
     assert.deepEqual(selector.warnings, []);
+  });
+});
+
+test("selector rejects a route whose model is unavailable in the selected harness", async () => {
+  await withFixture(async (directory) => {
+    const filename = path.join(directory, "routing.json");
+    const document = JSON.parse(await readFile(filename, "utf8"));
+    document.routes[0].panel[0].surface_id = "surface-b";
+    await writeFile(filename, JSON.stringify(document), "utf8");
+    await assert.rejects(() => loadModelSelector(directory), /unavailable model-harness pair/);
+  });
+});
+
+test("independent panels are checked by model lineage rather than harness", async () => {
+  await withFixture(async (directory) => {
+    const modelsFilename = path.join(directory, "models.json");
+    const modelsDocument = JSON.parse(await readFile(modelsFilename, "utf8"));
+    modelsDocument.models[1].independence_group = "lineage-a";
+    await writeFile(modelsFilename, JSON.stringify(modelsDocument), "utf8");
+    const selector = await loadModelSelector(directory);
+    assert.match(selector.warnings[0], /distinct independence groups/);
   });
 });
 
