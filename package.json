@@ -20,6 +20,7 @@
     "setup": "./setup.sh",
     "dashboard": "node src/control-plane/server.mjs",
     "bridge:test": "node scripts/bridge-roundtrip.mjs",
+    "bridge:doctor": "node scripts/bridge-doctor.mjs",
     "selector:check": "node src/model-selector-check.mjs",
     "state:lint": "node src/state-lint.mjs",
     "ha:notify": "node scripts/ha-notify-tony.mjs",

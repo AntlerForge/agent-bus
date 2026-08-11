@@ -64,6 +64,28 @@
     </dialog>
 
     <dialog id="task-detail-dialog" class="detail-dialog"><div id="task-detail"></div></dialog>
+
+    <dialog id="compose-dialog">
+      <form method="dialog" id="compose-form">
+        <div class="dialog-header"><div><p class="eyebrow">AGENT BUS MESSAGE</p><h2>Message an agent</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+        <p class="form-help">This sends a transport message on a new thread. It does not approve, assign or dispatch ledger work.</p>
+        <label>To<select name="to" id="compose-to" required></select></label>
+        <label>Subject<input name="subject" required maxlength="140" placeholder="What do you need?"></label>
+        <label>Message<textarea name="body" required rows="6" placeholder="The bridge acknowledges, runs the task on its native CLI and replies on this thread."></textarea></label>
+        <label class="checkbox-label"><input type="checkbox" name="requires_response" checked> Ask the agent to respond</label>
+        <div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="submit">Send message</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="thread-dialog" class="detail-dialog">
+      <div id="thread-detail"></div>
+      <form method="dialog" id="reply-form">
+        <label>Reply to<select name="to" id="reply-to" required></select></label>
+        <label>Reply<textarea name="body" required rows="4" placeholder="Reply on this thread"></textarea></label>
+        <label class="checkbox-label"><input type="checkbox" name="requires_response"> Ask for another response</label>
+        <div class="dialog-actions"><button class="button secondary" value="cancel">Close</button><button class="button primary" value="submit">Send reply</button></div>
+      </form>
+    </dialog>
     <dialog id="workflow-dialog">
       <form method="dialog" id="workflow-form">
         <div class="dialog-header"><div><p class="eyebrow">ROUTING TEMPLATE</p><h2>Propose a review workflow</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>

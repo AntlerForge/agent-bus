@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import { createRemoteBus } from "../src/remote-bus.mjs";
 
 function parseArgs(argv) {
@@ -31,7 +32,7 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function testTarget(client, target, options, tempDirectory) {
+export async function testTarget(client, target, options, tempDirectory) {
   const nonce = `${target.toUpperCase()}_${randomUUID()}`;
   const artifactPaths = [];
   let body = `Reply with the exact nonce ${nonce} and briefly identify your provider surface. Do not modify any files.`;
@@ -87,21 +88,27 @@ async function testTarget(client, target, options, tempDirectory) {
   };
 }
 
-const options = parseArgs(process.argv.slice(2));
-const client = createRemoteBus(options.baseUrl, { writeToken: process.env.AGENT_BUS_WRITE_TOKEN || null });
-await client.registerAgent({
-  agent_id: "bridge-test",
-  display_name: "Agent Bus Bridge Test",
-  type: "test-harness",
-  capabilities: ["bridge-round-trip-verification"],
-});
-const tempDirectory = await mkdtemp(path.join(os.tmpdir(), "agent-bus-roundtrip-"));
-try {
-  const results = [];
-  for (const target of options.targets) {
-    results.push(await testTarget(client, target, options, tempDirectory));
+export async function runRoundTrip(options) {
+  const client = createRemoteBus(options.baseUrl, { writeToken: process.env.AGENT_BUS_WRITE_TOKEN || null });
+  await client.registerAgent({
+    agent_id: "bridge-test",
+    display_name: "Agent Bus Bridge Test",
+    type: "test-harness",
+    capabilities: ["bridge-round-trip-verification"],
+  });
+  const tempDirectory = await mkdtemp(path.join(os.tmpdir(), "agent-bus-roundtrip-"));
+  try {
+    const results = [];
+    for (const target of options.targets) {
+      results.push(await testTarget(client, target, options, tempDirectory));
+    }
+    return { status: "ok", authority: options.baseUrl, results };
+  } finally {
+    await rm(tempDirectory, { recursive: true, force: true });
   }
-  console.log(JSON.stringify({ status: "ok", authority: options.baseUrl, results }, null, 2));
-} finally {
-  await rm(tempDirectory, { recursive: true, force: true });
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  const options = parseArgs(process.argv.slice(2));
+  console.log(JSON.stringify(await runRoundTrip(options), null, 2));
 }

@@ -1,6 +1,8 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
-import { registerAgent } from "./agents.mjs";
+import { fileURLToPath } from "node:url";
+import { heartbeatAgent, registerAgent } from "./agents.mjs";
 import { ackMessage, getThread, markRead, readInbox, replyMessage, updateThreadStatus } from "./mailbox.mjs";
 import { ensureBusLayout } from "./paths.mjs";
 import { configuredRemoteBus } from "./remote-bus.mjs";
@@ -82,6 +84,37 @@ async function registerHeartbeat(options) {
   return remote ? remote.registerAgent(args) : registerAgent(args, options.root);
 }
 
+let cachedBridgeVersion;
+
+export async function bridgeVersion() {
+  if (cachedBridgeVersion === undefined) {
+    try {
+      const packagePath = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+      cachedBridgeVersion = JSON.parse(await readFile(packagePath, "utf8")).version || null;
+    } catch {
+      cachedBridgeVersion = null;
+    }
+  }
+  return cachedBridgeVersion;
+}
+
+export function buildHeartbeatArgs({ agentId, state = "idle", queueDepth = 0, version = null }) {
+  return {
+    agent_id: agentId,
+    host: os.hostname(),
+    pid: process.pid,
+    bridge_version: version,
+    state,
+    queue_depth: queueDepth,
+  };
+}
+
+export async function sendHeartbeat({ agentId, root, state, queueDepth }) {
+  const args = buildHeartbeatArgs({ agentId, state, queueDepth, version: await bridgeVersion() });
+  const remote = configuredRemoteBus();
+  return remote ? remote.heartbeatAgent(args) : heartbeatAgent(args, root);
+}
+
 async function materializeArtifacts(message, options) {
   const remote = configuredRemoteBus();
   if (!remote) {
@@ -97,6 +130,10 @@ async function materializeArtifacts(message, options) {
 
 async function handleMessage(message, options) {
   options.log(`Handling ${message.message_id} from ${message.from}: ${message.subject}`);
+  if (options.liveness) {
+    options.liveness.currentThreadId = message.thread_id;
+    options.emitHeartbeat?.();
+  }
   await ackMessage({ message_id: message.message_id }, options.root);
   await updateThreadStatus({ thread_id: message.thread_id, status: "in_progress" }, options.root);
 
@@ -138,6 +175,11 @@ async function handleMessage(message, options) {
     await markRead({ message_id: message.message_id }, options.root);
     await updateThreadStatus({ thread_id: message.thread_id, status: "failed" }, options.root);
     options.log(`Failed ${message.message_id}: ${reason}`);
+  } finally {
+    if (options.liveness) {
+      options.liveness.currentThreadId = null;
+      options.emitHeartbeat?.();
+    }
   }
 }
 
@@ -160,7 +202,7 @@ async function processInbox(options, queue, active) {
 export async function runRuntimeBridge(options) {
   const normalized = {
     pollMs: 2000,
-    heartbeatMs: 30000,
+    heartbeatMs: 60000,
     once: false,
     root: undefined,
     capabilities: [],
@@ -175,6 +217,17 @@ export async function runRuntimeBridge(options) {
 
   const queue = createQueue({ log: normalized.log });
   const active = new Set();
+  normalized.liveness = { currentThreadId: null };
+  const emitHeartbeat = () => {
+    sendHeartbeat({
+      agentId: normalized.agentId,
+      root: normalized.root,
+      state: normalized.liveness.currentThreadId ? `working:${normalized.liveness.currentThreadId}` : "idle",
+      queueDepth: active.size,
+    }).catch((error) => normalized.log(`Heartbeat failed: ${error.message}`));
+  };
+  normalized.emitHeartbeat = emitHeartbeat;
+  emitHeartbeat();
   await processInbox(normalized, queue, active);
   if (normalized.once) {
     await queue.waitForIdle();
@@ -185,5 +238,6 @@ export async function runRuntimeBridge(options) {
   }, normalized.pollMs);
   setInterval(() => {
     registerHeartbeat(normalized).catch((error) => normalized.log(`Heartbeat failed: ${error.message}`));
+    emitHeartbeat();
   }, normalized.heartbeatMs);
 }

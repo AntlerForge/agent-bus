@@ -17,6 +17,11 @@
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>ThrottleInterval</key><integer>10</integer>
+  <!-- LaunchAgents inherit a 256-fd soft limit; ssh accepts one fd per forwarded
+       connection, so heavy bridge polling exhausts it ("accept: Too many open
+       files" then exit 255). Give the tunnel real headroom. -->
+  <key>SoftResourceLimits</key><dict><key>NumberOfFiles</key><integer>4096</integer></dict>
+  <key>HardResourceLimits</key><dict><key>NumberOfFiles</key><integer>8192</integer></dict>
   <key>StandardOutPath</key><string>/Users/YOU/var/log/home-platform/agent-bus/a6-tunnel.log</string>
   <key>StandardErrorPath</key><string>/Users/YOU/var/log/home-platform/agent-bus/a6-tunnel.err.log</string>
 </dict>

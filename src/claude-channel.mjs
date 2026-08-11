@@ -5,6 +5,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 import { formatChannelContent, channelMeta, readPendingAgentMessages } from "./channel-messages.mjs";
 import { ensureBusLayout, getBusRoot } from "./paths.mjs";
 import { configuredRemoteBus } from "./remote-bus.mjs";
+import { sendHeartbeat } from "./runtime-bridge.mjs";
 
 const root = getBusRoot();
 const channelAgent = process.env.AGENT_BUS_CHANNEL_AGENT || "claude-code";
@@ -111,16 +112,45 @@ mcp.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+const HEARTBEAT_INTERVAL_MS = 60000;
+let lastHeartbeatMs = 0;
+
+function channelHeartbeat(state, { force = false } = {}) {
+  if (!force && Date.now() - lastHeartbeatMs < HEARTBEAT_INTERVAL_MS) return Promise.resolve();
+  lastHeartbeatMs = Date.now();
+  return sendHeartbeat({ agentId: channelAgent, root, state, queueDepth: 0 }).catch((error) => {
+    console.error(`agent-bus-channel heartbeat failed: ${error.message}`);
+  });
+}
+
+let disconnectSent = false;
+async function markDisconnected() {
+  if (disconnectSent) return;
+  disconnectSent = true;
+  await channelHeartbeat("disconnected", { force: true });
+}
+
 mcp.oninitialized = () => {
+  void channelHeartbeat("connected");
   emitPending(mcp).catch((error) => {
     console.error(`agent-bus-channel initial emit failed: ${error.message}`);
   });
 
   setInterval(() => {
+    void channelHeartbeat("connected");
     emitPending(mcp).catch((error) => {
       console.error(`agent-bus-channel poll failed: ${error.message}`);
     });
   }, pollMs).unref();
 };
+
+mcp.onclose = () => {
+  void markDisconnected();
+};
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    markDisconnected().finally(() => process.exit(0));
+  });
+}
 
 await mcp.connect(new StdioServerTransport());

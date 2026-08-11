@@ -3,8 +3,7 @@ import { createServer } from "node:http";
 import { appendFile, mkdir, readdir, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { listAgents } from "../agents.mjs";
-import { registerAgent } from "../agents.mjs";
+import { classifyLiveness, heartbeatAgent, listAgents, registerAgent, LIVENESS_THRESHOLDS } from "../agents.mjs";
 import { readArtifactContent, readArtifactManifest, uploadSharedArtifact } from "../artifacts.mjs";
 import { getThread, listThreads } from "../mailbox.mjs";
 import { ackMessage, markRead, readInbox, replyMessage, sendMessage, updateThreadStatus } from "../mailbox.mjs";
@@ -24,7 +23,8 @@ import {
   updateRun,
 } from "../work-ledger/store.mjs";
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
+const STARTED_AT = new Date().toISOString();
 const STATIC_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "public");
 const STATIC_FILES = {
   "/": ["index.html", "text/html; charset=utf-8"],
@@ -116,6 +116,47 @@ function deriveAgents(agents, items) {
   });
 }
 
+async function agentsStatus(root) {
+  const [agents, items] = await Promise.all([listAgents(root), listWorkItems({}, root)]);
+  const nowMs = Date.now();
+  return {
+    schema_version: 1,
+    generated_at: new Date(nowMs).toISOString(),
+    thresholds: LIVENESS_THRESHOLDS,
+    control_plane: {
+      service: "agent-bus-control-plane",
+      version: VERSION,
+      pid: process.pid,
+      started_at: STARTED_AT,
+      note: "A response through http://127.0.0.1:18091 proves the Mac SSH tunnel and control plane are both reachable.",
+    },
+    agents: agents.map((agent) => {
+      const liveness = agent.liveness || {};
+      const lastHeartbeat = liveness.last_heartbeat || null;
+      const receiptTimes = items
+        .filter((item) => item.receipt_ref && item.current_assignment?.agent_id === agent.agent_id)
+        .map((item) => item.updated_at)
+        .sort();
+      return {
+        agent_id: agent.agent_id,
+        display_name: agent.display_name,
+        type: agent.type,
+        liveness: classifyLiveness(lastHeartbeat, nowMs),
+        state: liveness.state || "unknown",
+        current_thread_id: liveness.current_thread_id || null,
+        queue_depth: liveness.queue_depth ?? null,
+        host: liveness.host || null,
+        pid: liveness.pid ?? null,
+        bridge_version: liveness.bridge_version || null,
+        last_heartbeat: lastHeartbeat,
+        seconds_since_heartbeat: lastHeartbeat ? Math.round((nowMs - new Date(lastHeartbeat).getTime()) / 1000) : null,
+        last_seen: agent.last_seen || null,
+        last_receipt_at: receiptTimes.at(-1) || null,
+      };
+    }),
+  };
+}
+
 async function overview(root, selectorPath) {
   const [items, agents, threads, usage, selector] = await Promise.all([
     listWorkItems({}, root),
@@ -159,9 +200,10 @@ export function createControlPlane({
   return createServer(async (request, response) => {
     const startedAt = Date.now();
     response.once("finish", () => {
-      const quietRead = request.method === "GET"
-        && response.statusCode < 400
-        && /\/(?:healthz|version)(?:\?|$)|\/api\/v1\/inbox(?:\?|$)/.test(request.url || "");
+      const quietRead = response.statusCode < 400
+        && ((request.method === "GET"
+          && /\/(?:healthz|version)(?:\?|$)|\/api\/v1\/inbox(?:\?|$)|\/api\/v1\/agents\/status(?:\?|$)/.test(request.url || ""))
+          || (request.method === "POST" && /\/api\/v1\/agents\/heartbeat(?:\?|$)/.test(request.url || "")));
       if (!quietRead) {
         logger({
           event: "http_request",
@@ -223,6 +265,13 @@ export function createControlPlane({
       if (request.method === "POST" && pathname === "/api/v1/agents") {
         requireWriteAccess(request, writeToken);
         return sendJson(response, 200, await registerAgent(await readJsonBody(request), root));
+      }
+      if (request.method === "POST" && pathname === "/api/v1/agents/heartbeat") {
+        requireWriteAccess(request, writeToken);
+        return sendJson(response, 200, await heartbeatAgent(await readJsonBody(request), root));
+      }
+      if (request.method === "GET" && (pathname === "/api/v1/agents/status" || pathname === "/api/agents/status")) {
+        return sendJson(response, 200, await agentsStatus(root));
       }
       if (request.method === "GET" && pathname === "/api/v1/threads") {
         return sendJson(response, 200, await listThreads(root));

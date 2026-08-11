@@ -80,6 +80,12 @@ export function createRemoteBus(baseUrl, { writeToken = null } = {}) {
     registerAgent(args) {
       return write("/api/v1/agents", args);
     },
+    heartbeatAgent(args) {
+      return write("/api/v1/agents/heartbeat", args);
+    },
+    agentsStatus() {
+      return request(baseUrl, "/api/v1/agents/status");
+    },
     listAgents() {
       return request(baseUrl, "/api/v1/agents?raw=true");
     },

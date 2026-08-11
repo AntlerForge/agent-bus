@@ -125,6 +125,7 @@ Do |  |
 - Serve task, agent, review, usage and routing views
 - Translate authenticated user and agent actions into ledger operations
 - Expose health and version endpoints
+- Persist bridge heartbeats and expose read-only agent liveness status
 **Non-responsibilities (do NOT do):**
 - Direct storage mutation or provider-specific execution
 **Relations:**
@@ -138,6 +139,7 @@ Do |  |
 
 **Responsibilities:**
 - Validate selector contract version, model references and evidence references
+- Validate deployable model-harness pairs, harness capability profiles and model-lineage independence
 - Return a degraded but inspectable state when selector data is missing or stale
 - Resolve advisory routes and independent-review templates
 **Non-responsibilities (do NOT do):**
@@ -171,9 +173,12 @@ Do |  |
 - **0010-treat-mac-sleep-as-availability-state-and-catch-up-on-wake**: Treat Mac sleep as availability state and catch maintenance up on wake (status: active)
 - **0011-render-one-private-estate-status-surface**: Render one private Estate Status surface for every notification (status: active)
 - **0012-require-sustained-failure-and-interactive-mac-state**: Page only sustained failures and evaluate Mac jobs only when interactive (status: active)
+- **0013-select-model-harness-pairs**: Select model-harness pairs rather than models in isolation (status: active)
+- **0014-make-bridge-liveness-first-class**: Make bridge liveness first-class transport telemetry (status: active)
 
 ## Fitness Checks
 
+- **bridge-doctor-health**: bridge:doctor reports transport health with exact repairs
 - **full-test-suite**: Agent Bus and Work Ledger tests pass
 - **private-service-contract**: A6 service remains private and observable
 - **selector-contract-validation**: Selector contract and advisory-boundary tests pass

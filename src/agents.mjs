@@ -96,6 +96,52 @@ export async function registerAgent({ agent_id, display_name, type = "unknown", 
   });
 }
 
+export const LIVENESS_THRESHOLDS = { fresh_seconds: 120, stale_seconds: 600 };
+
+const HEARTBEAT_STATE_PATTERN = /^(idle|connected|disconnected|working:[A-Za-z0-9._:-]+)$/;
+
+export function classifyLiveness(lastHeartbeatIso, nowMs = Date.now()) {
+  if (!lastHeartbeatIso) return "unknown";
+  const seenMs = new Date(lastHeartbeatIso).getTime();
+  if (!Number.isFinite(seenMs)) return "unknown";
+  const ageSeconds = (nowMs - seenMs) / 1000;
+  if (ageSeconds < LIVENESS_THRESHOLDS.fresh_seconds) return "fresh";
+  if (ageSeconds < LIVENESS_THRESHOLDS.stale_seconds) return "stale";
+  return "down";
+}
+
+export async function heartbeatAgent({ agent_id, host, pid, bridge_version, state, queue_depth }, root) {
+  if (!agent_id) {
+    throw new Error("agent_id is required");
+  }
+  const normalizedState = String(state || "idle");
+  if (!HEARTBEAT_STATE_PATTERN.test(normalizedState)) {
+    throw new Error("state must be idle, connected, disconnected or working:<thread_id>");
+  }
+  return serializeAgentWrite(async () => {
+    const paths = await ensureBusLayout(root);
+    const agents = await readAgents(root);
+    const existing = agents[agent_id] || { agent_id, display_name: agent_id, type: "unknown", capabilities: [] };
+    const timestamp = nowIso();
+    agents[agent_id] = {
+      ...existing,
+      agent_id,
+      last_seen: timestamp,
+      liveness: {
+        host: host ? String(host) : null,
+        pid: Number.isFinite(Number(pid)) ? Number(pid) : null,
+        bridge_version: bridge_version ? String(bridge_version) : null,
+        state: normalizedState,
+        current_thread_id: normalizedState.startsWith("working:") ? normalizedState.slice("working:".length) : null,
+        queue_depth: Number.isFinite(Number(queue_depth)) ? Number(queue_depth) : null,
+        last_heartbeat: timestamp,
+      },
+    };
+    await writeJsonFileAtomic(paths.agentsFile, agents);
+    return agents[agent_id];
+  });
+}
+
 export async function touchAgent(agent_id, root) {
   if (!agent_id) {
     return null;

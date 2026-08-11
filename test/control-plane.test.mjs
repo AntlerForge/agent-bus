@@ -32,7 +32,7 @@ test("control plane serves dashboard, health and version", async () => {
     assert.equal(healthBody.ok, true);
     assert.equal(healthBody.status, "ok");
     const version = await fetch(`${base}/version`);
-    assert.equal((await version.json()).version, "0.3.0");
+    assert.equal((await version.json()).version, "0.4.0");
     const dashboard = await fetch(base);
     assert.equal(dashboard.status, 200);
     assert.match(await dashboard.text(), /Agent Control Plane/);

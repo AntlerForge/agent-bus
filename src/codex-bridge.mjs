@@ -23,6 +23,7 @@ import {
 import { DEFAULT_CODEX_HOME, getPersistentSession, runPersistentTurn } from "./codex-session.mjs";
 import { createQueue } from "./task-queue.mjs";
 import { configuredRemoteBus } from "./remote-bus.mjs";
+import { sendHeartbeat } from "./runtime-bridge.mjs";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(MODULE_DIR, "..");
@@ -138,6 +139,8 @@ async function registerHeartbeat(options) {
 
 async function handleMessage(message, options, session) {
   log(`Handling ${message.message_id} from ${message.from}: ${message.subject}`);
+  liveness.currentThreadId = message.thread_id;
+  emitHeartbeat();
   await ackMessage({ message_id: message.message_id }, options.root);
   let providerCompleted = false;
 
@@ -187,6 +190,9 @@ async function handleMessage(message, options, session) {
       log(`Failure reply could not be delivered; leaving ${message.message_id} unread for durable retry: ${deliveryError instanceof Error ? deliveryError.message : String(deliveryError)}`);
     }
     log(`Failed ${message.message_id}: ${error instanceof Error ? error.message : String(error)}`);
+  } finally {
+    liveness.currentThreadId = null;
+    emitHeartbeat();
   }
 }
 
@@ -312,12 +318,22 @@ function startTerminalInput(options, session, queue) {
 const options = parseArgs(process.argv.slice(2));
 const active = new Set();
 const queue = createQueue({ log });
+const liveness = { currentThreadId: null };
+function emitHeartbeat() {
+  sendHeartbeat({
+    agentId: "codex",
+    root: options.root,
+    state: liveness.currentThreadId ? `working:${liveness.currentThreadId}` : "idle",
+    queueDepth: active.size,
+  }).catch((error) => log(`Heartbeat failed: ${error instanceof Error ? error.message : String(error)}`));
+}
 await mkdir(path.dirname(options.sessionStore), { recursive: true });
 if (!configuredRemoteBus()) {
   await ensureBusLayout(options.root);
   await mkdir(path.join(options.root, "inbox", "codex"), { recursive: true });
 }
 await registerHeartbeat(options);
+emitHeartbeat();
 
 const session = await getPersistentSession(options, log);
 const remoteBus = configuredRemoteBus();
@@ -341,5 +357,6 @@ if (options.once) {
     registerHeartbeat(options).catch((error) => {
       log(`Heartbeat failed: ${error instanceof Error ? error.message : String(error)}`);
     });
-  }, 30000);
+    emitHeartbeat();
+  }, 60000);
 }

@@ -198,6 +198,7 @@ properties:
     - "Serve task, agent, review, usage and routing views"
     - "Translate authenticated user and agent actions into ledger operations"
     - "Expose health and version endpoints"
+    - "Persist bridge heartbeats and expose read-only agent liveness status"
   non_responsibilities:
     - "Direct storage mutation or provider-specific execution"
 relations:
@@ -251,12 +252,12 @@ kind: Interface
 id: control-plane-http
 namespace: project:agent-bus
 title: "Control plane dashboard HTTP"
-description: "Private localhost web dashboard, health and version interface hosted on A6."
+description: "Private localhost web dashboard, health, version, bridge-heartbeat and agent-liveness-status interface hosted on A6."
 owner: tony
 status: active
 properties:
   type: http
-  version: "1.1"
+  version: "1.2"
 ---
 apiVersion: arch.kv/v1
 kind: Interface
@@ -505,6 +506,46 @@ relations:
     type: depends-on
   - to: Component:project:agent-bus/work-ledger
     type: depends-on
+---
+apiVersion: arch.kv/v1
+kind: Flow
+id: bridge-heartbeat-to-liveness-status
+namespace: project:agent-bus
+title: "Bridge heartbeat to agent liveness status"
+owner: tony
+status: active
+properties:
+  trigger: "A bridge heartbeat interval fires (~60s) or a bridge starts/finishes a thread"
+  steps:
+    - "Bridge posts agent id, host, pid, bridge version, state and queue depth to the control plane"
+    - "Control plane merges the heartbeat into the agent record with an atomic write"
+    - "Status API classifies each agent fresh, stale, down or unknown from heartbeat age"
+    - "Dashboard Agents view and bridge:doctor read the status API; neither treats it as task status"
+  data: [agent_id, host, pid, bridge_version, state, queue_depth, last_heartbeat, liveness]
+relations:
+  - to: Component:project:agent-bus/agent-adapters
+    type: depends-on
+  - to: Component:project:agent-bus/control-plane
+    type: depends-on
+  - to: Component:project:agent-bus/agent-directory
+    type: depends-on
+---
+apiVersion: arch.kv/v1
+kind: FitnessCheck
+id: bridge-doctor-health
+namespace: project:agent-bus
+title: "bridge:doctor reports transport health with exact repairs"
+owner: tony
+status: active
+properties:
+  mode: executable
+  command: "npm run bridge:doctor"
+  expected: "LaunchAgents, tunnel, control plane and heartbeats all healthy; any failure prints the exact repair command; computer-use GUI driving is never a fallback"
+relations:
+  - to: Component:project:agent-bus/agent-adapters
+    type: checks
+  - to: Invariant:project:agent-bus/p-005
+    type: checks
 ---
 apiVersion: arch.kv/v1
 kind: FitnessCheck

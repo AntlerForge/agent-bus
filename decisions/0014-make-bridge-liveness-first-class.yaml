@@ -1,0 +1,48 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0014-make-bridge-liveness-first-class
+namespace: project:agent-bus
+title: "Make bridge liveness first-class transport telemetry"
+status: active
+owner: tony
+properties:
+  date: 2026-08-11
+  component: agent-adapters
+  context: |
+    Nothing detected an unhealthy bridge or tunnel. The a6-tunnel LaunchAgent was
+    flapping (exit 255 after file-descriptor exhaustion), the dashboard Agents tab
+    only showed workload-derived availability, and historically agents fell back to
+    banned computer-use GUI driving when a bridge silently died. Tony's brief of
+    2026-08-11 (~/Documents/Outputs/agent-bus-liveness-brief-2026-08-11.md)
+    instructed making liveness first-class and is the accepted implementation plan
+    this decision records.
+  decision: |
+    Treat bridge liveness as first-class transport telemetry, distinct from work
+    authority. Every bridge posts a heartbeat (host, pid, bridge version, state
+    idle|working:<thread_id>, queue depth) to POST /api/v1/agents/heartbeat about
+    every 60 seconds; the Claude Code channel marks itself connected/disconnected.
+    The control plane persists the latest heartbeat on the agent record in
+    _agents.json and exposes read-only GET /api/v1/agents/status classifying each
+    agent fresh (<2 min), stale (<10 min), down (otherwise) or unknown (never
+    seen), with no secrets in the payload. The dashboard Agents view renders
+    liveness with text labels and icons (never colour alone) and supports
+    compose-to-agent and thread reply through the existing message endpoints.
+    npm run bridge:doctor diagnoses LaunchAgent, tunnel, control-plane and
+    heartbeat health and prints the exact repair command per failure; the tunnel
+    plist gains explicit file-descriptor limits. When a bridge is unhealthy the
+    documented response is bridge:doctor then repair or "manual handoff required,
+    bridge down"; computer-use GUI driving of provider apps is never a fallback.
+  consequences:
+    positive: |
+      Tony and agents can see which bridges are genuinely alive, dead bridges are
+      detected within ~2.5 minutes, the tunnel fd-exhaustion failure mode is
+      repaired and bounded, and the status API becomes the interface the future
+      KV mission console reads.
+    negative: |
+      Heartbeats add a small constant write load to _agents.json and one more
+      contract (control-plane-http 1.2) to keep stable.
+    neutral: |
+      Heartbeat state is transport telemetry only; work-item status still comes
+      exclusively from the Work Ledger (P-001 unchanged).
+  supersedes: null
+  superseded_by: null
