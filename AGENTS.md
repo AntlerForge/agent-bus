@@ -58,6 +58,7 @@ Do |  |
 
 **Responsibilities:**
 - Deliver visually distinct notifications using stable idempotency identifiers
+- Retain ALERT detail as a persistent Home Assistant notification with an explicit Agent Bus source title
 - Capture YES/NO mobile actions into bounded A6 runtime records
 - Route every notification to a rendered private status or detail page
 **Non-responsibilities (do NOT do):**
@@ -86,6 +87,7 @@ Do |  |
 
 **Responsibilities:**
 - Aggregate declared waiting states without changing their source stores
+- Skip and visibly log incomplete work-item directories while preserving failures for other read errors
 - Emit transition-only SLA alerts and a weekly INFO decision pack
 - Render queue breach summaries and refresh the shared Estate Status projection
 **Non-responsibilities (do NOT do):**
