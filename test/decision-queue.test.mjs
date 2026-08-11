@@ -28,4 +28,6 @@ test("decision queue is read-only toward source authorities", () => {
   assert.match(source, /phoneUrl\("breach-summary\.md"\)/);
   assert.match(source, /renderEstateStatus/);
   assert.match(source, /collectRepoRisks/);
+  assert.match(source, /incomplete_work_item_skipped/);
+  assert.match(source, /error\?\.code !== "ENOENT"/);
 });
