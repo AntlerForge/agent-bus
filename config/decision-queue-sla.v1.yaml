@@ -13,9 +13,9 @@ slas_hours:
 expiry_multiple: 2
 weekly_limit: 20
 delivery:
-  phone_base_url: http://antler-a6:8088/Projects/Personal/agent-bus/runtime/decision-queue/
+  phone_base_url: http://antler-a6:8088/files/Projects/Personal/agent-bus/runtime/decision-queue/
   estate_status_url: https://kv.antlerforge.com/#tasks
-  filebrowser_status_url: http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md
+  filebrowser_status_url: http://antler-a6:8088/files/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md
   auth_posture: "Authenticated KV dashboard is primary; private tailnet plus FileBrowser login is fallback; no unauthenticated personal data"
 baseline_oracle:
   date: 2026-07-18

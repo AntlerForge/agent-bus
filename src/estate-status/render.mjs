@@ -4,7 +4,7 @@ import { writeFileAtomic } from "../io.mjs";
 
 const DEFAULT_ROOT = "/srv/projects/Personal/agent-bus/runtime";
 const DEFAULT_URL = "https://kv.antlerforge.com/#tasks";
-const FILEBROWSER_URL = "http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md";
+const FILEBROWSER_URL = "http://antler-a6:8088/files/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md";
 
 async function json(file, fallback) {
   try { return JSON.parse(await fs.readFile(file, "utf8")); }
@@ -19,6 +19,13 @@ async function files(dir, suffix) {
 const human = (value) => String(value || "unknown").replace(/^.*?:/, "").replace(/[-_]+/g, " ");
 const hours = (value) => value < 48 ? `${Math.round(value)}h` : `${Math.floor(value / 24)}d`;
 const clean = (value) => String(value || "").replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
+const queueType = (type, count) => ({
+  overdue_task: count === 1 ? "overdue task" : "overdue tasks",
+  bus_thread: count === 1 ? "agent thread" : "agent threads",
+  bus_work: count === 1 ? "work proposal" : "work proposals",
+  holding_pen: count === 1 ? "holding-pen review" : "holding-pen reviews",
+  sentinel: count === 1 ? "system check" : "system checks",
+}[type] || `${human(type)}${count === 1 ? "" : "s"}`);
 
 function alertMeaning(send, cards) {
   const match = String(send.id).match(/^outcome-[^:]+:(.+)-(opened|recovered)-\d{4}/);
@@ -57,9 +64,14 @@ export async function renderEstateStatus({ runtimeRoot = DEFAULT_ROOT, outputFil
 export async function renderBreachSummary({ snapshot, newBreaches, outputFile, generatedAt = new Date().toISOString(), statusUrl = DEFAULT_URL }) {
   const wanted = new Set(newBreaches || []);
   const items = (snapshot.items || []).filter((row) => wanted.has(row.id));
-  const lines = ["# Decision Queue Breach Summary", "", `Generated: ${generatedAt}`, "", `[Back to Estate Status](${statusUrl})`, "", `${items.length} item(s) newly crossed their waiting-time agreement.`, ""];
+  const typeCounts = Object.entries(Object.groupBy(items, (row) => row.type || "item"))
+    .map(([type, rows]) => `${rows.length} ${queueType(type, rows.length)}`);
+  const lines = [
+    "# Agent Bus Decision Queue", "", `Generated: ${generatedAt}`, "", `[Open the KV task page](${statusUrl})`, "",
+    `${items.length} item(s) newly crossed their waiting-time agreement. This is a mixed review backlog, not a count of broken systems.`, "",
+    typeCounts.length ? `Breakdown: ${typeCounts.join(", ")}.` : "No new breaches in the latest evaluation.", "",
+  ];
   for (const row of items) lines.push(`## ${clean(row.title)}`, "", `- Waiting: ${hours(row.age_hours)}`, `- Agreement: ${hours(row.sla_hours)}`, `- Action: ${clean(row.action)}`, "");
-  if (!items.length) lines.push("No new breaches in the latest evaluation.", "");
   await writeFileAtomic(outputFile, `${lines.join("\n")}\n`);
   return { output_file: outputFile, breaches: items.length };
 }

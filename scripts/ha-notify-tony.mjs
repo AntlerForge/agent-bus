@@ -9,6 +9,7 @@ const CLASSES = new Set(["ALERT", "APPROVAL", "INFO"]);
 function parseArgs(argv) {
   const options = {
     className: null, id: null, message: null, approvalNumber: null, url: null,
+    persistentId: null, persistentMessageFile: null,
     envFile: process.env.HA_NOTIFY_ENV_FILE || "/home/ajbarfoot/Developer/ha-agent-pilot/.env",
     configFile: process.env.HA_NOTIFY_CONFIG || "/srv/projects/Personal/agent-bus/runtime/ha-notify/config.json",
     stateDirectory: process.env.HA_NOTIFY_STATE_DIR || "/srv/projects/Personal/agent-bus/runtime/ha-notify/sends",
@@ -20,6 +21,8 @@ function parseArgs(argv) {
     else if (key === "--message") { options.message = value; index += 1; }
     else if (key === "--approval-number") { options.approvalNumber = value; index += 1; }
     else if (key === "--url") { options.url = value; index += 1; }
+    else if (key === "--persistent-id") { options.persistentId = value; index += 1; }
+    else if (key === "--persistent-message-file") { options.persistentMessageFile = value; index += 1; }
     else if (key === "--env-file") { options.envFile = value; index += 1; }
     else if (key === "--config") { options.configFile = value; index += 1; }
     else throw new Error(`Unsupported argument: ${key}`);
@@ -34,6 +37,7 @@ function parseArgs(argv) {
     if (/\.json$/i.test(parsed.pathname)) throw new Error("--url must not point at machine-readable JSON");
   }
   if (options.className === "APPROVAL" && !options.approvalNumber) throw new Error("APPROVAL requires --approval-number");
+  if (options.persistentId && !/^[A-Za-z0-9_-]{3,160}$/.test(options.persistentId)) throw new Error("--persistent-id must be a stable 3-160 character identifier");
   return options;
 }
 
@@ -52,9 +56,9 @@ function actionName(decision, id) {
 
 function notificationPayload(options, resolvedUrl) {
   const titles = {
-    ALERT: "🚨 ALERT — action needed",
-    APPROVAL: `✅ APPROVAL ${options.approvalNumber} — tap YES or NO`,
-    INFO: "ℹ️ INFO — all clear",
+    ALERT: "🚨 Agent Bus — action needed",
+    APPROVAL: `✅ Agent Bus approval ${options.approvalNumber} — tap YES or NO`,
+    INFO: "ℹ️ Agent Bus — information",
   };
   const data = { tag: `agent-bus:${options.id}`, group: "agent-bus", url: resolvedUrl };
   if (options.className === "ALERT") data.push = { sound: "default", "interruption-level": "time-sensitive" };
@@ -88,6 +92,9 @@ export async function notifyTony(options, { fetchImpl = fetch } = {}) {
     const resolvedUrl = options.url || config.default_url || "/lovelace/default_view";
     if (/\.json(?:$|[?#])/i.test(resolvedUrl)) throw new Error("Notification URL must not point at machine-readable JSON");
     const payload = notificationPayload(options, resolvedUrl);
+    const persistentMessage = options.persistentMessage
+      || (options.persistentMessageFile ? await readFile(options.persistentMessageFile, "utf8") : null)
+      || `${options.message}\n\n[Open the relevant page](${resolvedUrl})`;
     const deliveries = [];
     for (const service of services) {
       const response = await fetchImpl(`${env.HASS_URL.replace(/\/+$/, "")}/api/services/notify/${encodeURIComponent(service)}`, {
@@ -96,7 +103,21 @@ export async function notifyTony(options, { fetchImpl = fetch } = {}) {
       if (!response.ok) throw new Error(`HA notify service ${service} failed (${response.status})`);
       deliveries.push({ service, accepted_at: new Date().toISOString() });
     }
-    const result = { id: options.id, class: options.className, url: resolvedUrl, started_at: startedAt, sent_at: new Date().toISOString(), deduplicated: false, deliveries };
+    let persistentNotification = null;
+    if (options.className === "ALERT") {
+      const notificationId = options.persistentId || `agent_bus_${safeId}`;
+      const response = await fetchImpl(`${env.HASS_URL.replace(/\/+$/, "")}/api/services/persistent_notification/create`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${env.HASS_TOKEN}`, "content-type": "application/json" },
+        body: JSON.stringify({ title: payload.title, message: persistentMessage, notification_id: notificationId }),
+      });
+      persistentNotification = { id: notificationId, accepted: Boolean(response.ok), status: response.status ?? null };
+    }
+    const result = {
+      id: options.id, class: options.className, title: payload.title, message: options.message,
+      url: resolvedUrl, started_at: startedAt, sent_at: new Date().toISOString(), deduplicated: false,
+      deliveries, persistent_notification: persistentNotification,
+    };
     await claim.writeFile(`${JSON.stringify(result, null, 2)}\n`); await claim.sync(); await claim.close(); claim = null;
     return result;
   } catch (error) {

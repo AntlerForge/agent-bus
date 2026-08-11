@@ -169,17 +169,25 @@ const breachedIds = queue.filter((row) => row.breached).map((row) => row.id);
 const newBreaches = previous.initialized ? breachedIds.filter((id) => !previous.breached_ids.includes(id)) : [];
 await atomic(`${outputDir}/state.json`, `${JSON.stringify({ initialized: true, evaluated_at: now.toISOString(), breached_ids: breachedIds }, null, 2)}\n`);
 await atomic(`${outputDir}/last-evaluation.json`, `${JSON.stringify({ evaluated_at: now.toISOString(), new_breaches: newBreaches }, null, 2)}\n`);
-if (newBreaches.length) await renderBreachSummary({ snapshot, newBreaches, outputFile: `${outputDir}/breach-summary.md`, generatedAt: now.toISOString(), statusUrl });
+const breachSummaryFile = `${outputDir}/breach-summary.md`;
+if (newBreaches.length) await renderBreachSummary({ snapshot, newBreaches, outputFile: breachSummaryFile, generatedAt: now.toISOString(), statusUrl });
 await renderEstateStatus({ runtimeRoot: root, generatedAt: now.toISOString(), statusUrl });
 
-const notify = async (klass, id, message, url) => {
+const notify = async (klass, id, message, url, extraArgs = []) => {
   if (argv.has("--no-notify")) return;
   const args = ["scripts/ha-notify-tony.mjs", "--class", klass, "--id", id, "--message", message];
   if (url) args.push("--url", url);
+  args.push(...extraArgs);
   await execFile(process.execPath, args);
 };
 const phoneUrl = (file) => new URL(file, config.delivery.phone_base_url).href;
-if (newBreaches.length) await notify("ALERT", `decision-queue-breach-${now.toISOString().slice(0, 13)}`, `${newBreaches.length} waiting item(s) crossed their agreement. Tap for ages and actions.`, phoneUrl("breach-summary.md"));
+if (newBreaches.length) await notify(
+  "ALERT",
+  `decision-queue-breach-${now.toISOString().slice(0, 13)}`,
+  `${newBreaches.length} overdue review item(s) across tasks, agent threads and system checks. This is a mixed backlog, not ${newBreaches.length} system failures. Tap to review.`,
+  statusUrl,
+  ["--persistent-id", "agent-bus-decision-queue-breach", "--persistent-message-file", breachSummaryFile],
+);
 
 if (argv.has("--weekly") || now.getUTCDay() === 0) {
   const selected = queue.slice(0, config.weekly_limit);

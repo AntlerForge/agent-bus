@@ -1,7 +1,10 @@
 # Home Assistant notifier
 
 `scripts/ha-notify-tony.mjs` is the A6 entry point for `ALERT`, `APPROVAL`, and
-`INFO` notifications. Stable IDs are claimed atomically under
+`INFO` notifications. Every title identifies Agent Bus as the sender. ALERTs
+also create a persistent Home Assistant notification, so their content remains
+available from Home Assistant's notification bell after the mobile banner has
+gone. Stable IDs are claimed atomically under
 `/srv/projects/Personal/agent-bus/runtime/ha-notify/sends`; replaying an ID
 returns the original result with `deduplicated: true` and sends nothing.
 
@@ -31,3 +34,8 @@ node scripts/ha-notify-tony.mjs --class APPROVAL --approval-number 1 \
 HA-side changes: none. Reversal is disabling/removing the A6 listener unit and
 removing the runtime notifier directory; no Home Assistant configuration is
 modified.
+
+For a long incident report, pass `--persistent-message-file <path>`. The mobile
+push stays concise while the persistent Home Assistant copy contains the full
+Markdown report. `--persistent-id <stable-id>` makes later alerts replace the
+same persistent card instead of accumulating duplicates.

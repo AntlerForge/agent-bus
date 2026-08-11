@@ -78,6 +78,7 @@ properties:
   tech: "Node.js, Home Assistant REST and WebSocket APIs"
   responsibilities:
     - "Deliver visually distinct notifications using stable idempotency identifiers"
+    - "Retain ALERT detail as a persistent Home Assistant notification with an explicit Agent Bus source title"
     - "Capture YES/NO mobile actions into bounded A6 runtime records"
     - "Route every notification to a rendered private status or detail page"
   non_responsibilities:

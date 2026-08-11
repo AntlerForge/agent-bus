@@ -29,5 +29,7 @@ test("Estate Status renders cards, queue metrics, alerts and links without JSON"
     assert.doesNotMatch(page, /\.json/);
     assert.match(breach, /Waiting: 3d/);
     assert.match(breach, /Approve or reject/);
+    assert.match(breach, /mixed review backlog/);
+    assert.match(breach, /Breakdown: 1 item/);
   } finally { await fs.rm(root, { recursive: true, force: true }); }
 });
