@@ -1,4 +1,4 @@
-const state = { view: "overview", overview: null, tasks: [], agents: [], threads: [], usage: null, selector: null, agentStatus: null, taskFilter: "all" };
+const state = { view: "overview", overview: null, tasks: [], agents: [], threads: [], usage: null, selector: null, agentStatus: null, taskFilter: "all", showRetired: false };
 const content = document.querySelector("#content");
 const notice = document.querySelector("#notice");
 const taskDialog = document.querySelector("#task-dialog");
@@ -63,11 +63,14 @@ async function refreshAgentStatus() {
 }
 setInterval(refreshAgentStatus, STATUS_POLL_MS);
 
+function byMostRecent(a, b) { return new Date(b.updated_at || 0) - new Date(a.updated_at || 0); }
+
 function taskRows(tasks) {
   if (!tasks.length) return '<div class="empty">No work items in this view.</div>';
-  return `<div class="table-wrap"><table><thead><tr><th>Work item</th><th>Status</th><th>Delegate</th><th>Review</th><th>Updated</th></tr></thead><tbody>${tasks.map((item) => `
+  const sorted = tasks.slice().sort(byMostRecent);
+  return `<div class="table-wrap"><table><thead><tr><th>Work item</th><th>Status</th><th>Asked by</th><th>Doing it</th><th>Review gate</th><th>Updated</th></tr></thead><tbody>${sorted.map((item) => `
     <tr data-task-id="${escapeHtml(item.work_item_id)}"><td class="title-cell"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.source_ref)} · ${escapeHtml(item.objective)}</small></td>
-    <td>${badge(item.status)}</td><td>${escapeHtml(item.current_assignment?.agent_id || "Unassigned")}</td><td>${escapeHtml(formatStatus(item.review_policy))}</td><td>${escapeHtml(formatDate(item.updated_at))}</td></tr>`).join("")}</tbody></table></div>`;
+    <td>${badge(item.status)}</td><td>${escapeHtml(item.proposed_by || "unknown")}</td><td>${escapeHtml(item.current_assignment?.agent_id || "Unassigned")}</td><td>${escapeHtml(item.review_policy === "human" ? "Tony approves" : item.review_policy === "independent_agent" ? "Independent agent" : "No gate")}</td><td>${escapeHtml(formatDate(item.updated_at))}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
 const LIVENESS_PRESENTATION = {
@@ -94,7 +97,13 @@ function statusFor(agentId) {
 }
 
 function agentRows(agents, limit) {
-  const list = limit ? agents.slice(0, limit) : agents;
+  const visible = agents.filter((agent) => statusFor(agent.agent_id)?.lifecycle_status !== "retired")
+    .sort((a, b) => {
+      const liveA = statusFor(a.agent_id); const liveB = statusFor(b.agent_id);
+      return ((LIVENESS_RANK[liveA?.liveness] ?? 4) - (LIVENESS_RANK[liveB?.liveness] ?? 4))
+        || (agentRecency(liveB || {}) - agentRecency(liveA || {}));
+    });
+  const list = limit ? visible.slice(0, limit) : visible;
   return `<div class="agent-list">${list.map((agent) => {
     const live = statusFor(agent.agent_id);
     return `<div class="agent-row"><span class="avatar">${escapeHtml(initials(agent.display_name))}</span><div><strong>${escapeHtml(agent.display_name)}</strong><small>${escapeHtml(agent.current_work_item?.title || agent.type)}${agent.queued_count ? ` · ${agent.queued_count} queued` : ""}</small></div>${live ? livenessBadge(live.liveness, live.seconds_since_heartbeat) : badge(agent.derived_status)}</div>`;
@@ -107,21 +116,51 @@ function agentThreads(agentId) {
   return threads.map((thread) => `<button class="thread-link" data-thread-id="${escapeHtml(thread.thread_id)}">${escapeHtml(thread.subject)} <small>(${escapeHtml(formatStatus(thread.status))})</small></button>`).join("");
 }
 
+const LIVENESS_RANK = { fresh: 0, stale: 1, down: 2, unknown: 3 };
+
+function agentRecency(agent) {
+  return new Date(agent.last_heartbeat || agent.last_seen || 0).getTime();
+}
+
+function sortedStatusAgents() {
+  const agents = (state.agentStatus?.agents || []).slice();
+  agents.sort((a, b) => (LIVENESS_RANK[a.liveness] - LIVENESS_RANK[b.liveness]) || (agentRecency(b) - agentRecency(a)));
+  return agents;
+}
+
+function livenessCell(agent) {
+  if (agent.connection === "channel" && !["fresh", "stale"].includes(agent.liveness)) {
+    return '<span class="badge liveness-unknown"><span aria-hidden="true">◌</span> No session</span><br><small class="muted">Channels only report while a session is open</small>';
+  }
+  return livenessBadge(agent.liveness, agent.seconds_since_heartbeat);
+}
+
 function agentStatusRows() {
   if (!state.agentStatus) return '<div class="empty">Liveness status is unavailable.</div>';
-  return `<div class="table-wrap"><table><thead><tr><th>Agent</th><th>Liveness</th><th>State</th><th>Queue</th><th>Bridge</th><th>Recent threads</th><th></th></tr></thead><tbody>${state.agentStatus.agents.map((agent) => {
+  const agents = sortedStatusAgents().filter((agent) => state.showRetired || agent.lifecycle_status !== "retired");
+  return `<div class="table-wrap"><table><thead><tr><th>Agent</th><th>Liveness</th><th>State</th><th>Queue</th><th>Bridge</th><th>Recent threads</th><th></th></tr></thead><tbody>${agents.map((agent) => {
     const workload = state.agents.find((entry) => entry.agent_id === agent.agent_id);
     const working = agent.state?.startsWith("working:");
-    return `<tr>
-      <td class="title-cell"><strong>${escapeHtml(agent.display_name)}</strong><small>${escapeHtml(agent.agent_id)} · ${escapeHtml(agent.type || "unknown")}${workload?.current_work_item ? ` · ledger: ${escapeHtml(workload.current_work_item.title)}` : ""}</small></td>
-      <td>${livenessBadge(agent.liveness, agent.seconds_since_heartbeat)}</td>
+    const retired = agent.lifecycle_status === "retired";
+    return `<tr class="${retired ? "retired-row" : ""}">
+      <td class="title-cell"><strong>${escapeHtml(agent.display_name)}</strong><small>${escapeHtml(agent.agent_id)} · ${escapeHtml(agent.connection)}${retired ? " · stood down" : ""}${workload?.current_work_item ? ` · ledger: ${escapeHtml(workload.current_work_item.title)}` : ""}</small></td>
+      <td>${retired ? '<span class="badge liveness-unknown">Stood down</span>' : livenessCell(agent)}</td>
       <td>${working ? `<span class="badge working"><span aria-hidden="true">▶</span> Working</span><br><button class="thread-link" data-thread-id="${escapeHtml(agent.current_thread_id)}">${escapeHtml(agent.current_thread_id)}</button>` : escapeHtml(formatStatus(agent.state))}</td>
       <td>${agent.queue_depth ?? "—"}</td>
       <td><small>${agent.host ? `${escapeHtml(agent.host)} · pid ${escapeHtml(agent.pid)}` : "No heartbeat seen"}${agent.bridge_version ? ` · v${escapeHtml(agent.bridge_version)}` : ""}${agent.last_receipt_at ? `<br>Last receipt ${escapeHtml(formatDate(agent.last_receipt_at))}` : ""}</small></td>
       <td class="thread-cell">${agentThreads(agent.agent_id)}</td>
-      <td><button class="button secondary small" data-compose="${escapeHtml(agent.agent_id)}">Message</button></td>
+      <td class="actions-cell"><button class="button secondary small" data-compose="${escapeHtml(agent.agent_id)}">Message</button>
+      <button class="button secondary small" data-stand-down="${escapeHtml(agent.agent_id)}" data-next="${retired ? "active" : "retired"}">${retired ? "Reactivate" : "Stand down"}</button></td>
     </tr>`;
   }).join("")}</tbody></table></div>`;
+}
+
+async function setAgentLifecycle(agentId, status) {
+  try {
+    await api(`/api/v1/agents/${encodeURIComponent(agentId)}/lifecycle`, { method: "POST", body: JSON.stringify({ status, actor: "tony" }) });
+    showNotice(status === "retired" ? `${agentId} stood down. It stays in the directory but is hidden from the active list.` : `${agentId} reactivated.`);
+    await load();
+  } catch (error) { showNotice(error.message, true); }
 }
 
 function renderOverview() {
@@ -135,15 +174,28 @@ function renderOverview() {
   <section class="panel"><div class="panel-header"><h2>Agents</h2><button class="button secondary small" data-switch="agents">Directory</button></div>${agentRows(state.overview.agents, 7)}</section></div>`;
 }
 
+const STATUS_LEGEND = [
+  ["proposed", "Someone suggested this work ('Asked by'). Nothing happens until you approve it — open the item and press Approve."],
+  ["ready", "You approved it. It waits here until an agent is assigned and starts a run."],
+  ["in_progress", "The assigned agent ('Doing it') has an active run recorded against it."],
+  ["review", "The agent submitted a receipt with evidence. The review gate decides who signs it off — 'Tony approves' means you."],
+  ["done", "Receipt accepted. Nothing reaches done without a receipt."],
+  ["blocked", "The agent hit something it cannot resolve; open the item to see the last event."],
+];
+
 function renderTasks() {
   const statuses = ["all", "proposed", "ready", "in_progress", "blocked", "review", "done"];
   const tasks = state.taskFilter === "all" ? state.tasks : state.tasks.filter((task) => task.status === state.taskFilter);
-  return `<section class="panel"><div class="panel-header"><div><h2>Delegated work</h2><p class="muted">One durable outcome can have several agent runs and reviews.</p></div></div>
-    <div class="filters">${statuses.map((status) => `<button class="filter ${state.taskFilter === status ? "active" : ""}" data-filter="${status}">${formatStatus(status)}</button>`).join("")}</div>${taskRows(tasks)}</section>`;
+  return `<section class="panel"><div class="panel-header"><div><h2>Delegated work</h2><p class="muted">Newest first. One durable outcome can have several agent runs and reviews.</p></div></div>
+    <div class="filters">${statuses.map((status) => `<button class="filter ${state.taskFilter === status ? "active" : ""}" data-filter="${status}">${formatStatus(status)}</button>`).join("")}</div>${taskRows(tasks)}
+    <details class="legend"><summary>What do these statuses mean?</summary><dl>${STATUS_LEGEND.map(([status, explanation]) => `<div class="legend-row"><dt>${badge(status)}</dt><dd>${escapeHtml(explanation)}</dd></div>`).join("")}</dl>
+    <p class="muted">The path is proposed → ready (you approve) → in progress (agent runs) → review (receipt submitted) → done (receipt accepted).</p></details></section>`;
 }
 function renderAgents() {
   const generated = state.agentStatus ? `Bridge heartbeats as of ${formatDate(state.agentStatus.generated_at)}; refreshes every ${STATUS_POLL_MS / 1000}s.` : "Bridge heartbeats unavailable.";
-  return `<section class="panel"><div class="panel-header"><div><h2>Live agents</h2><p class="muted">${escapeHtml(generated)} Liveness is transport health from bridge heartbeats — it never changes task status.</p></div><button class="button primary" data-compose="">Message an agent</button></div>${agentStatusRows()}</section>`;
+  const retiredCount = (state.agentStatus?.agents || []).filter((agent) => agent.lifecycle_status === "retired").length;
+  return `<section class="panel"><div class="panel-header"><div><h2>Live agents</h2><p class="muted">${escapeHtml(generated)} Sorted healthiest and most recent first. Liveness is transport health from bridge heartbeats — it never changes task status.</p></div><div class="header-actions">${retiredCount ? `<button class="button secondary" data-toggle-retired>${state.showRetired ? "Hide" : "Show"} stood down (${retiredCount})</button>` : ""}<button class="button primary" data-compose="">Message an agent</button></div></div>${agentStatusRows()}
+  <details class="legend"><summary>Bridges vs channels</summary><p class="muted">A <strong>bridge</strong> is a background service on the Mac that drives a provider CLI on its own — it heartbeats around the clock, so Down means genuinely broken (run <code>npm run bridge:doctor</code>). A <strong>channel</strong> only exists inside an interactive session (for example Claude Code), so "No session" just means no session is open right now — it is not a fault.</p></details></section>`;
 }
 function selectorTarget(target) {
   const model = state.selector.models.find((entry) => entry.model_id === target.model_id);
@@ -181,7 +233,7 @@ function renderRoutes() { return `<section class="panel"><div class="panel-heade
 
 function openCompose(agentId) {
   const select = document.querySelector("#compose-to");
-  const known = state.agentStatus?.agents || state.agents;
+  const known = (state.agentStatus?.agents || state.agents).filter((agent) => agent.lifecycle_status !== "retired" || agent.agent_id === agentId);
   select.innerHTML = known.map((agent) => `<option value="${escapeHtml(agent.agent_id)}" ${agent.agent_id === agentId ? "selected" : ""}>${escapeHtml(agent.display_name)} (${escapeHtml(agent.agent_id)})</option>`).join("");
   composeDialog.showModal();
 }
@@ -218,7 +270,7 @@ async function showTask(workItemId) {
     if (item.status === "ready" && item.current_assignment) actions.push('<button class="button primary" data-action="start">Record run started</button>');
     detailDialog.dataset.taskId = workItemId;
     document.querySelector("#task-detail").innerHTML = `<div class="dialog-header"><div><p class="eyebrow">${escapeHtml(item.source_ref)}</p><h2>${escapeHtml(item.title)}</h2></div><button class="icon-button" data-close-detail aria-label="Close">×</button></div>
-      <p>${escapeHtml(item.objective)}</p><div class="detail-meta"><div class="meta-card"><small>Status</small>${badge(item.status)}</div><div class="meta-card"><small>Human owner</small><strong>${escapeHtml(item.human_owner)}</strong></div><div class="meta-card"><small>Agent delegate</small><strong>${escapeHtml(item.current_assignment?.agent_id || "Unassigned")}</strong></div><div class="meta-card"><small>Review</small><strong>${escapeHtml(formatStatus(item.review_policy))}</strong></div><div class="meta-card"><small>Budget</small><strong>${item.budget_tokens === null ? "Not set" : `${formatNumber(item.budget_tokens)} tokens`}</strong></div><div class="meta-card"><small>Runs</small><strong>${item.runs.length}</strong></div></div>
+      <p>${escapeHtml(item.objective)}</p><div class="detail-meta"><div class="meta-card"><small>Status</small>${badge(item.status)}</div><div class="meta-card"><small>Asked by</small><strong>${escapeHtml(item.proposed_by || "unknown")}</strong></div><div class="meta-card"><small>Human owner</small><strong>${escapeHtml(item.human_owner)}</strong></div><div class="meta-card"><small>Doing it</small><strong>${escapeHtml(item.current_assignment?.agent_id || "Unassigned")}</strong></div><div class="meta-card"><small>Review</small><strong>${escapeHtml(formatStatus(item.review_policy))}</strong></div><div class="meta-card"><small>Budget</small><strong>${item.budget_tokens === null ? "Not set" : `${formatNumber(item.budget_tokens)} tokens`}</strong></div><div class="meta-card"><small>Runs</small><strong>${item.runs.length}</strong></div></div>
       <div class="detail-actions">${actions.join("")}</div><h3>History</h3><div class="event-list">${events.slice().reverse().map((event) => `<div class="event"><strong>${escapeHtml(formatStatus(event.type))}</strong><br><small>${escapeHtml(event.actor)} · ${escapeHtml(formatDate(event.created_at))}</small></div>`).join("")}</div>`;
     detailDialog.showModal();
   } catch (error) { showNotice(error.message, true); }
@@ -236,16 +288,27 @@ async function taskAction(action, workItemId) {
 }
 
 document.addEventListener("click", async (event) => {
-  const nav = event.target.closest("[data-view], [data-switch]");
-  if (nav) { state.view = nav.dataset.view || nav.dataset.switch; render(); return; }
-  const filter = event.target.closest("[data-filter]"); if (filter) { state.taskFilter = filter.dataset.filter; render(); return; }
-  const compose = event.target.closest("[data-compose]"); if (compose) { openCompose(compose.dataset.compose); return; }
-  const threadLink = event.target.closest("[data-thread-id]"); if (threadLink) { await showThread(threadLink.dataset.threadId); return; }
-  const row = event.target.closest("[data-task-id]"); if (row) { await showTask(row.dataset.taskId); return; }
+  // Close buttons and dialog actions must be handled before the generic row
+  // matchers: the open dialogs carry data-task-id/data-thread-id themselves,
+  // so a dialog-wide closest() match would swallow every click inside them.
   if (event.target.closest("[data-close-detail]")) { detailDialog.close(); return; }
   if (event.target.closest("[data-close-thread]")) { threadDialog.close(); return; }
   const action = event.target.closest("[data-action]");
-  if (action && detailDialog.open) { try { await taskAction(action.dataset.action, detailDialog.dataset.taskId); } catch (error) { showNotice(error.message, true); } }
+  if (action && detailDialog.open) {
+    try { await taskAction(action.dataset.action, detailDialog.dataset.taskId); } catch (error) { showNotice(error.message, true); }
+    return;
+  }
+  const nav = event.target.closest("[data-view], [data-switch]");
+  if (nav) { state.view = nav.dataset.view || nav.dataset.switch; render(); return; }
+  const filter = event.target.closest("[data-filter]"); if (filter) { state.taskFilter = filter.dataset.filter; render(); return; }
+  const retiredToggle = event.target.closest("[data-toggle-retired]");
+  if (retiredToggle) { state.showRetired = !state.showRetired; render(); return; }
+  const standDown = event.target.closest("[data-stand-down]");
+  if (standDown) { await setAgentLifecycle(standDown.dataset.standDown, standDown.dataset.next); return; }
+  const compose = event.target.closest("[data-compose]"); if (compose) { openCompose(compose.dataset.compose); return; }
+  const threadLink = event.target.closest("button[data-thread-id], tr[data-thread-id]");
+  if (threadLink) { await showThread(threadLink.dataset.threadId); return; }
+  const row = event.target.closest("tr[data-task-id]"); if (row) { await showTask(row.dataset.taskId); return; }
 });
 document.querySelector("#compose-form").addEventListener("submit", async (event) => {
   if (event.submitter?.value !== "submit") return;

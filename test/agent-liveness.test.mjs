@@ -129,6 +129,45 @@ test("control plane accepts heartbeats and serves the agents status API", async 
   });
 });
 
+test("agent lifecycle endpoint stands agents down and reactivates them", async () => {
+  await withControlPlane(async (base) => {
+    const retire = await fetch(`${base}/api/v1/agents/codex/lifecycle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "retired", actor: "tony" }),
+    });
+    assert.equal(retire.status, 200);
+    const retired = await retire.json();
+    assert.equal(retired.lifecycle_status, "retired");
+    assert.equal(retired.lifecycle_changed_by, "tony");
+
+    const status = await (await fetch(`${base}/api/v1/agents/status`)).json();
+    const codex = status.agents.find((agent) => agent.agent_id === "codex");
+    assert.equal(codex.lifecycle_status, "retired");
+    assert.equal(codex.connection, "bridge");
+
+    const reactivate = await fetch(`${base}/api/v1/agents/codex/lifecycle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "active", actor: "tony" }),
+    });
+    assert.equal((await reactivate.json()).lifecycle_status, "active");
+
+    const invalid = await fetch(`${base}/api/v1/agents/codex/lifecycle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "gone" }),
+    });
+    assert.equal(invalid.status, 400);
+    const missing = await fetch(`${base}/api/v1/agents/nobody/lifecycle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status: "retired" }),
+    });
+    assert.equal(missing.status, 404);
+  });
+});
+
 test("heartbeat endpoint honours the write token while status stays readable", async () => {
   await withControlPlane(async (base) => {
     const denied = await fetch(`${base}/api/v1/agents/heartbeat`, {

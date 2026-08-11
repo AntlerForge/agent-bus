@@ -3,7 +3,7 @@ import { createServer } from "node:http";
 import { appendFile, mkdir, readdir, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { classifyLiveness, heartbeatAgent, listAgents, registerAgent, LIVENESS_THRESHOLDS } from "../agents.mjs";
+import { classifyLiveness, heartbeatAgent, listAgents, registerAgent, setAgentLifecycleStatus, LIVENESS_THRESHOLDS } from "../agents.mjs";
 import { readArtifactContent, readArtifactManifest, uploadSharedArtifact } from "../artifacts.mjs";
 import { getThread, listThreads } from "../mailbox.mjs";
 import { ackMessage, markRead, readInbox, replyMessage, sendMessage, updateThreadStatus } from "../mailbox.mjs";
@@ -23,7 +23,7 @@ import {
   updateRun,
 } from "../work-ledger/store.mjs";
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 const STARTED_AT = new Date().toISOString();
 const STATIC_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "public");
 const STATIC_FILES = {
@@ -141,6 +141,8 @@ async function agentsStatus(root) {
         agent_id: agent.agent_id,
         display_name: agent.display_name,
         type: agent.type,
+        lifecycle_status: agent.lifecycle_status || "active",
+        connection: agent.type === "claude-code" || agent.type === "claude-generic" ? "channel" : "bridge",
         liveness: classifyLiveness(lastHeartbeat, nowMs),
         state: liveness.state || "unknown",
         current_thread_id: liveness.current_thread_id || null,
@@ -269,6 +271,16 @@ export function createControlPlane({
       if (request.method === "POST" && pathname === "/api/v1/agents/heartbeat") {
         requireWriteAccess(request, writeToken);
         return sendJson(response, 200, await heartbeatAgent(await readJsonBody(request), root));
+      }
+      const agentLifecycle = pathname.match(/^\/api\/v1\/agents\/([^/]+)\/lifecycle$/);
+      if (request.method === "POST" && agentLifecycle) {
+        requireWriteAccess(request, writeToken);
+        const body = await readJsonBody(request);
+        return sendJson(response, 200, await setAgentLifecycleStatus({
+          agent_id: decodeURIComponent(agentLifecycle[1]),
+          status: body.status,
+          actor: body.actor,
+        }, root));
       }
       if (request.method === "GET" && (pathname === "/api/v1/agents/status" || pathname === "/api/agents/status")) {
         return sendJson(response, 200, await agentsStatus(root));

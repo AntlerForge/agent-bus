@@ -142,6 +142,32 @@ export async function heartbeatAgent({ agent_id, host, pid, bridge_version, stat
   });
 }
 
+const AGENT_LIFECYCLE_STATUSES = ["active", "retired"];
+
+export async function setAgentLifecycleStatus({ agent_id, status, actor }, root) {
+  if (!agent_id) {
+    throw new Error("agent_id is required");
+  }
+  if (!AGENT_LIFECYCLE_STATUSES.includes(status)) {
+    throw new Error(`status must be one of: ${AGENT_LIFECYCLE_STATUSES.join(", ")}`);
+  }
+  return serializeAgentWrite(async () => {
+    const paths = await ensureBusLayout(root);
+    const agents = await readAgents(root);
+    const agent = agents[agent_id];
+    if (!agent) {
+      const error = new Error(`Unknown agent: ${agent_id}`);
+      error.statusCode = 404;
+      throw error;
+    }
+    agent.lifecycle_status = status;
+    agent.lifecycle_changed_at = nowIso();
+    agent.lifecycle_changed_by = actor ? String(actor) : null;
+    await writeJsonFileAtomic(paths.agentsFile, agents);
+    return agent;
+  });
+}
+
 export async function touchAgent(agent_id, root) {
   if (!agent_id) {
     return null;

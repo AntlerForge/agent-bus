@@ -149,6 +149,17 @@ input:focus, textarea:focus, select:focus { outline: 3px solid rgba(63,111,133,.
 .harness-columns ul { margin: 6px 0 0; padding-left: 17px; }
 .harness-columns li { margin: 4px 0; }
 .harness-models { margin: 12px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted); }
+.legend { margin-top: 16px; border: 1px solid var(--line); border-radius: 12px; padding: 12px 15px; background: #faf9f4; }
+.legend summary { cursor: pointer; font-size: 13px; font-weight: 650; }
+.legend dl { margin: 12px 0 0; }
+.legend-row { display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: start; margin: 8px 0; }
+.legend-row dt { margin: 0; }
+.legend-row dd { margin: 0; font-size: 13px; line-height: 1.45; }
+.legend p { font-size: 13px; line-height: 1.5; margin: 10px 0 0; }
+.retired-row { opacity: .55; }
+.actions-cell { white-space: nowrap; }
+.actions-cell .button { display: block; margin: 3px 0; width: 100%; }
+.header-actions { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 900px) {
   .shell { grid-template-columns: 74px 1fr; }
   .sidebar { padding: 24px 12px; }
