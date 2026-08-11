@@ -129,6 +129,7 @@ properties:
   tech: "Node.js, YAML and systemd"
   responsibilities:
     - "Aggregate declared waiting states without changing their source stores"
+    - "Skip and visibly log incomplete work-item directories while preserving failures for other read errors"
     - "Emit transition-only SLA alerts and a weekly INFO decision pack"
     - "Render queue breach summaries and refresh the shared Estate Status projection"
   non_responsibilities:

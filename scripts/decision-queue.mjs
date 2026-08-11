@@ -49,7 +49,15 @@ async function collectWork() {
   for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const file = path.join(dir, entry.name, "work-item.md");
-    const data = frontmatter(await fs.readFile(file, "utf8"));
+    let text;
+    try {
+      text = await fs.readFile(file, "utf8");
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      console.warn(JSON.stringify({ event: "incomplete_work_item_skipped", directory: entry.name, missing: "work-item.md" }));
+      continue;
+    }
+    const data = frontmatter(text);
     if (data.status === "proposed" || data.status === "review") rows.push(item("bus_work", data.work_item_id, data.title,
       data.updated_at || data.created_at, data.status === "proposed" ? `Accept or reject proposal ${data.work_item_id}` : `Approve or reject receipt ${data.receipt_ref || data.work_item_id}`, file));
   }
