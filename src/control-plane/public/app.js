@@ -1,4 +1,7 @@
-const state = { view: "overview", overview: null, tasks: [], agents: [], threads: [], usage: null, selector: null, agentStatus: null, taskFilter: "all", showRetired: false };
+const state = {
+  view: "home", overview: null, tasks: [], agents: [], threads: [], usage: null, selector: null,
+  agentStatus: null, taskFilter: "all", activityFilter: "all", activityQuery: "", showRetired: false,
+};
 const content = document.querySelector("#content");
 const notice = document.querySelector("#notice");
 const taskDialog = document.querySelector("#task-dialog");
@@ -6,23 +9,58 @@ const detailDialog = document.querySelector("#task-detail-dialog");
 const workflowDialog = document.querySelector("#workflow-dialog");
 const composeDialog = document.querySelector("#compose-dialog");
 const threadDialog = document.querySelector("#thread-dialog");
+const agentDialog = document.querySelector("#agent-dialog");
 const basePath = document.querySelector('meta[name="agent-bus-base-path"]')?.content || "";
 const STATUS_POLL_MS = 30000;
 
 const labels = {
-  overview: ["CONTROL PLANE", "Overview"], tasks: ["WORK LEDGER", "Tasks"], agents: ["RUNTIME DIRECTORY", "Agents"],
-  models: ["ADVISORY ROUTING", "Model routes"], reviews: ["QUALITY GATES", "Reviews"],
-  usage: ["BUDGETS & COST", "Usage"], routes: ["AGENT BUS", "Message routes"],
+  home: ["YOUR AGENTS AT A GLANCE", "Home"], agents: ["SET UP, WATCH, STAND DOWN", "Agents"],
+  activity: ["EVERY JOB, NEWEST FIRST", "Activity"], ledger: ["APPROVALS & RECEIPTS", "Tracked jobs"],
+  models: ["ADVISORY ROUTING", "Model routes"], usage: ["BUDGETS & COST", "Usage"],
 };
+
+// Plain-language presentation of thread (conversation) statuses.
+const JOB_STATUS = {
+  open: { label: "Waiting for agent", cls: "waiting", active: true },
+  acknowledged: { label: "Agent has seen it", cls: "waiting", active: true },
+  in_progress: { label: "Agent is working", cls: "working", active: true },
+  input_required: { label: "Waiting on you", cls: "needs-you", needsYou: true },
+  blocked: { label: "Stuck", cls: "needs-you", needsYou: true },
+  completed: { label: "Finished", cls: "done", finished: true },
+  failed: { label: "Failed", cls: "bad", finished: true },
+  canceled: { label: "Cancelled", cls: "quiet", finished: true },
+  closed: { label: "Closed", cls: "quiet", finished: true },
+};
+
+// Plain-language presentation of tracked work-item statuses.
+const WORK_STATUS = {
+  proposed: { label: "Waiting for your approval", cls: "needs-you", needsYou: true },
+  ready: { label: "Approved — not started", cls: "waiting", active: true },
+  in_progress: { label: "Being worked on", cls: "working", active: true },
+  blocked: { label: "Stuck — needs you", cls: "needs-you", needsYou: true },
+  review: { label: "Needs your sign-off", cls: "needs-you", needsYou: true },
+  done: { label: "Done", cls: "done", finished: true },
+  canceled: { label: "Cancelled", cls: "quiet", finished: true },
+};
+
+function jobStatus(status) { return JOB_STATUS[status] || { label: status || "unknown", cls: "quiet" }; }
+function workStatus(status) { return WORK_STATUS[status] || { label: status || "unknown", cls: "quiet" }; }
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 }
-function formatStatus(value) { return String(value || "unknown").replaceAll("_", " "); }
 function formatNumber(value) { return value === null || value === undefined ? "Unknown" : new Intl.NumberFormat().format(Number(value)); }
 function formatDate(value) { return value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)) : "Never"; }
-function badge(status) { return `<span class="badge ${escapeHtml(status)}">${escapeHtml(formatStatus(status))}</span>`; }
+function formatStatus(value) { return String(value || "unknown").replaceAll("_", " "); }
 function initials(name) { return String(name || "?").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(); }
+function chip(meta) { return `<span class="badge status-${escapeHtml(meta.cls)}">${escapeHtml(meta.label)}</span>`; }
+function formatAge(seconds) {
+  if (seconds < 90) return `${seconds}s ago`;
+  if (seconds < 5400) return `${Math.round(seconds / 60)}m ago`;
+  if (seconds < 129600) return `${Math.round(seconds / 3600)}h ago`;
+  return `${Math.round(seconds / 86400)}d ago`;
+}
+function since(iso) { return iso ? formatAge(Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))) : "never"; }
 
 async function api(path, options = {}) {
   const token = sessionStorage.getItem("agentBusWriteToken");
@@ -35,22 +73,22 @@ async function api(path, options = {}) {
 
 function showNotice(message, error = false) {
   notice.textContent = message; notice.hidden = !message; notice.classList.toggle("error", error);
-  if (message && !error) setTimeout(() => { notice.hidden = true; }, 3500);
+  if (message && !error) setTimeout(() => { notice.hidden = true; }, 4000);
 }
 
 async function load() {
-  content.innerHTML = '<div class="loading">Refreshing ledger…</div>';
+  content.innerHTML = '<div class="loading">Loading…</div>';
   try {
     const [overview, tasks, agents, threads, usage, selector, agentStatus] = await Promise.all([
       api("/api/v1/overview"), api("/api/v1/work-items"), api("/api/v1/agents"), api("/api/v1/threads"), api("/api/v1/usage"), api("/api/v1/model-selector"), api("/api/v1/agents/status"),
     ]);
     Object.assign(state, { overview, tasks, agents, threads, usage, selector, agentStatus });
     render();
-  } catch (error) { content.innerHTML = `<div class="empty">Could not load the ledger.<br>${escapeHtml(error.message)}</div>`; }
+  } catch (error) { content.innerHTML = `<div class="empty">Could not load.<br>${escapeHtml(error.message)}</div>`; }
 }
 
 function anyDialogOpen() {
-  return [taskDialog, detailDialog, workflowDialog, composeDialog, threadDialog].some((dialog) => dialog?.open);
+  return [taskDialog, detailDialog, workflowDialog, composeDialog, threadDialog, agentDialog].some((dialog) => dialog?.open);
 }
 
 async function refreshAgentStatus() {
@@ -58,145 +96,160 @@ async function refreshAgentStatus() {
   try {
     const [agentStatus, threads] = await Promise.all([api("/api/v1/agents/status"), api("/api/v1/threads")]);
     Object.assign(state, { agentStatus, threads });
-    if (["agents", "overview"].includes(state.view)) render();
+    if (["home", "agents", "activity"].includes(state.view)) render();
   } catch { /* transient poll failure; the next interval retries */ }
 }
 setInterval(refreshAgentStatus, STATUS_POLL_MS);
 
-function byMostRecent(a, b) { return new Date(b.updated_at || 0) - new Date(a.updated_at || 0); }
-
-function taskRows(tasks) {
-  if (!tasks.length) return '<div class="empty">No work items in this view.</div>';
-  const sorted = tasks.slice().sort(byMostRecent);
-  return `<div class="table-wrap"><table><thead><tr><th>Work item</th><th>Status</th><th>Asked by</th><th>Doing it</th><th>Review gate</th><th>Updated</th></tr></thead><tbody>${sorted.map((item) => `
-    <tr data-task-id="${escapeHtml(item.work_item_id)}"><td class="title-cell"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.source_ref)} · ${escapeHtml(item.objective)}</small></td>
-    <td>${badge(item.status)}</td><td>${escapeHtml(item.proposed_by || "unknown")}</td><td>${escapeHtml(item.current_assignment?.agent_id || "Unassigned")}</td><td>${escapeHtml(item.review_policy === "human" ? "Tony approves" : item.review_policy === "independent_agent" ? "Independent agent" : "No gate")}</td><td>${escapeHtml(formatDate(item.updated_at))}</td></tr>`).join("")}</tbody></table></div>`;
-}
-
-const LIVENESS_PRESENTATION = {
-  fresh: { icon: "✔", label: "Fresh" },
-  stale: { icon: "◐", label: "Stale" },
-  down: { icon: "✖", label: "Down" },
-  unknown: { icon: "?", label: "Unknown" },
-};
-
-function livenessBadge(liveness, secondsSince) {
-  const { icon, label } = LIVENESS_PRESENTATION[liveness] || LIVENESS_PRESENTATION.unknown;
-  const age = secondsSince === null || secondsSince === undefined ? "" : ` · ${formatAge(secondsSince)}`;
-  return `<span class="badge liveness-${escapeHtml(liveness)}"><span aria-hidden="true">${icon}</span> ${escapeHtml(label)}${escapeHtml(age)}</span>`;
-}
-
-function formatAge(seconds) {
-  if (seconds < 90) return `${seconds}s ago`;
-  if (seconds < 5400) return `${Math.round(seconds / 60)}m ago`;
-  return `${Math.round(seconds / 3600)}h ago`;
-}
+// ---------- agents ----------
 
 function statusFor(agentId) {
   return state.agentStatus?.agents?.find((agent) => agent.agent_id === agentId) || null;
 }
 
-function agentRows(agents, limit) {
-  const visible = agents.filter((agent) => statusFor(agent.agent_id)?.lifecycle_status !== "retired")
-    .sort((a, b) => {
-      const liveA = statusFor(a.agent_id); const liveB = statusFor(b.agent_id);
-      return ((LIVENESS_RANK[liveA?.liveness] ?? 4) - (LIVENESS_RANK[liveB?.liveness] ?? 4))
-        || (agentRecency(liveB || {}) - agentRecency(liveA || {}));
-    });
-  const list = limit ? visible.slice(0, limit) : visible;
-  return `<div class="agent-list">${list.map((agent) => {
-    const live = statusFor(agent.agent_id);
-    return `<div class="agent-row"><span class="avatar">${escapeHtml(initials(agent.display_name))}</span><div><strong>${escapeHtml(agent.display_name)}</strong><small>${escapeHtml(agent.current_work_item?.title || agent.type)}${agent.queued_count ? ` · ${agent.queued_count} queued` : ""}</small></div>${live ? livenessBadge(live.liveness, live.seconds_since_heartbeat) : badge(agent.derived_status)}</div>`;
-  }).join("")}</div>`;
+function threadSubject(threadId) {
+  return state.threads.find((thread) => thread.thread_id === threadId)?.subject || threadId;
 }
 
-function agentThreads(agentId) {
-  const threads = state.threads.filter((thread) => (thread.participants || []).includes(agentId)).slice(0, 3);
-  if (!threads.length) return '<span class="muted">No threads yet</span>';
-  return threads.map((thread) => `<button class="thread-link" data-thread-id="${escapeHtml(thread.thread_id)}">${escapeHtml(thread.subject)} <small>(${escapeHtml(formatStatus(thread.status))})</small></button>`).join("");
-}
-
-const LIVENESS_RANK = { fresh: 0, stale: 1, down: 2, unknown: 3 };
-
-function agentRecency(agent) {
-  return new Date(agent.last_heartbeat || agent.last_seen || 0).getTime();
-}
-
-function sortedStatusAgents() {
-  const agents = (state.agentStatus?.agents || []).slice();
-  agents.sort((a, b) => (LIVENESS_RANK[a.liveness] - LIVENESS_RANK[b.liveness]) || (agentRecency(b) - agentRecency(a)));
-  return agents;
-}
-
-function livenessCell(agent) {
-  if (agent.connection === "channel" && !["fresh", "stale"].includes(agent.liveness)) {
-    return '<span class="badge liveness-unknown"><span aria-hidden="true">◌</span> No session</span><br><small class="muted">Channels only report while a session is open</small>';
+// One plain sentence about whether this agent can take work right now.
+function presence(agent) {
+  if (!agent) return { label: "Never connected", cls: "quiet", detail: "" };
+  if (agent.lifecycle_status === "retired") return { label: "Stood down", cls: "quiet", detail: "Hidden from routing until you reactivate it." };
+  if (agent.state?.startsWith("working:")) {
+    return { label: "Working", cls: "working", detail: threadSubject(agent.current_thread_id), threadId: agent.current_thread_id };
   }
-  return livenessBadge(agent.liveness, agent.seconds_since_heartbeat);
+  if (agent.connection === "channel") {
+    if (["fresh", "stale"].includes(agent.liveness)) return { label: "Connected", cls: "online", detail: "A session is open right now." };
+    return { label: "Opens with a session", cls: "quiet", detail: "This one lives inside Claude Code — it is available whenever you have a session open. Not a fault." };
+  }
+  if (agent.liveness === "fresh") return { label: "Online", cls: "online", detail: agent.queue_depth ? `${agent.queue_depth} job(s) queued` : "Ready for work" };
+  if (agent.liveness === "stale") return { label: "Quiet", cls: "waiting", detail: `Last heard ${formatAge(agent.seconds_since_heartbeat)} — usually the Mac is asleep. If not, run npm run bridge:doctor.` };
+  if (agent.liveness === "down") return { label: "Offline", cls: "bad", detail: "Not responding. In a terminal run: npm run bridge:doctor — it prints the exact fix." };
+  return { label: "Never connected", cls: "quiet", detail: "Registered but no service has ever reported in." };
 }
 
-function agentStatusRows() {
-  if (!state.agentStatus) return '<div class="empty">Liveness status is unavailable.</div>';
-  const agents = sortedStatusAgents().filter((agent) => state.showRetired || agent.lifecycle_status !== "retired");
-  return `<div class="table-wrap"><table><thead><tr><th>Agent</th><th>Liveness</th><th>State</th><th>Queue</th><th>Bridge</th><th>Recent threads</th><th></th></tr></thead><tbody>${agents.map((agent) => {
-    const workload = state.agents.find((entry) => entry.agent_id === agent.agent_id);
-    const working = agent.state?.startsWith("working:");
-    const retired = agent.lifecycle_status === "retired";
-    return `<tr class="${retired ? "retired-row" : ""}">
-      <td class="title-cell"><strong>${escapeHtml(agent.display_name)}</strong><small>${escapeHtml(agent.agent_id)} · ${escapeHtml(agent.connection)}${retired ? " · stood down" : ""}${workload?.current_work_item ? ` · ledger: ${escapeHtml(workload.current_work_item.title)}` : ""}</small></td>
-      <td>${retired ? '<span class="badge liveness-unknown">Stood down</span>' : livenessCell(agent)}</td>
-      <td>${working ? `<span class="badge working"><span aria-hidden="true">▶</span> Working</span><br><button class="thread-link" data-thread-id="${escapeHtml(agent.current_thread_id)}">${escapeHtml(agent.current_thread_id)}</button>` : escapeHtml(formatStatus(agent.state))}</td>
-      <td>${agent.queue_depth ?? "—"}</td>
-      <td><small>${agent.host ? `${escapeHtml(agent.host)} · pid ${escapeHtml(agent.pid)}` : "No heartbeat seen"}${agent.bridge_version ? ` · v${escapeHtml(agent.bridge_version)}` : ""}${agent.last_receipt_at ? `<br>Last receipt ${escapeHtml(formatDate(agent.last_receipt_at))}` : ""}</small></td>
-      <td class="thread-cell">${agentThreads(agent.agent_id)}</td>
-      <td class="actions-cell"><button class="button secondary small" data-compose="${escapeHtml(agent.agent_id)}">Message</button>
-      <button class="button secondary small" data-stand-down="${escapeHtml(agent.agent_id)}" data-next="${retired ? "active" : "retired"}">${retired ? "Reactivate" : "Stand down"}</button></td>
-    </tr>`;
-  }).join("")}</tbody></table></div>`;
+function visibleAgents() {
+  const RANK = { online: 0, working: 0, waiting: 1, bad: 2, quiet: 3 };
+  return (state.agentStatus?.agents || [])
+    .filter((agent) => state.showRetired || agent.lifecycle_status !== "retired")
+    .map((agent) => ({ agent, p: presence(agent) }))
+    .sort((a, b) => (RANK[a.p.cls] ?? 4) - (RANK[b.p.cls] ?? 4)
+      || new Date(b.agent.last_heartbeat || b.agent.last_seen || 0) - new Date(a.agent.last_heartbeat || a.agent.last_seen || 0));
 }
 
-async function setAgentLifecycle(agentId, status) {
-  try {
-    await api(`/api/v1/agents/${encodeURIComponent(agentId)}/lifecycle`, { method: "POST", body: JSON.stringify({ status, actor: "tony" }) });
-    showNotice(status === "retired" ? `${agentId} stood down. It stays in the directory but is hidden from the active list.` : `${agentId} reactivated.`);
-    await load();
-  } catch (error) { showNotice(error.message, true); }
+function agentActivity(agentId) {
+  return allActivity().filter((item) => item.agents.includes(agentId));
 }
 
-function renderOverview() {
-  const { counts, usage } = state.overview;
-  return `<div class="stats">
-    <div class="stat"><small>Active work</small><strong>${counts.active}</strong><div class="sub">${counts.ready} ready</div></div>
-    <div class="stat"><small>Awaiting review</small><strong>${counts.review}</strong><div class="sub">quality gates</div></div>
-    <div class="stat"><small>Blocked</small><strong>${counts.blocked}</strong><div class="sub">needs attention</div></div>
-    <div class="stat"><small>Recorded tokens</small><strong>${formatNumber(usage.total_tokens)}</strong><div class="sub">${usage.cost_known ? `£/$ ${usage.estimated_cost.toFixed(2)}` : "cost incomplete"}</div></div>
-  </div><div class="grid-two"><section class="panel"><div class="panel-header"><h2>Recent work</h2><button class="button secondary small" data-switch="tasks">View all</button></div>${taskRows(state.overview.recent_work)}</section>
-  <section class="panel"><div class="panel-header"><h2>Agents</h2><button class="button secondary small" data-switch="agents">Directory</button></div>${agentRows(state.overview.agents, 7)}</section></div>`;
+function agentCard({ agent, p }) {
+  const last = agentActivity(agent.agent_id)[0];
+  return `<article class="agent-card" data-agent="${escapeHtml(agent.agent_id)}">
+    <div class="agent-card-head"><span class="avatar">${escapeHtml(initials(agent.display_name))}</span>
+      <div><strong>${escapeHtml(agent.display_name)}</strong><small>${agent.connection === "channel" ? "session-based" : "always-on"}</small></div>
+      ${chip(p)}</div>
+    <p class="agent-card-detail">${p.threadId ? `<button class="thread-link" data-thread-id="${escapeHtml(p.threadId)}">${escapeHtml(p.detail)}</button>` : escapeHtml(p.detail || "")}</p>
+    ${last && !p.threadId ? `<p class="agent-card-last">Last: <button class="thread-link" data-open-kind="${last.kind}" data-open-id="${escapeHtml(last.id)}">${escapeHtml(last.title)}</button> <small>(${escapeHtml(last.statusMeta.label.toLowerCase())}, ${escapeHtml(since(last.updated))})</small></p>` : ""}
+    <div class="agent-card-actions"><button class="button primary small" data-compose="${escapeHtml(agent.agent_id)}">Give it a job</button>
+    <button class="button secondary small" data-agent="${escapeHtml(agent.agent_id)}">History</button></div>
+  </article>`;
 }
 
-const STATUS_LEGEND = [
-  ["proposed", "Someone suggested this work ('Asked by'). Nothing happens until you approve it — open the item and press Approve."],
-  ["ready", "You approved it. It waits here until an agent is assigned and starts a run."],
-  ["in_progress", "The assigned agent ('Doing it') has an active run recorded against it."],
-  ["review", "The agent submitted a receipt with evidence. The review gate decides who signs it off — 'Tony approves' means you."],
-  ["done", "Receipt accepted. Nothing reaches done without a receipt."],
-  ["blocked", "The agent hit something it cannot resolve; open the item to see the last event."],
-];
+// ---------- unified activity (conversations + tracked jobs) ----------
 
-function renderTasks() {
+function allActivity() {
+  const jobs = state.threads.map((thread) => ({
+    kind: "thread", id: thread.thread_id, title: thread.subject,
+    who: (thread.participants || []).join(" → "),
+    agents: thread.participants || [],
+    statusMeta: jobStatus(thread.status), rawStatus: thread.status,
+    updated: thread.updated, typeLabel: "Job",
+  }));
+  const tracked = state.tasks.map((item) => ({
+    kind: "task", id: item.work_item_id, title: item.title,
+    who: `asked by ${item.proposed_by || "unknown"}${item.current_assignment ? `, ${item.current_assignment.agent_id} doing it` : ""}`,
+    agents: [item.proposed_by, item.current_assignment?.agent_id].filter(Boolean),
+    statusMeta: workStatus(item.status), rawStatus: item.status,
+    updated: item.updated_at, typeLabel: "Tracked",
+  }));
+  return jobs.concat(tracked).sort((a, b) => new Date(b.updated || 0) - new Date(a.updated || 0));
+}
+
+function activityRows(items, emptyMessage) {
+  if (!items.length) return `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
+  return `<div class="activity-list">${items.map((item) => `
+    <button class="activity-row" data-open-kind="${item.kind}" data-open-id="${escapeHtml(item.id)}">
+      <span class="type-tag ${item.kind}">${item.typeLabel}</span>
+      <span class="activity-main"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.who)}</small></span>
+      ${chip(item.statusMeta)}
+      <span class="activity-when">${escapeHtml(since(item.updated))}</span>
+    </button>`).join("")}</div>`;
+}
+
+// ---------- views ----------
+
+function renderHome() {
+  const activity = allActivity();
+  const needsYou = activity.filter((item) => item.statusMeta.needsYou);
+  const happening = activity.filter((item) => item.statusMeta.active);
+  const finished = activity.filter((item) => item.statusMeta.finished).slice(0, 8);
+  const agents = visibleAgents();
+  return `
+    <section class="panel needs-you-panel"><div class="panel-header"><div><h2>Needs you${needsYou.length ? ` (${needsYou.length})` : ""}</h2><p class="muted">Approvals, sign-offs and anything stuck. Everything else runs without you.</p></div></div>
+      ${activityRows(needsYou, "Nothing needs you right now.")}</section>
+    <section class="panel"><div class="panel-header"><div><h2>Happening now</h2><p class="muted">Jobs agents are on at the moment.</p></div></div>
+      ${activityRows(happening, "Nothing running. Give an agent a job.")}</section>
+    <section class="panel"><div class="panel-header"><div><h2>Your agents</h2><p class="muted">Click one for its history, or hand it a job directly.</p></div><button class="button secondary small" data-switch="agents">Manage</button></div>
+      <div class="agent-grid">${agents.map(agentCard).join("")}</div></section>
+    <section class="panel"><div class="panel-header"><div><h2>Recently finished</h2><p class="muted">Click any job to read the result and the files it produced.</p></div><button class="button secondary small" data-switch="activity">All activity</button></div>
+      ${activityRows(finished, "Nothing finished yet.")}</section>`;
+}
+
+function renderAgents() {
+  const agents = visibleAgents();
+  const retiredCount = (state.agentStatus?.agents || []).filter((agent) => agent.lifecycle_status === "retired").length;
+  return `<section class="panel"><div class="panel-header"><div><h2>Your agents</h2><p class="muted">Sorted by availability. Updates every ${STATUS_POLL_MS / 1000}s.</p></div>
+      <div class="header-actions">${retiredCount ? `<button class="button secondary" data-toggle-retired>${state.showRetired ? "Hide" : "Show"} stood down (${retiredCount})</button>` : ""}<button class="button primary" data-compose="">Give an agent a job</button></div></div>
+    <div class="agent-grid">${agents.map(agentCard).join("")}</div></section>
+    <section class="panel help-panel"><h2>How this works</h2>
+      <div class="help-columns">
+        <div><h3>Give an agent a job</h3><p>Press <strong>Give it a job</strong>, write what you want in plain words, send. The agent picks it up on its own machine, works, and replies on the same job — you will see it move through <em>Agent has seen it → Agent is working → Finished</em> on Home. Files it creates are listed when you open the finished job.</p></div>
+        <div><h3>Always-on vs session-based</h3><p><strong>Always-on</strong> agents (Codex, Cursor, Antigravity) run as background services on the Mac and take work day or night. If one shows <em>Offline</em>, run <code>npm run bridge:doctor</code> in a terminal — it prints the exact repair. <strong>Session-based</strong> agents (Claude Code) are only reachable while you have a session open; that is normal, not a fault.</p></div>
+        <div><h3>Add a new agent</h3><p>An agent needs a small background service built for it (about an hour of work that an existing agent can do). Press <strong>Give it a job</strong> on Cursor or Codex and say: <em>"Set up a new Agent Bus bridge for &lt;provider&gt; following deploy/macos/README.md"</em>. Once its service starts reporting in, it appears here automatically.</p></div>
+        <div><h3>Retire an agent</h3><p>Open its history and press <strong>Stand down</strong>. It keeps its past record but disappears from routing and this list. You can reactivate it any time.</p></div>
+      </div></section>`;
+}
+
+function renderActivity() {
+  const query = state.activityQuery.trim().toLowerCase();
+  let items = allActivity();
+  if (state.activityFilter === "needs-you") items = items.filter((item) => item.statusMeta.needsYou);
+  if (state.activityFilter === "active") items = items.filter((item) => item.statusMeta.active);
+  if (state.activityFilter === "finished") items = items.filter((item) => item.statusMeta.finished);
+  if (query) items = items.filter((item) => `${item.title} ${item.who}`.toLowerCase().includes(query));
+  const filters = [["all", "All"], ["needs-you", "Needs you"], ["active", "Active"], ["finished", "Finished"]];
+  return `<section class="panel"><div class="panel-header"><div><h2>All activity</h2><p class="muted">Every job and tracked item, newest first. <strong>Job</strong> = a direct conversation with an agent. <strong>Tracked</strong> = work that goes through approval and sign-off.</p></div></div>
+    <div class="activity-controls"><div class="filters">${filters.map(([key, label]) => `<button class="filter ${state.activityFilter === key ? "active" : ""}" data-activity-filter="${key}">${label}</button>`).join("")}</div>
+    <input type="search" id="activity-search" placeholder="Search jobs…" value="${escapeHtml(state.activityQuery)}"></div>
+    ${activityRows(items, query ? "No jobs match that search." : "No activity yet.")}</section>`;
+}
+
+function taskRows(tasks) {
+  if (!tasks.length) return '<div class="empty">No tracked jobs in this view.</div>';
+  const sorted = tasks.slice().sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+  return `<div class="table-wrap"><table><thead><tr><th>Tracked job</th><th>Status</th><th>Asked by</th><th>Doing it</th><th>Sign-off</th><th>Updated</th></tr></thead><tbody>${sorted.map((item) => `
+    <tr data-task-id="${escapeHtml(item.work_item_id)}"><td class="title-cell"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.source_ref)} · ${escapeHtml(item.objective)}</small></td>
+    <td>${chip(workStatus(item.status))}</td><td>${escapeHtml(item.proposed_by || "unknown")}</td><td>${escapeHtml(item.current_assignment?.agent_id || "Unassigned")}</td><td>${escapeHtml(item.review_policy === "human" ? "You" : item.review_policy === "independent_agent" ? "Another agent" : "None")}</td><td>${escapeHtml(formatDate(item.updated_at))}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function renderLedger() {
   const statuses = ["all", "proposed", "ready", "in_progress", "blocked", "review", "done"];
   const tasks = state.taskFilter === "all" ? state.tasks : state.tasks.filter((task) => task.status === state.taskFilter);
-  return `<section class="panel"><div class="panel-header"><div><h2>Delegated work</h2><p class="muted">Newest first. One durable outcome can have several agent runs and reviews.</p></div></div>
-    <div class="filters">${statuses.map((status) => `<button class="filter ${state.taskFilter === status ? "active" : ""}" data-filter="${status}">${formatStatus(status)}</button>`).join("")}</div>${taskRows(tasks)}
-    <details class="legend"><summary>What do these statuses mean?</summary><dl>${STATUS_LEGEND.map(([status, explanation]) => `<div class="legend-row"><dt>${badge(status)}</dt><dd>${escapeHtml(explanation)}</dd></div>`).join("")}</dl>
-    <p class="muted">The path is proposed → ready (you approve) → in progress (agent runs) → review (receipt submitted) → done (receipt accepted).</p></details></section>`;
+  return `<section class="panel"><div class="panel-header"><div><h2>Tracked jobs</h2><p class="muted">Work that goes through your approval and ends with an evidence receipt. Direct jobs to agents do not appear here — see Activity for those.</p></div><button class="button primary" id="ledger-new-task">Track a new job</button></div>
+    <div class="filters">${statuses.map((status) => `<button class="filter ${state.taskFilter === status ? "active" : ""}" data-filter="${status}">${status === "all" ? "All" : workStatus(status).label}</button>`).join("")}</div>${taskRows(tasks)}
+    <details class="legend"><summary>How a tracked job flows</summary>
+    <p class="muted"><strong>Waiting for your approval</strong> (someone suggested it — nothing happens until you say yes) → <strong>Approved</strong> → <strong>Being worked on</strong> (an agent has picked it up) → <strong>Needs your sign-off</strong> (the agent submitted evidence of what it did) → <strong>Done</strong>. If it shows <strong>Stuck</strong>, open it and read the last event.</p></details></section>`;
 }
-function renderAgents() {
-  const generated = state.agentStatus ? `Bridge heartbeats as of ${formatDate(state.agentStatus.generated_at)}; refreshes every ${STATUS_POLL_MS / 1000}s.` : "Bridge heartbeats unavailable.";
-  const retiredCount = (state.agentStatus?.agents || []).filter((agent) => agent.lifecycle_status === "retired").length;
-  return `<section class="panel"><div class="panel-header"><div><h2>Live agents</h2><p class="muted">${escapeHtml(generated)} Sorted healthiest and most recent first. Liveness is transport health from bridge heartbeats — it never changes task status.</p></div><div class="header-actions">${retiredCount ? `<button class="button secondary" data-toggle-retired>${state.showRetired ? "Hide" : "Show"} stood down (${retiredCount})</button>` : ""}<button class="button primary" data-compose="">Message an agent</button></div></div>${agentStatusRows()}
-  <details class="legend"><summary>Bridges vs channels</summary><p class="muted">A <strong>bridge</strong> is a background service on the Mac that drives a provider CLI on its own — it heartbeats around the clock, so Down means genuinely broken (run <code>npm run bridge:doctor</code>). A <strong>channel</strong> only exists inside an interactive session (for example Claude Code), so "No session" just means no session is open right now — it is not a fault.</p></details></section>`;
-}
+
 function selectorTarget(target) {
   const model = state.selector.models.find((entry) => entry.model_id === target.model_id);
   const surface = state.selector.surfaces.find((entry) => entry.surface_id === target.surface_id);
@@ -205,7 +258,7 @@ function selectorTarget(target) {
 function harnessCard(surface) {
   const capabilities = Object.entries(surface.harness?.capabilities || {}).filter(([, level]) => ["distinctive", "strong"].includes(level));
   const modelNames = (surface.models || []).map((id) => state.selector.models.find((model) => model.model_id === id)?.display_name || id);
-  return `<article class="harness-card"><div class="route-card-head"><div><p class="eyebrow">${escapeHtml(surface.harness?.kind || surface.execution || "surface")}</p><h3>${escapeHtml(surface.display_name)}</h3></div>${badge(surface.access)}</div>
+  return `<article class="harness-card"><div class="route-card-head"><div><p class="eyebrow">${escapeHtml(surface.harness?.kind || surface.execution || "surface")}</p><h3>${escapeHtml(surface.display_name)}</h3></div><span class="badge ${escapeHtml(surface.access)}">${escapeHtml(formatStatus(surface.access))}</span></div>
     <p class="muted harness-meta">${escapeHtml(surface.provider)} · ${escapeHtml(surface.installed_version || "Hosted")} · ${escapeHtml(formatStatus(surface.harness?.execution_location || surface.execution))}</p>
     <div class="capability-tags">${capabilities.map(([name, level]) => `<span class="capability ${escapeHtml(level)}">${escapeHtml(formatStatus(name))}</span>`).join("")}</div>
     <div class="harness-columns"><div><strong>Strengths</strong><ul>${(surface.harness?.strengths || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div><div><strong>Weaknesses</strong><ul>${(surface.harness?.weaknesses || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div></div>
@@ -223,13 +276,26 @@ function renderModels() {
     <section class="panel"><div class="panel-header"><div><h2>Advisory execution-stack routes</h2><p class="muted">Each route recommends a validated model × harness pairing. It never dispatches work.</p></div>${selector.workflow_templates.length ? '<button class="button primary" id="new-workflow-button">Set up review panel</button>' : ""}</div><div class="route-grid">${routes}</div></section>
     <section class="panel surface-panel"><div class="panel-header"><div><h2>Harness profiles</h2><p class="muted">Operational capability, access and weaknesses are tracked separately from intrinsic model quality.</p></div></div><div class="harness-grid">${selector.surfaces.map(harnessCard).join("")}</div></section>`;
 }
-function renderReviews() { return `<section class="panel"><div class="panel-header"><div><h2>Awaiting review</h2><p class="muted">Completion gates keep independent review visible and auditable.</p></div></div>${taskRows(state.tasks.filter((task) => task.status === "review"))}</section>`; }
 function renderUsage() {
   const rows = Object.entries(state.usage.by_agent || {});
   return `<div class="stats"><div class="stat"><small>Total recorded</small><strong>${formatNumber(state.usage.total_tokens)}</strong><div class="sub">tokens</div></div><div class="stat"><small>Estimated cost</small><strong>${state.usage.cost_known ? state.usage.estimated_cost.toFixed(2) : "—"}</strong><div class="sub">unknown values stay unknown</div></div></div>
   <section class="panel"><div class="panel-header"><div><h2>Usage by agent</h2><p class="muted">Provider receipts should supply these figures; the ledger never invents missing cost.</p></div></div>${rows.length ? `<div class="table-wrap"><table><thead><tr><th>Agent</th><th>Input</th><th>Output</th><th>Total</th><th>Estimated cost</th></tr></thead><tbody>${rows.map(([agent, usage]) => `<tr><td><strong>${escapeHtml(agent)}</strong></td><td>${formatNumber(usage.input_tokens)}</td><td>${formatNumber(usage.output_tokens)}</td><td>${formatNumber(usage.total_tokens)}</td><td>${usage.cost_known ? usage.estimated_cost.toFixed(2) : "Unknown"}</td></tr>`).join("")}</tbody></table></div>` : '<div class="empty">No run usage has been recorded yet.</div>'}</section>`;
 }
-function renderRoutes() { return `<section class="panel"><div class="panel-header"><div><h2>Agent Bus threads</h2><p class="muted">Routes show message delivery. They do not determine task status. Select a thread to read it and reply.</p></div><button class="button primary" data-compose="">New message</button></div>${state.threads.length ? `<div class="table-wrap"><table><thead><tr><th>Thread</th><th>Status</th><th>Participants</th><th>Updated</th></tr></thead><tbody>${state.threads.map((thread) => `<tr class="clickable" data-thread-id="${escapeHtml(thread.thread_id)}"><td class="title-cell"><strong>${escapeHtml(thread.subject)}</strong><small>${escapeHtml(thread.thread_id)}</small></td><td>${badge(thread.status)}</td><td>${escapeHtml((thread.participants || []).join(" → "))}</td><td>${escapeHtml(formatDate(thread.updated))}</td></tr>`).join("")}</tbody></table></div>` : '<div class="empty">No Agent Bus threads yet.</div>'}</section>`; }
+
+function render() {
+  const [eyebrow, title] = labels[state.view];
+  document.querySelector("#view-eyebrow").textContent = eyebrow; document.querySelector("#view-title").textContent = title;
+  document.querySelectorAll(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === state.view));
+  const views = { home: renderHome, agents: renderAgents, activity: renderActivity, ledger: renderLedger, models: renderModels, usage: renderUsage };
+  content.innerHTML = views[state.view]();
+  const search = document.querySelector("#activity-search");
+  if (search) {
+    search.addEventListener("input", () => { state.activityQuery = search.value; render(); document.querySelector("#activity-search")?.focus(); });
+    if (state.activityQuery) { search.focus(); search.setSelectionRange(search.value.length, search.value.length); }
+  }
+}
+
+// ---------- dialogs ----------
 
 function openCompose(agentId) {
   const select = document.querySelector("#compose-to");
@@ -238,14 +304,21 @@ function openCompose(agentId) {
   composeDialog.showModal();
 }
 
+function extractFiles(body) {
+  const matches = String(body || "").match(/(?:file:\/\/)?(\/(?:Users|srv|tmp|Volumes)\/[^\s)`'"<>\]]+)/g) || [];
+  return [...new Set(matches.map((match) => match.replace(/^file:\/\//, "").replace(/[.,;:]+$/, "")))];
+}
+
 async function showThread(threadId) {
   try {
     const thread = await api(`/api/v1/threads/${encodeURIComponent(threadId)}`);
     const others = (thread.participants || []).filter((participant) => participant !== "tony");
+    const files = extractFiles(thread.body);
     threadDialog.dataset.threadId = threadId;
-    document.querySelector("#thread-detail").innerHTML = `<div class="dialog-header"><div><p class="eyebrow">${escapeHtml(threadId)}</p><h2>${escapeHtml(thread.subject)}</h2></div><button class="icon-button" data-close-thread aria-label="Close">×</button></div>
-      <p class="muted">${badge(thread.status)} · ${escapeHtml((thread.participants || []).join(" → "))} · updated ${escapeHtml(formatDate(thread.updated))}</p>
-      <pre class="thread-body">${escapeHtml(thread.body || "(empty thread)")}</pre>`;
+    document.querySelector("#thread-detail").innerHTML = `<div class="dialog-header"><div><p class="eyebrow">JOB</p><h2>${escapeHtml(thread.subject)}</h2></div><button class="icon-button" data-close-thread aria-label="Close">×</button></div>
+      <p class="muted">${chip(jobStatus(thread.status))} · ${escapeHtml((thread.participants || []).join(" → "))} · updated ${escapeHtml(formatDate(thread.updated))}</p>
+      ${files.length ? `<div class="files-box"><strong>Files mentioned in this job</strong>${files.map((file) => `<code>${escapeHtml(file)}</code>`).join("")}</div>` : ""}
+      <pre class="thread-body">${escapeHtml(thread.body || "(empty job)")}</pre>`;
     const replyTo = document.querySelector("#reply-to");
     replyTo.innerHTML = (others.length ? others : (thread.participants || [])).map((participant) => `<option value="${escapeHtml(participant)}">${escapeHtml(participant)}</option>`).join("");
     document.querySelector("#reply-form").hidden = !replyTo.innerHTML;
@@ -253,24 +326,44 @@ async function showThread(threadId) {
   } catch (error) { showNotice(error.message, true); }
 }
 
-function render() {
-  const [eyebrow, title] = labels[state.view];
-  document.querySelector("#view-eyebrow").textContent = eyebrow; document.querySelector("#view-title").textContent = title;
-  document.querySelectorAll(".nav-item").forEach((button) => button.classList.toggle("active", button.dataset.view === state.view));
-  const views = { overview: renderOverview, tasks: renderTasks, agents: renderAgents, models: renderModels, reviews: renderReviews, usage: renderUsage, routes: renderRoutes };
-  content.innerHTML = views[state.view]();
+function showAgent(agentId) {
+  const agent = statusFor(agentId);
+  if (!agent) { showNotice(`Unknown agent: ${agentId}`, true); return; }
+  const p = presence(agent);
+  const history = agentActivity(agentId).slice(0, 20);
+  const retired = agent.lifecycle_status === "retired";
+  const kindLine = agent.connection === "channel"
+    ? "Session-based: reachable while a Claude Code session is open."
+    : `Always-on service on ${agent.host || "the Mac"}${agent.bridge_version ? ` (v${agent.bridge_version})` : ""}. If it goes offline, run npm run bridge:doctor in a terminal for the exact fix.`;
+  document.querySelector("#agent-detail").innerHTML = `<div class="dialog-header"><div><p class="eyebrow">${escapeHtml(agent.agent_id)}</p><h2>${escapeHtml(agent.display_name)}</h2></div><button class="icon-button" data-close-agent aria-label="Close">×</button></div>
+    <p class="muted">${chip(p)} ${escapeHtml(p.detail || "")}</p>
+    <p class="muted">${escapeHtml(kindLine)}</p>
+    <div class="detail-actions"><button class="button primary" data-compose="${escapeHtml(agent.agent_id)}">Give it a job</button>
+      <button class="button secondary" data-stand-down="${escapeHtml(agent.agent_id)}" data-next="${retired ? "active" : "retired"}">${retired ? "Reactivate" : "Stand down"}</button></div>
+    <h3>What it has done</h3>
+    ${activityRows(history, "No jobs yet. Give it one.")}`;
+  if (!agentDialog.open) agentDialog.showModal();
+}
+
+async function setAgentLifecycle(agentId, status) {
+  try {
+    await api(`/api/v1/agents/${encodeURIComponent(agentId)}/lifecycle`, { method: "POST", body: JSON.stringify({ status, actor: "tony" }) });
+    if (agentDialog.open) agentDialog.close();
+    showNotice(status === "retired" ? `${agentId} stood down. Its history is kept — reactivate it any time from "Show stood down".` : `${agentId} is back in the rotation.`);
+    await load();
+  } catch (error) { showNotice(error.message, true); }
 }
 
 async function showTask(workItemId) {
   try {
     const { item, events } = await api(`/api/v1/work-items/${encodeURIComponent(workItemId)}`);
     const actions = [];
-    if (item.status === "proposed") actions.push('<button class="button primary" data-action="approve">Approve proposal</button>');
-    if (item.status === "ready" && !item.current_assignment) actions.push('<button class="button primary" data-action="assign">Assign agent</button>');
+    if (item.status === "proposed") actions.push('<button class="button primary" data-action="approve">Approve — let it start</button>');
+    if (item.status === "ready" && !item.current_assignment) actions.push('<button class="button primary" data-action="assign">Choose an agent</button>');
     if (item.status === "ready" && item.current_assignment) actions.push('<button class="button primary" data-action="start">Record run started</button>');
     detailDialog.dataset.taskId = workItemId;
-    document.querySelector("#task-detail").innerHTML = `<div class="dialog-header"><div><p class="eyebrow">${escapeHtml(item.source_ref)}</p><h2>${escapeHtml(item.title)}</h2></div><button class="icon-button" data-close-detail aria-label="Close">×</button></div>
-      <p>${escapeHtml(item.objective)}</p><div class="detail-meta"><div class="meta-card"><small>Status</small>${badge(item.status)}</div><div class="meta-card"><small>Asked by</small><strong>${escapeHtml(item.proposed_by || "unknown")}</strong></div><div class="meta-card"><small>Human owner</small><strong>${escapeHtml(item.human_owner)}</strong></div><div class="meta-card"><small>Doing it</small><strong>${escapeHtml(item.current_assignment?.agent_id || "Unassigned")}</strong></div><div class="meta-card"><small>Review</small><strong>${escapeHtml(formatStatus(item.review_policy))}</strong></div><div class="meta-card"><small>Budget</small><strong>${item.budget_tokens === null ? "Not set" : `${formatNumber(item.budget_tokens)} tokens`}</strong></div><div class="meta-card"><small>Runs</small><strong>${item.runs.length}</strong></div></div>
+    document.querySelector("#task-detail").innerHTML = `<div class="dialog-header"><div><p class="eyebrow">TRACKED JOB · ${escapeHtml(item.source_ref)}</p><h2>${escapeHtml(item.title)}</h2></div><button class="icon-button" data-close-detail aria-label="Close">×</button></div>
+      <p>${escapeHtml(item.objective)}</p><div class="detail-meta"><div class="meta-card"><small>Status</small>${chip(workStatus(item.status))}</div><div class="meta-card"><small>Asked by</small><strong>${escapeHtml(item.proposed_by || "unknown")}</strong></div><div class="meta-card"><small>Doing it</small><strong>${escapeHtml(item.current_assignment?.agent_id || "No one yet")}</strong></div><div class="meta-card"><small>Sign-off</small><strong>${escapeHtml(item.review_policy === "human" ? "You" : item.review_policy === "independent_agent" ? "Another agent" : "None")}</strong></div><div class="meta-card"><small>Budget</small><strong>${item.budget_tokens === null ? "Not set" : `${formatNumber(item.budget_tokens)} tokens`}</strong></div><div class="meta-card"><small>Runs</small><strong>${item.runs.length}</strong></div></div>
       <div class="detail-actions">${actions.join("")}</div><h3>History</h3><div class="event-list">${events.slice().reverse().map((event) => `<div class="event"><strong>${escapeHtml(formatStatus(event.type))}</strong><br><small>${escapeHtml(event.actor)} · ${escapeHtml(formatDate(event.created_at))}</small></div>`).join("")}</div>`;
     detailDialog.showModal();
   } catch (error) { showNotice(error.message, true); }
@@ -279,20 +372,23 @@ async function showTask(workItemId) {
 async function taskAction(action, workItemId) {
   if (action === "approve") await api(`/api/v1/work-items/${encodeURIComponent(workItemId)}/transition`, { method: "POST", body: JSON.stringify({ status: "ready", actor: "tony", reason: "Approved in dashboard" }) });
   if (action === "assign") {
-    const agentId = window.prompt(`Assign to agent (${state.agents.map((agent) => agent.agent_id).join(", ")}):`, "codex");
+    const agentId = window.prompt(`Which agent should do it? (${state.agents.map((agent) => agent.agent_id).join(", ")}):`, "codex");
     if (!agentId) return;
     await api(`/api/v1/work-items/${encodeURIComponent(workItemId)}/assign`, { method: "POST", body: JSON.stringify({ agent_id: agentId, assigned_by: "tony" }) });
   }
   if (action === "start") await api(`/api/v1/work-items/${encodeURIComponent(workItemId)}/runs`, { method: "POST", body: JSON.stringify({ actor: "tony", provider: "manual" }) });
-  detailDialog.close(); await load(); showNotice("Work item updated.");
+  detailDialog.close(); await load(); showNotice("Updated.");
 }
 
+// ---------- events ----------
+
 document.addEventListener("click", async (event) => {
-  // Close buttons and dialog actions must be handled before the generic row
-  // matchers: the open dialogs carry data-task-id/data-thread-id themselves,
-  // so a dialog-wide closest() match would swallow every click inside them.
+  // Close buttons and dialog actions come before the generic row matchers:
+  // the open dialogs carry data ids themselves, so a dialog-wide closest()
+  // match would swallow every click inside them.
   if (event.target.closest("[data-close-detail]")) { detailDialog.close(); return; }
   if (event.target.closest("[data-close-thread]")) { threadDialog.close(); return; }
+  if (event.target.closest("[data-close-agent]")) { agentDialog.close(); return; }
   const action = event.target.closest("[data-action]");
   if (action && detailDialog.open) {
     try { await taskAction(action.dataset.action, detailDialog.dataset.taskId); } catch (error) { showNotice(error.message, true); }
@@ -301,15 +397,31 @@ document.addEventListener("click", async (event) => {
   const nav = event.target.closest("[data-view], [data-switch]");
   if (nav) { state.view = nav.dataset.view || nav.dataset.switch; render(); return; }
   const filter = event.target.closest("[data-filter]"); if (filter) { state.taskFilter = filter.dataset.filter; render(); return; }
+  const activityFilter = event.target.closest("[data-activity-filter]");
+  if (activityFilter) { state.activityFilter = activityFilter.dataset.activityFilter; render(); return; }
   const retiredToggle = event.target.closest("[data-toggle-retired]");
   if (retiredToggle) { state.showRetired = !state.showRetired; render(); return; }
   const standDown = event.target.closest("[data-stand-down]");
   if (standDown) { await setAgentLifecycle(standDown.dataset.standDown, standDown.dataset.next); return; }
   const compose = event.target.closest("[data-compose]"); if (compose) { openCompose(compose.dataset.compose); return; }
+  const opener = event.target.closest("[data-open-kind]");
+  if (opener) {
+    if (opener.dataset.openKind === "thread") { await showThread(opener.dataset.openId); } else { await showTask(opener.dataset.openId); }
+    return;
+  }
   const threadLink = event.target.closest("button[data-thread-id], tr[data-thread-id]");
   if (threadLink) { await showThread(threadLink.dataset.threadId); return; }
+  const agentCardEl = event.target.closest("[data-agent]");
+  if (agentCardEl) { showAgent(agentCardEl.dataset.agent); return; }
   const row = event.target.closest("tr[data-task-id]"); if (row) { await showTask(row.dataset.taskId); return; }
+  if (event.target.closest("#ledger-new-task")) { taskDialog.showModal(); return; }
+  if (event.target.closest("#new-workflow-button")) {
+    const select = document.querySelector("#workflow-template");
+    select.innerHTML = state.selector.workflow_templates.map((template) => `<option value="${escapeHtml(template.template_id)}">${escapeHtml(template.title)}</option>`).join("");
+    workflowDialog.showModal();
+  }
 });
+
 document.querySelector("#compose-form").addEventListener("submit", async (event) => {
   if (event.submitter?.value !== "submit") return;
   event.preventDefault();
@@ -325,7 +437,7 @@ document.querySelector("#compose-form").addEventListener("submit", async (event)
       ack_required: true,
     }) });
     composeDialog.close(); form.reset();
-    showNotice(`Sent ${sent.message_id} on ${sent.thread_id}.`);
+    showNotice(`Sent. Watch it under Happening now — the agent usually picks it up within a minute.`);
     await load();
   } catch (error) { showNotice(error.message, true); }
 });
@@ -335,25 +447,19 @@ document.querySelector("#reply-form").addEventListener("submit", async (event) =
   const form = event.currentTarget;
   const data = Object.fromEntries(new FormData(form));
   try {
-    const sent = await api(`/api/v1/threads/${encodeURIComponent(threadDialog.dataset.threadId)}/reply`, { method: "POST", body: JSON.stringify({
+    await api(`/api/v1/threads/${encodeURIComponent(threadDialog.dataset.threadId)}/reply`, { method: "POST", body: JSON.stringify({
       from: "tony",
       to: data.to,
       body: data.body,
       requires_response: data.requires_response === "on",
     }) });
     form.reset();
-    showNotice(`Replied with ${sent.message_id}.`);
+    showNotice("Reply sent on the same job.");
     await showThread(threadDialog.dataset.threadId);
   } catch (error) { showNotice(error.message, true); }
 });
-document.querySelector("#new-task-button").addEventListener("click", () => taskDialog.showModal());
 document.querySelector("#refresh-button").addEventListener("click", load);
-document.addEventListener("click", (event) => {
-  if (!event.target.closest("#new-workflow-button")) return;
-  const select = document.querySelector("#workflow-template");
-  select.innerHTML = state.selector.workflow_templates.map((template) => `<option value="${escapeHtml(template.template_id)}">${escapeHtml(template.title)}</option>`).join("");
-  workflowDialog.showModal();
-});
+document.querySelector("#give-job-button").addEventListener("click", () => openCompose(""));
 document.querySelector("#task-form").addEventListener("submit", async (event) => {
   if (event.submitter?.value !== "submit") return;
   event.preventDefault();
@@ -362,7 +468,7 @@ document.querySelector("#task-form").addEventListener("submit", async (event) =>
   data.acceptance_criteria = data.acceptance_criteria.split("\n").map((line) => line.trim()).filter(Boolean);
   data.budget_tokens = data.budget_tokens ? Number(data.budget_tokens) : null;
   data.human_owner = "tony"; data.proposed_by = "tony";
-  try { await api("/api/v1/work-items", { method: "POST", body: JSON.stringify(data) }); taskDialog.close(); form.reset(); await load(); state.view = "tasks"; render(); showNotice("Proposal created. It has not been dispatched."); }
+  try { await api("/api/v1/work-items", { method: "POST", body: JSON.stringify(data) }); taskDialog.close(); form.reset(); await load(); state.view = "ledger"; render(); showNotice("Tracked job created. Open it and press Approve when you are ready for an agent to start."); }
   catch (error) { showNotice(error.message, true); }
 });
 document.querySelector("#workflow-form").addEventListener("submit", async (event) => {
@@ -378,14 +484,14 @@ document.querySelector("#workflow-form").addEventListener("submit", async (event
     const result = await api(`/api/v1/model-selector/templates/${encodeURIComponent(templateId)}/propose`, { method: "POST", body: JSON.stringify(data) });
     workflowDialog.close();
     await load();
-    state.view = "tasks";
+    state.view = "ledger";
     render();
     showNotice(`${result.created.length} linked proposals created. Nothing has been dispatched.`);
   } catch (error) { showNotice(error.message, true); }
 });
 document.addEventListener("keydown", (event) => {
   if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
-  const views = ["overview", "tasks", "agents", "models", "reviews", "usage", "routes"];
+  const views = ["home", "agents", "activity", "ledger", "models", "usage"];
   const index = Number(event.key) - 1; if (views[index]) { state.view = views[index]; render(); }
 });
 load();

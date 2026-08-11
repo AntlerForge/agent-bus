@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <meta name="agent-bus-base-path" content="__AGENT_BUS_BASE_PATH__">
-    <title>Agent Control Plane</title>
+    <title>Agent Bus</title>
     <link rel="stylesheet" href="__AGENT_BUS_BASE_PATH__/styles.css">
   </head>
   <body>
@@ -13,67 +13,68 @@
       <aside class="sidebar">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">AB</span>
-          <div><strong>Agent Bus</strong><small>Control plane</small></div>
+          <div><strong>Agent Bus</strong><small>Your agents</small></div>
         </div>
         <nav aria-label="Dashboard sections">
-          <button class="nav-item active" data-view="overview"><span>Overview</span><kbd>1</kbd></button>
-          <button class="nav-item" data-view="tasks"><span>Tasks</span><kbd>2</kbd></button>
-          <button class="nav-item" data-view="agents"><span>Agents</span><kbd>3</kbd></button>
-          <button class="nav-item" data-view="models"><span>Model routes</span><kbd>4</kbd></button>
-          <button class="nav-item" data-view="reviews"><span>Reviews</span><kbd>5</kbd></button>
+          <button class="nav-item active" data-view="home"><span>Home</span><kbd>1</kbd></button>
+          <button class="nav-item" data-view="agents"><span>Agents</span><kbd>2</kbd></button>
+          <button class="nav-item" data-view="activity"><span>Activity</span><kbd>3</kbd></button>
+          <button class="nav-item" data-view="ledger"><span>Tracked jobs</span><kbd>4</kbd></button>
+          <button class="nav-item" data-view="models"><span>Model routes</span><kbd>5</kbd></button>
           <button class="nav-item" data-view="usage"><span>Usage</span><kbd>6</kbd></button>
-          <button class="nav-item" data-view="routes"><span>Messages</span><kbd>7</kbd></button>
         </nav>
         <div class="boundary-note">
           <span class="status-dot"></span>
-          <div><strong>A6 ledger</strong><small>Agent Bus carries messages.<br>Ledger owns task status.</small></div>
+          <div><strong>Private</strong><small>Runs on A6, reachable<br>only from your machines.</small></div>
         </div>
       </aside>
 
       <main>
         <header class="topbar">
           <div>
-            <p class="eyebrow" id="view-eyebrow">CONTROL PLANE</p>
-            <h1 id="view-title">Overview</h1>
+            <p class="eyebrow" id="view-eyebrow">YOUR AGENTS AT A GLANCE</p>
+            <h1 id="view-title">Home</h1>
           </div>
           <div class="top-actions">
             <button class="button secondary" id="refresh-button">Refresh</button>
-            <button class="button primary" id="new-task-button">New task</button>
+            <button class="button primary" id="give-job-button">Give an agent a job</button>
           </div>
         </header>
         <div id="notice" class="notice" hidden></div>
-        <section id="content" aria-live="polite"><div class="loading">Loading ledger…</div></section>
+        <section id="content" aria-live="polite"><div class="loading">Loading…</div></section>
       </main>
     </div>
 
     <dialog id="task-dialog">
       <form method="dialog" id="task-form">
-        <div class="dialog-header"><div><p class="eyebrow">NEW WORK ITEM</p><h2>Propose a task</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
-        <p class="form-help">New tasks enter the proposal inbox. They do not dispatch themselves.</p>
-        <label>Title<input name="title" required maxlength="140" placeholder="Review the routing implementation"></label>
-        <label>Objective<textarea name="objective" required rows="4" placeholder="Describe the outcome, not just an activity."></textarea></label>
+        <div class="dialog-header"><div><p class="eyebrow">TRACKED JOB</p><h2>Track a new job</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+        <p class="form-help">A tracked job goes through your approval, gets worked by an agent, and ends with an evidence receipt you sign off. For a quick one-off, use "Give an agent a job" instead.</p>
+        <label>Title<input name="title" required maxlength="140" placeholder="Generate the AF-004 artwork set"></label>
+        <label>What does done look like?<textarea name="objective" required rows="4" placeholder="Describe the outcome you want, not just an activity."></textarea></label>
         <div class="form-grid">
-          <label>Source reference<input name="source_ref" required placeholder="BL119, T123 or GitHub issue URL"></label>
+          <label>Where did this come from?<input name="source_ref" required placeholder="A note, backlog id or link"></label>
           <label>Project<input name="project" value="agent-bus"></label>
-          <label>Review policy<select name="review_policy"><option value="none">No gate</option><option value="human">Human approval</option><option value="independent_agent">Independent agent</option></select></label>
+          <label>Who signs it off?<select name="review_policy"><option value="human">Me</option><option value="independent_agent">Another agent</option><option value="none">No sign-off</option></select></label>
           <label>Token budget<input name="budget_tokens" type="number" min="0" step="1000" placeholder="Optional"></label>
         </div>
-        <label>Acceptance criteria<textarea name="acceptance_criteria" rows="3" placeholder="One criterion per line"></textarea></label>
-        <div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="submit">Create proposal</button></div>
+        <label>How will you know it worked?<textarea name="acceptance_criteria" rows="3" placeholder="One check per line"></textarea></label>
+        <div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="submit">Create — I approve it next</button></div>
       </form>
     </dialog>
 
     <dialog id="task-detail-dialog" class="detail-dialog"><div id="task-detail"></div></dialog>
 
+    <dialog id="agent-dialog" class="detail-dialog"><div id="agent-detail"></div></dialog>
+
     <dialog id="compose-dialog">
       <form method="dialog" id="compose-form">
-        <div class="dialog-header"><div><p class="eyebrow">AGENT BUS MESSAGE</p><h2>Message an agent</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
-        <p class="form-help">This sends a transport message on a new thread. It does not approve, assign or dispatch ledger work.</p>
-        <label>To<select name="to" id="compose-to" required></select></label>
-        <label>Subject<input name="subject" required maxlength="140" placeholder="What do you need?"></label>
-        <label>Message<textarea name="body" required rows="6" placeholder="The bridge acknowledges, runs the task on its native CLI and replies on this thread."></textarea></label>
-        <label class="checkbox-label"><input type="checkbox" name="requires_response" checked> Ask the agent to respond</label>
-        <div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="submit">Send message</button></div>
+        <div class="dialog-header"><div><p class="eyebrow">DIRECT JOB</p><h2>Give an agent a job</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+        <p class="form-help">Write it like a message to a colleague. The agent picks it up on its own machine, does the work, and replies on this job — watch it under Happening now on Home.</p>
+        <label>Which agent<select name="to" id="compose-to" required></select></label>
+        <label>What is the job, in a few words<input name="subject" required maxlength="140" placeholder="Generate 8 image options for AF-004"></label>
+        <label>The details<textarea name="body" required rows="6" placeholder="What you want, where the inputs are, and where the results should go."></textarea></label>
+        <label class="checkbox-label"><input type="checkbox" name="requires_response" checked> The agent must reply when done</label>
+        <div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="submit">Send the job</button></div>
       </form>
     </dialog>
 
@@ -81,15 +82,15 @@
       <div id="thread-detail"></div>
       <form method="dialog" id="reply-form">
         <label>Reply to<select name="to" id="reply-to" required></select></label>
-        <label>Reply<textarea name="body" required rows="4" placeholder="Reply on this thread"></textarea></label>
-        <label class="checkbox-label"><input type="checkbox" name="requires_response"> Ask for another response</label>
+        <label>Reply<textarea name="body" required rows="4" placeholder="Follow up on this job"></textarea></label>
+        <label class="checkbox-label"><input type="checkbox" name="requires_response"> Ask for another reply</label>
         <div class="dialog-actions"><button class="button secondary" value="cancel">Close</button><button class="button primary" value="submit">Send reply</button></div>
       </form>
     </dialog>
     <dialog id="workflow-dialog">
       <form method="dialog" id="workflow-form">
         <div class="dialog-header"><div><p class="eyebrow">ROUTING TEMPLATE</p><h2>Propose a review workflow</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
-        <p class="form-help">This creates linked proposals only. You still approve and assign each work item.</p>
+        <p class="form-help">This creates linked proposals only. You still approve and assign each tracked job.</p>
         <label>Workflow template<select name="template_id" id="workflow-template" required></select></label>
         <label>Subject<input name="subject" required placeholder="Chapter 38"></label>
         <div class="form-grid">
