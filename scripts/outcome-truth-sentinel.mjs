@@ -4,6 +4,7 @@ import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { applyEvaluation, loadCards, loadMatrix, saveCards } from "../src/outcome-truth/core.mjs";
 import { renderEstateStatus } from "../src/estate-status/render.mjs";
+import { dispatchOutcomeFailure } from "../src/estate-steward/dispatch.mjs";
 
 const execFile = promisify(execFileCb);
 const args = Object.fromEntries(process.argv.slice(2).map((v, i, a) => v.startsWith("--") ? [v.slice(2), a[i + 1]] : null).filter(Boolean));
@@ -26,6 +27,19 @@ async function collect() {
   const borgAgeMinutes = (Date.now() - borgTime) / 60000;
   const macFile = process.env.OUTCOME_MAC_SNAPSHOT || `${stateDir}/mac-snapshot.json`;
   const macOut = await fs.readFile(macFile, "utf8");
+  let estateSteward = { healthy: false, age_minutes: Number.POSITIVE_INFINITY, contract_version: null };
+  try {
+    const estateSnapshot = JSON.parse(await fs.readFile(
+      process.env.ESTATE_STEWARD_SNAPSHOT || "/srv/projects/Personal/estate-monitor/runtime/status.json",
+      "utf8",
+    ));
+    const estateAgeMinutes = (Date.now() - Date.parse(estateSnapshot.generatedAt)) / 60000;
+    estateSteward = {
+      healthy: estateSnapshot.contractVersion === "2.0" && Number.isFinite(estateAgeMinutes) && estateAgeMinutes <= 5,
+      age_minutes: estateAgeMinutes,
+      contract_version: estateSnapshot.contractVersion || null,
+    };
+  } catch {}
   const ledger = (await fs.readFile("/srv/kv/vault/_cache/automations/run-ledger.jsonl", "utf8"))
     .trim().split("\n").map((line) => JSON.parse(line)).filter((row) => row.automation_id === "kv-daily-synthesis");
   const synthesisOutcome = ledger.filter((row) => row.event !== "run_started").at(-1);
@@ -72,14 +86,8 @@ async function collect() {
       latest_run_age_minutes: synthesisRun ? (Date.now() - Date.parse(synthesisRun.ts)) / 60000 : Number.POSITIVE_INFINITY,
     },
     sandbox: { ok: true },
+    estate_steward: estateSteward,
   };
-}
-
-async function notify(transition) {
-  if (!transition.notify || process.env.OUTCOME_NO_NOTIFY === "1") return;
-  const recovered = transition.type === "recovered";
-  const body = `${recovered ? "RECOVERED" : "FAILED"}: ${transition.card.check_id}${recovered ? " passed its semantic recovery contract" : " requires attention"}`;
-  await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", "ALERT", "--id", `outcome-${transition.card.card_id}-${transition.type}-${transition.card.last_seen}`, "--message", body, "--url", statusUrl]);
 }
 
 const matrix = await loadMatrix(matrixFile);
@@ -92,10 +100,8 @@ const outcome = applyEvaluation({ matrix, snapshot, previous, now, shadowStarted
 await saveCards(cardsFile, outcome.cards);
 await fs.writeFile(`${stateDir}/heartbeat`, `${now}\n`, { mode: 0o600 });
 await renderEstateStatus({ runtimeRoot, generatedAt: now, statusUrl });
-for (const transition of outcome.transitions) await notify(transition);
-if (process.env.OUTCOME_DAILY_INFO === "1" && outcome.results.every((r) => r.state === "pass")) {
-  const message = process.env.OUTCOME_INFO_MESSAGE || "All enabled semantic contracts are healthy.";
-  await execFile(process.execPath, ["scripts/ha-notify-tony.mjs", "--class", "INFO", "--id", `outcome-all-clear-${now.slice(0,10)}`, "--message", message]);
+for (const transition of outcome.transitions) {
+  await dispatchOutcomeFailure({ transition, evidencePath: cardsFile });
 }
 await renderEstateStatus({ runtimeRoot, generatedAt: now, statusUrl });
 console.log(JSON.stringify(outcome));

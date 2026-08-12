@@ -13,6 +13,7 @@ test("July replay catches named failures and ignores van and HA noise", () => {
   assert.ok(matrix.checks.some((check) => check.id === "mac-repo-risk-sweep-freshness"));
   assert.ok(matrix.checks.some((check) => check.id === "mac-retired-local-bus-write"));
   assert.ok(matrix.checks.some((check) => check.id === "kv-daily-synthesis-run-freshness"));
+  assert.ok(matrix.checks.some((check) => check.id === "estate-steward-freshness"));
   assert.ok(ids.includes("a6-legacy-rsync-semantic-outcome"));
   for (const id of ["mac-launchagent-share-mount", "mac-launchagent-runtime-check", "mac-launchagent-developer-mirrors", "mac-launchagent-project-store"]) assert.ok(ids.includes(id));
   assert.equal(ids.some((id) => /spaniel|home.assistant|entity/.test(id)), false);
@@ -36,12 +37,11 @@ test("cards deduplicate and close only after semantic recovery", () => {
   assert.equal(recovered.transitions.every((t) => !t.notify), true);
 });
 
-test("sentinel emits only ALERT transition requests and daily INFO is separate", async () => {
+test("sentinel and deadman dispatch to Estate Steward agents, never directly to HA", async () => {
   const sources = await Promise.all(["scripts/outcome-truth-sentinel.mjs", "scripts/outcome-truth-deadman.mjs"].map((f) => fs.readFile(f,"utf8")));
-  assert.equal(sources.join("\n").includes('"--class", "APPROVAL"'), false);
-  assert.match(sources[0], /"--class", "INFO"/);
-  assert.match(sources[1], /"--class", "ALERT"/);
-  assert.equal(sources.join("\n").includes('"--title"'), false);
+  assert.equal(sources.join("\n").includes("ha-notify-tony.mjs"), false);
+  assert.match(sources[0], /dispatchOutcomeFailure/);
+  assert.match(sources[1], /dispatchSentinelDeadman/);
 });
 
 test("an induced sandbox fault opens once and semantic recovery closes it", () => {

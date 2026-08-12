@@ -94,9 +94,9 @@ namespace: project:agent-bus
 title: "Outcome-truth exception sentinel"
 description: |
   Does: evaluate versioned semantic outcome contracts on A6, persist deduplicated cards,
-  consume a read-only Mac snapshot, and notify state transitions through Home Assistant.
-  Does not: remediate failures, monitor HA entity availability, implement SpanielBus checks,
-  or use APPROVAL notifications.
+  consume a read-only Mac snapshot, and dispatch sustained failures to a repair agent.
+  Does not: notify Tony directly, monitor HA entity availability, implement SpanielBus
+  checks, or use APPROVAL notifications.
 owner: tony
 status: active
 properties:
@@ -104,13 +104,13 @@ properties:
   tech: "Node.js, YAML, systemd and a minimal macOS LaunchAgent reporter"
   responsibilities:
     - "Evaluate declared semantic recovery contracts"
-    - "Persist stable exception cards and transition-only notifications"
+    - "Persist stable exception cards and transition-only agent dispatches"
     - "Expose an independently monitored heartbeat"
     - "Regenerate the durable Estate Status projection after every evaluation"
   non_responsibilities:
     - "Auto-remediation, telemetry monitoring or approval authority"
 relations:
-  - to: Component:project:agent-bus/ha-notification-channel
+  - to: Component:project:agent-bus/bus-core
     type: depends-on
   - to: DataStore:project:agent-bus/outcome-card-files
     type: writes-to
@@ -122,7 +122,8 @@ namespace: project:agent-bus
 title: "Waiting-on-Tony decision queue"
 description: |
   Does: read authoritative A6 stores, normalise age/SLA state, and produce a bounded
-  decision pack. Does not: approve work, mutate KV records, or integrate with the KV dashboard.
+  decision pack. Does not: approve work, mutate KV records, represent queue counts as
+  infrastructure failure, or notify Tony directly.
 owner: tony
 status: active
 properties:
@@ -131,13 +132,11 @@ properties:
   responsibilities:
     - "Aggregate declared waiting states without changing their source stores"
     - "Skip and visibly log incomplete work-item directories while preserving failures for other read errors"
-    - "Emit transition-only SLA alerts and a weekly INFO decision pack"
+    - "Persist transition-only SLA evidence and a weekly decision pack"
     - "Render queue breach summaries and refresh the shared Estate Status projection"
   non_responsibilities:
     - "Approval authority, automatic expiry, or dashboard integration"
-relations:
-  - to: Component:project:agent-bus/ha-notification-channel
-    type: depends-on
+relations: []
 ---
 apiVersion: arch.kv/v1
 kind: Component

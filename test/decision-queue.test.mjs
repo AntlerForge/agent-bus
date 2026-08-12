@@ -24,8 +24,8 @@ test("decision queue is read-only toward source authorities", () => {
   assert.doesNotMatch(source, /execFile\([^\n]*(ingest\.py|board\.py)|writeFile\([^)]*vault|"--class",\s*"APPROVAL"/);
   assert.match(source, /expiry_draft/);
   assert.match(source, /newBreaches/);
-  assert.doesNotMatch(source, /phoneUrl\("queue\.json"\)/);
-  assert.match(source, /phoneUrl\("breach-summary\.md"\)/);
+  assert.doesNotMatch(source, /ha-notify-tony\.mjs|phoneUrl\(/);
   assert.match(source, /renderEstateStatus/);
   assert.match(source, /collectRepoRisks/);
+  assert.match(source, /incomplete_work_item_skipped/);
 });

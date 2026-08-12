@@ -119,6 +119,14 @@ checks:
     operator: equals
     expected: true
     recovery: a later evaluation observes the induced contract healthy
+  - id: estate-steward-freshness
+    area: monitoring
+    owner: tony
+    severity: hard
+    source: estate_steward.healthy
+    operator: equals
+    expected: true
+    recovery: the Estate Steward publishes a valid contract 2.0 snapshot no more than five minutes old
 reserved_checks:
   - id: spanielbus-bm2-freshness
     enabled: false

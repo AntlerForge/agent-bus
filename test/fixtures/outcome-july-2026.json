@@ -21,5 +21,6 @@
   },
   "synthesis":{"latest_clean":false,"latest_run_age_minutes":600},
   "sandbox":{"ok":true},
+  "estate_steward":{"healthy":true},
   "noise":{"kv_spanielbus_sync_failures":854,"ha_unavailable_entities":119}
 }

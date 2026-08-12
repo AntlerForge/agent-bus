@@ -1,0 +1,43 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0015-route-observations-to-estate-steward
+namespace: project:agent-bus
+title: "Route operational observations to Estate Steward instead of Tony"
+status: active
+owner: tony
+properties:
+  date: 2026-08-12
+  component: outcome-truth-sentinel
+  tags: [ux, notifications, estate-steward, outcome-truth, decision-queue]
+  context: |
+    Agent Bus's outcome sentinel and mixed waiting-on-Tony queue could each send
+    mobile alerts. This bypassed the newer Estate Monitor agent-first route,
+    mixed ordinary task ageing with service failure, and sent Tony to a generic
+    Tasks page with no single action. Multiple notification authorities made it
+    impossible to offer a coherent estate-maintenance experience.
+  decision: |
+    Remove direct mobile delivery authority from the outcome sentinel and
+    decision queue. Outcome failures remain durable and dispatch an idempotent
+    diagnostic/repair message to the Codex bridge; they are available to Estate
+    Steward as evidence. The decision queue remains a read-only planning view
+    and never represents its count as infrastructure failure. Home Assistant
+    notification code remains available for explicit approvals and for the one
+    central Estate Steward escalation policy, but observation producers may not
+    call it directly.
+  consequences:
+    positive: "Tony receives one coherent incident experience while outcome truth and queue evidence remain durable and agent-actionable."
+    negative: "Estate Steward and KV Dashboard become the required aggregation and human-status surfaces."
+    neutral: "Explicit approval notifications remain available because they request a defined decision rather than transfer diagnosis to Tony."
+  supersedes:
+    - 0007-aggregate-decisions-read-only-on-a6
+    - 0011-render-one-private-estate-status-surface
+  superseded_by: null
+relations:
+  - to: Component:project:agent-bus/outcome-truth-sentinel
+    type: governs
+  - to: Component:project:agent-bus/decision-queue
+    type: governs
+  - to: Component:project:agent-bus/ha-notification-channel
+    type: governs
+source: decisions/0015-route-observations-to-estate-steward.yaml
+last_verified: "2026-08-12"

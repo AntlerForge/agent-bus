@@ -1,12 +1,9 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
-import { execFile as execFileCb } from "node:child_process";
-import { promisify } from "node:util";
 import YAML from "yaml";
 import { renderBreachSummary, renderEstateStatus } from "../src/estate-status/render.mjs";
 
-const execFile = promisify(execFileCb);
 const argv = new Set(process.argv.slice(2));
 const now = new Date(process.env.DECISION_QUEUE_NOW || Date.now());
 const root = process.env.AGENT_BUS_RUNTIME || "/srv/projects/Personal/agent-bus/runtime";
@@ -49,7 +46,15 @@ async function collectWork() {
   for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
     const file = path.join(dir, entry.name, "work-item.md");
-    const data = frontmatter(await fs.readFile(file, "utf8"));
+    let text;
+    try {
+      text = await fs.readFile(file, "utf8");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      console.warn(JSON.stringify({ event: "incomplete_work_item_skipped", directory: entry.name, missing: "work-item.md" }));
+      continue;
+    }
+    const data = frontmatter(text);
     if (data.status === "proposed" || data.status === "review") rows.push(item("bus_work", data.work_item_id, data.title,
       data.updated_at || data.created_at, data.status === "proposed" ? `Accept or reject proposal ${data.work_item_id}` : `Approve or reject receipt ${data.receipt_ref || data.work_item_id}`, file));
   }
@@ -164,22 +169,12 @@ await atomic(`${outputDir}/last-evaluation.json`, `${JSON.stringify({ evaluated_
 if (newBreaches.length) await renderBreachSummary({ snapshot, newBreaches, outputFile: `${outputDir}/breach-summary.md`, generatedAt: now.toISOString(), statusUrl });
 await renderEstateStatus({ runtimeRoot: root, generatedAt: now.toISOString(), statusUrl });
 
-const notify = async (klass, id, message, url) => {
-  if (argv.has("--no-notify")) return;
-  const args = ["scripts/ha-notify-tony.mjs", "--class", klass, "--id", id, "--message", message];
-  if (url) args.push("--url", url);
-  await execFile(process.execPath, args);
-};
-const phoneUrl = (file) => new URL(file, config.delivery.phone_base_url).href;
-if (newBreaches.length) await notify("ALERT", `decision-queue-breach-${now.toISOString().slice(0, 13)}`, `${newBreaches.length} waiting item(s) crossed their agreement. Tap for ages and actions.`, phoneUrl("breach-summary.md"));
-
 if (argv.has("--weekly") || now.getUTCDay() === 0) {
   const selected = queue.slice(0, config.weekly_limit);
   const lines = selected.map((row) => `- ${row.title} — ${Math.floor(row.age_hours / 24)}d — ${row.action}`);
   const pack = `# DECISION PACK — ${now.toISOString().slice(0, 10)}\n\n[Estate Status](${statusUrl})\n\n${lines.join("\n")}\n`;
   const packFile = `${outputDir}/decision-pack-${now.toISOString().slice(0, 10)}.md`;
   await atomic(packFile, pack);
-  await notify("INFO", `decision-pack-${now.toISOString().slice(0, 10)}`, `${selected.length} decisions ready — tap to open.`, phoneUrl(path.basename(packFile)));
 }
 await renderEstateStatus({ runtimeRoot: root, generatedAt: now.toISOString(), statusUrl });
 console.log(JSON.stringify(snapshot));

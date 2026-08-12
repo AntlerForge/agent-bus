@@ -3,7 +3,7 @@ kind: Decision
 id: 0007-aggregate-decisions-read-only-on-a6
 namespace: project:agent-bus
 title: "Aggregate Tony's decision queue read-only on A6"
-status: active
+status: superseded
 owner: tony
 properties:
   date: 2026-07-19
@@ -24,4 +24,4 @@ properties:
     negative: "Source parsers must track their existing storage contracts."
     neutral: "Dashboard integration and automatic approvals remain excluded from v0."
   supersedes: null
-  superseded_by: null
+  superseded_by: 0015-route-observations-to-estate-steward

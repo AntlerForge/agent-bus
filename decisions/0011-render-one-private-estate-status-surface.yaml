@@ -3,7 +3,7 @@ kind: Decision
 id: 0011-render-one-private-estate-status-surface
 namespace: project:agent-bus
 title: "Render one private Estate Status surface for every notification"
-status: active
+status: superseded
 owner: tony
 properties:
   date: 2026-07-22
@@ -26,4 +26,4 @@ properties:
     negative: "The Markdown projection can be briefly stale between source mutation and the next evaluation."
     neutral: "Access remains tailnet-private and FileBrowser-authenticated; no new port, service or credential is introduced."
   supersedes: null
-  superseded_by: null
+  superseded_by: 0015-route-observations-to-estate-steward
