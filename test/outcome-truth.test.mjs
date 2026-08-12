@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { borgScriptCoversLegacySources } from "../src/outcome-truth/probes.mjs";
 import fs from "node:fs/promises";
 import { applyEvaluation, cardId, loadMatrix } from "../src/outcome-truth/core.mjs";
 
@@ -69,4 +70,10 @@ test("normal Mac sleep suppresses freshness failures without masking an awake fa
   asleep.mac.contracts.reporter.healthy = false;
   const awakeFailure = applyEvaluation({ matrix, snapshot: asleep, now: "2026-07-20T09:00:00Z", shadowStartedAt: "2026-07-18T00:00:00Z" });
   assert.equal(awakeFailure.results.find((result) => result.id === "mac-reporter-freshness").state, "fail");
+});
+test("Borg legacy coverage reads Bash source arrays without punctuation false negatives", () => {
+  assert.equal(borgScriptCoversLegacySources("sources=(/share /srv /etc/kv)"), true);
+  assert.equal(borgScriptCoversLegacySources("sources=(\n  '/share'\n  \"/srv\"\n)"), true);
+  assert.equal(borgScriptCoversLegacySources("sources=(/srv /etc/kv)"), false);
+  assert.equal(borgScriptCoversLegacySources("echo /share /srv"), false);
 });
