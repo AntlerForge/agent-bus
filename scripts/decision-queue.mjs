@@ -36,7 +36,7 @@ const item = (type, id, title, since, action, source) => {
 
 async function collectCards() {
   const cards = JSON.parse(await fs.readFile(`${root}/outcome-truth/cards.json`, "utf8"));
-  return Object.values(cards).filter((card) => card.status === "open").map((card) =>
+  return Object.values(cards).filter((card) => card.status === "open" && card.human_attention?.required).map((card) =>
     item("sentinel", card.check_id, card.check_id, card.first_seen, `Review the failure; close only by satisfying: ${card.recovery_contract}`, `${root}/outcome-truth/cards.json`));
 }
 

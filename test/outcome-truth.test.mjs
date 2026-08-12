@@ -41,6 +41,7 @@ test("sentinel and deadman dispatch to Estate Steward agents, never directly to 
   const sources = await Promise.all(["scripts/outcome-truth-sentinel.mjs", "scripts/outcome-truth-deadman.mjs"].map((f) => fs.readFile(f,"utf8")));
   assert.equal(sources.join("\n").includes("ha-notify-tony.mjs"), false);
   assert.match(sources[0], /dispatchOutcomeFailure/);
+  assert.match(sources[0], /steward_dispatched_at/);
   assert.match(sources[1], /dispatchSentinelDeadman/);
 });
 

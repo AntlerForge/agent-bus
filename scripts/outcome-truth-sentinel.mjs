@@ -101,7 +101,23 @@ await saveCards(cardsFile, outcome.cards);
 await fs.writeFile(`${stateDir}/heartbeat`, `${now}\n`, { mode: 0o600 });
 await renderEstateStatus({ runtimeRoot, generatedAt: now, statusUrl });
 for (const transition of outcome.transitions) {
-  await dispatchOutcomeFailure({ transition, evidencePath: cardsFile });
+  const result = await dispatchOutcomeFailure({ transition, evidencePath: cardsFile });
+  if (result && transition.card) {
+    transition.card.steward_dispatched_at = now;
+    transition.card.steward_thread_id = result.thread_id || result.threadId || null;
+  }
 }
+for (const card of Object.values(outcome.cards)) {
+  if (card.status !== "open" || card.severity !== "hard" || card.steward_dispatched_at) continue;
+  const result = await dispatchOutcomeFailure({
+    transition: { type: "migrated", notify: true, card },
+    evidencePath: cardsFile,
+  });
+  if (result) {
+    card.steward_dispatched_at = now;
+    card.steward_thread_id = result.thread_id || result.threadId || null;
+  }
+}
+await saveCards(cardsFile, outcome.cards);
 await renderEstateStatus({ runtimeRoot, generatedAt: now, statusUrl });
 console.log(JSON.stringify(outcome));
