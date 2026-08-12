@@ -193,6 +193,25 @@ input:focus, textarea:focus, select:focus { outline: 3px solid rgba(63,111,133,.
 .activity-controls { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 13px; flex-wrap: wrap; }
 #activity-search { border: 1px solid var(--line); border-radius: 9px; padding: 9px 12px; min-width: 220px; background: var(--panel); }
 
+/* Why-waiting explanation and receipts */
+.why-box { border: 1px solid #e4c98f; background: #fdf6e7; border-radius: 12px; padding: 13px 15px; margin: 0 0 15px; }
+.why-box strong { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: #7c591d; }
+.why-box p { margin: 7px 0 0; font-size: 13.5px; line-height: 1.5; }
+.why-next { font-weight: 650; }
+.receipt-box { border: 1px solid var(--line); background: #fbfaf6; border-radius: 12px; padding: 15px; margin: 15px 0; }
+.receipt-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 9px; }
+.receipt-summary { font-size: 13.5px; line-height: 1.55; margin: 0 0 12px; white-space: pre-wrap; }
+.receipt-list { margin-bottom: 12px; }
+.receipt-list strong { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.receipt-list ul { margin: 7px 0 0; padding-left: 18px; }
+.receipt-list li { font-size: 13px; line-height: 1.5; margin: 4px 0; }
+.evidence-list li { margin: 9px 0; }
+.evidence-list code { font: 11.5px ui-monospace, monospace; background: #eef0ea; padding: 1px 5px; border-radius: 5px; word-break: break-all; }
+.action-row { display: flex; gap: 8px; align-items: center; }
+.action-row select { border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; background: var(--panel); }
+.button.quiet { background: transparent; border-color: var(--line); color: var(--muted); }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; margin: 15px 0; }
+
 /* Job files + help */
 .files-box { border: 1px solid var(--line); border-radius: 11px; background: #f2f5ef; padding: 12px 14px; margin: 12px 0; display: grid; gap: 5px; }
 .files-box strong { font-size: 12px; }

@@ -14,6 +14,7 @@ import {
   createWorkItem,
   getUsageSummary,
   getWorkItem,
+  getWorkItemReceipt,
   listWorkItemEvents,
   listWorkItems,
   reviewWorkItem,
@@ -359,11 +360,18 @@ export function createControlPlane({
       const detailMatch = pathname.match(/^\/api\/v1\/work-items\/([^/]+)$/);
       if (request.method === "GET" && detailMatch) {
         const workItemId = decodeURIComponent(detailMatch[1]);
-        const [item, events] = await Promise.all([
+        const [item, events, receipt] = await Promise.all([
           getWorkItem({ work_item_id: workItemId }, root),
           listWorkItemEvents({ work_item_id: workItemId }, root),
+          getWorkItemReceipt({ work_item_id: workItemId }, root),
         ]);
-        return sendJson(response, 200, { item, events });
+        return sendJson(response, 200, { item, events, receipt });
+      }
+      const receiptMatch = pathname.match(/^\/api\/v1\/work-items\/([^/]+)\/receipt$/);
+      if (request.method === "GET" && receiptMatch) {
+        const receipt = await getWorkItemReceipt({ work_item_id: decodeURIComponent(receiptMatch[1]) }, root);
+        if (!receipt) return sendJson(response, 404, { error: "No receipt has been submitted for this work item" });
+        return sendJson(response, 200, receipt);
       }
 
       const actions = [

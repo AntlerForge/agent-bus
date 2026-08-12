@@ -267,6 +267,18 @@ export async function listWorkItems({ status, agent_id, project } = {}, root) {
   return items;
 }
 
+export async function getWorkItemReceipt({ work_item_id }, root) {
+  const item = await readStoredWorkItem(cleanText(work_item_id, "work_item_id"), root);
+  if (!item.receipt_ref) return null;
+  try {
+    const { data, body } = parseMarkdownWithFrontmatter(await readFile(item.files.receipt, "utf8"));
+    return { ...data, summary: body.trim().replace(/^#\s*Completion receipt\s*/i, "").trim() };
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
 export async function listWorkItemEvents({ work_item_id }, root) {
   const item = await readStoredWorkItem(cleanText(work_item_id, "work_item_id"), root);
   try {

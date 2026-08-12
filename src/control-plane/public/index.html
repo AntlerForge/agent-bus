@@ -64,6 +64,15 @@
 
     <dialog id="task-detail-dialog" class="detail-dialog"><div id="task-detail"></div></dialog>
 
+    <dialog id="ask-dialog">
+      <form method="dialog" id="ask-form">
+        <div class="dialog-header"><div><h2 id="ask-title">Are you sure?</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div>
+        <p class="form-help" id="ask-message"></p>
+        <label id="ask-input-label">Your note<textarea name="text" id="ask-text" rows="3"></textarea></label>
+        <div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="submit" id="ask-confirm">Confirm</button></div>
+      </form>
+    </dialog>
+
     <dialog id="agent-dialog" class="detail-dialog"><div id="agent-detail"></div></dialog>
 
     <dialog id="compose-dialog">

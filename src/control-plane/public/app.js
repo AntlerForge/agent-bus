@@ -10,6 +10,7 @@ const workflowDialog = document.querySelector("#workflow-dialog");
 const composeDialog = document.querySelector("#compose-dialog");
 const threadDialog = document.querySelector("#thread-dialog");
 const agentDialog = document.querySelector("#agent-dialog");
+const askDialog = document.querySelector("#ask-dialog");
 const basePath = document.querySelector('meta[name="agent-bus-base-path"]')?.content || "";
 const STATUS_POLL_MS = 30000;
 
@@ -88,7 +89,29 @@ async function load() {
 }
 
 function anyDialogOpen() {
-  return [taskDialog, detailDialog, workflowDialog, composeDialog, threadDialog, agentDialog].some((dialog) => dialog?.open);
+  return [taskDialog, detailDialog, workflowDialog, composeDialog, threadDialog, agentDialog, askDialog].some((dialog) => dialog?.open);
+}
+
+// In-page replacement for window.confirm/prompt: returns the typed text,
+// true for a confirm-only ask, or null when cancelled.
+function ask({ title, message, confirmLabel = "Confirm", inputLabel = null, placeholder = "" }) {
+  document.querySelector("#ask-title").textContent = title;
+  document.querySelector("#ask-message").textContent = message;
+  document.querySelector("#ask-confirm").textContent = confirmLabel;
+  const label = document.querySelector("#ask-input-label");
+  const input = document.querySelector("#ask-text");
+  label.hidden = !inputLabel;
+  input.required = Boolean(inputLabel);
+  input.value = "";
+  input.placeholder = placeholder;
+  if (inputLabel) label.childNodes[0].nodeValue = inputLabel;
+  askDialog.showModal();
+  if (inputLabel) input.focus();
+  return new Promise((resolve) => {
+    askDialog.addEventListener("close", () => {
+      resolve(askDialog.returnValue === "submit" ? (inputLabel ? input.value.trim() || null : true) : null);
+    }, { once: true });
+  });
 }
 
 async function refreshAgentStatus() {
@@ -156,17 +179,27 @@ function agentCard({ agent, p }) {
 
 // ---------- unified activity (conversations + tracked jobs) ----------
 
+const THREAD_ASK = {
+  input_required: "The agent asked you something — open it and reply",
+  blocked: "The agent is stuck and needs a steer from you",
+};
+
 function allActivity() {
   const jobs = state.threads.map((thread) => ({
     kind: "thread", id: thread.thread_id, title: thread.subject,
-    who: (thread.participants || []).join(" → "),
+    who: THREAD_ASK[thread.status] || (thread.participants || []).join(" → "),
     agents: thread.participants || [],
     statusMeta: jobStatus(thread.status), rawStatus: thread.status,
     updated: thread.updated, typeLabel: "Job",
   }));
+  const ASK = {
+    proposed: (item) => `${item.proposed_by || "An agent"} wants to do this — approve it or drop it`,
+    review: (item) => `${item.current_assignment?.agent_id || "The agent"} finished and needs your sign-off`,
+    blocked: () => "The agent is stuck and needs a steer",
+  };
   const tracked = state.tasks.map((item) => ({
     kind: "task", id: item.work_item_id, title: item.title,
-    who: `asked by ${item.proposed_by || "unknown"}${item.current_assignment ? `, ${item.current_assignment.agent_id} doing it` : ""}`,
+    who: ASK[item.status]?.(item) || `asked by ${item.proposed_by || "unknown"}${item.current_assignment ? `, ${item.current_assignment.agent_id} doing it` : ""}`,
     agents: [item.proposed_by, item.current_assignment?.agent_id].filter(Boolean),
     statusMeta: workStatus(item.status), rawStatus: item.status,
     updated: item.updated_at, typeLabel: "Tracked",
@@ -194,7 +227,7 @@ function renderHome() {
   const finished = activity.filter((item) => item.statusMeta.finished).slice(0, 8);
   const agents = visibleAgents();
   return `
-    <section class="panel needs-you-panel"><div class="panel-header"><div><h2>Needs you${needsYou.length ? ` (${needsYou.length})` : ""}</h2><p class="muted">Approvals, sign-offs and anything stuck. Everything else runs without you.</p></div></div>
+    <section class="panel needs-you-panel"><div class="panel-header"><div><h2>Needs you${needsYou.length ? ` (${needsYou.length})` : ""}</h2><p class="muted">Click any row to see why it is waiting, what the agent did, and the buttons to approve it, send it back or drop it. Everything else runs without you.</p></div></div>
       ${activityRows(needsYou, "Nothing needs you right now.")}</section>
     <section class="panel"><div class="panel-header"><div><h2>Happening now</h2><p class="muted">Jobs agents are on at the moment.</p></div></div>
       ${activityRows(happening, "Nothing running. Give an agent a job.")}</section>
@@ -314,8 +347,10 @@ async function showThread(threadId) {
     const thread = await api(`/api/v1/threads/${encodeURIComponent(threadId)}`);
     const others = (thread.participants || []).filter((participant) => participant !== "tony");
     const files = extractFiles(thread.body);
+    const askedYou = THREAD_ASK[thread.status];
     threadDialog.dataset.threadId = threadId;
     document.querySelector("#thread-detail").innerHTML = `<div class="dialog-header"><div><p class="eyebrow">JOB</p><h2>${escapeHtml(thread.subject)}</h2></div><button class="icon-button" data-close-thread aria-label="Close">×</button></div>
+      ${askedYou ? `<div class="why-box"><strong>Why this is waiting for you</strong><p>${escapeHtml(askedYou)}. Read the conversation below — the agent's last message says what it needs.</p><p class="why-next">Answer it in the reply box at the bottom and the agent carries on.</p></div>` : ""}
       <p class="muted">${chip(jobStatus(thread.status))} · ${escapeHtml((thread.participants || []).join(" → "))} · updated ${escapeHtml(formatDate(thread.updated))}</p>
       ${files.length ? `<div class="files-box"><strong>Files mentioned in this job</strong>${files.map((file) => `<code>${escapeHtml(file)}</code>`).join("")}</div>` : ""}
       <pre class="thread-body">${escapeHtml(thread.body || "(empty job)")}</pre>`;
@@ -354,30 +389,105 @@ async function setAgentLifecycle(agentId, status) {
   } catch (error) { showNotice(error.message, true); }
 }
 
+// Why is this sitting in front of me, and what happens if I act?
+function waitingExplanation(item) {
+  if (item.status === "proposed") {
+    return { why: `${item.proposed_by || "An agent"} suggested this job. Nothing will happen until you say yes — agents are not allowed to start their own proposals.`,
+      next: "Approve it and pick who does it, or say you are not doing it." };
+  }
+  if (item.status === "review") {
+    return { why: `${item.current_assignment?.agent_id || "The agent"} says it has finished and submitted the evidence below. It cannot be marked done until you sign it off.`,
+      next: "Read the evidence, then approve it or send it back with what you want changed." };
+  }
+  if (item.status === "blocked") {
+    return { why: "The agent hit something it could not resolve on its own.", next: "Read the history below, then either send it back with guidance or cancel it." };
+  }
+  if (item.status === "ready" && !item.current_assignment) {
+    return { why: "You approved this, but nobody has been given it yet.", next: "Choose an agent to do it." };
+  }
+  return null;
+}
+
+function agentPicker(id, selected) {
+  const options = (state.agentStatus?.agents || state.agents)
+    .filter((agent) => agent.lifecycle_status !== "retired" && agent.connection !== "channel");
+  return `<select id="${id}">${options.map((agent) => `<option value="${escapeHtml(agent.agent_id)}" ${agent.agent_id === selected ? "selected" : ""}>${escapeHtml(agent.display_name)}</option>`).join("")}</select>`;
+}
+
+function receiptBlock(receipt) {
+  if (!receipt) return "";
+  const list = (title, values) => (values && values.length
+    ? `<div class="receipt-list"><strong>${title}</strong><ul>${values.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}</ul></div>` : "");
+  const evidence = (receipt.evidence || []).map((entry) => `<li><strong>${escapeHtml(entry.target_state)}</strong><br><small>Where: <code>${escapeHtml(entry.location)}</code></small><br><small>Check it yourself: <code>${escapeHtml(entry.verify)}</code></small></li>`).join("");
+  return `<div class="receipt-box">
+    <div class="receipt-head"><strong>What the agent says it did</strong><span class="badge status-${receipt.outcome === "success" ? "done" : "bad"}">${escapeHtml(receipt.outcome || "unknown")}</span></div>
+    <p class="receipt-summary">${escapeHtml(receipt.summary || "(no summary)")}</p>
+    ${evidence ? `<div class="receipt-list"><strong>Evidence you can check</strong><ul class="evidence-list">${evidence}</ul></div>` : ""}
+    ${list("What it produced", receipt.deliverables)}
+    ${list("What it could not do", receipt.limitations)}
+    <small class="muted">Submitted by ${escapeHtml(receipt.submitted_by || "unknown")} · ${escapeHtml(formatDate(receipt.created_at))}</small></div>`;
+}
+
 async function showTask(workItemId) {
   try {
-    const { item, events } = await api(`/api/v1/work-items/${encodeURIComponent(workItemId)}`);
+    const { item, events, receipt } = await api(`/api/v1/work-items/${encodeURIComponent(workItemId)}`);
+    const waiting = waitingExplanation(item);
     const actions = [];
-    if (item.status === "proposed") actions.push('<button class="button primary" data-action="approve">Approve — let it start</button>');
-    if (item.status === "ready" && !item.current_assignment) actions.push('<button class="button primary" data-action="assign">Choose an agent</button>');
+    if (item.status === "proposed") actions.push(`<div class="action-row">${agentPicker("approve-agent", item.current_assignment?.agent_id)}<button class="button primary" data-action="approve-assign">Approve and hand it over</button></div>`);
+    if (item.status === "review") actions.push('<button class="button primary" data-action="sign-off">Approve — this is done</button><button class="button secondary" data-action="request-changes">Send back for changes</button>');
+    if (item.status === "ready" && !item.current_assignment) actions.push(`<div class="action-row">${agentPicker("approve-agent")}<button class="button primary" data-action="assign">Give it to this agent</button></div>`);
     if (item.status === "ready" && item.current_assignment) actions.push('<button class="button primary" data-action="start">Record run started</button>');
+    if (!["done", "canceled"].includes(item.status)) actions.push('<button class="button quiet" data-action="cancel">Not doing this</button>');
     detailDialog.dataset.taskId = workItemId;
     document.querySelector("#task-detail").innerHTML = `<div class="dialog-header"><div><p class="eyebrow">TRACKED JOB · ${escapeHtml(item.source_ref)}</p><h2>${escapeHtml(item.title)}</h2></div><button class="icon-button" data-close-detail aria-label="Close">×</button></div>
-      <p>${escapeHtml(item.objective)}</p><div class="detail-meta"><div class="meta-card"><small>Status</small>${chip(workStatus(item.status))}</div><div class="meta-card"><small>Asked by</small><strong>${escapeHtml(item.proposed_by || "unknown")}</strong></div><div class="meta-card"><small>Doing it</small><strong>${escapeHtml(item.current_assignment?.agent_id || "No one yet")}</strong></div><div class="meta-card"><small>Sign-off</small><strong>${escapeHtml(item.review_policy === "human" ? "You" : item.review_policy === "independent_agent" ? "Another agent" : "None")}</strong></div><div class="meta-card"><small>Budget</small><strong>${item.budget_tokens === null ? "Not set" : `${formatNumber(item.budget_tokens)} tokens`}</strong></div><div class="meta-card"><small>Runs</small><strong>${item.runs.length}</strong></div></div>
+      ${waiting ? `<div class="why-box"><strong>Why this is waiting for you</strong><p>${escapeHtml(waiting.why)}</p><p class="why-next">${escapeHtml(waiting.next)}</p></div>` : ""}
+      <p>${escapeHtml(item.objective)}</p>
+      ${receiptBlock(receipt)}
+      <div class="detail-meta"><div class="meta-card"><small>Status</small>${chip(workStatus(item.status))}</div><div class="meta-card"><small>Asked by</small><strong>${escapeHtml(item.proposed_by || "unknown")}</strong></div><div class="meta-card"><small>Doing it</small><strong>${escapeHtml(item.current_assignment?.agent_id || "No one yet")}</strong></div><div class="meta-card"><small>Sign-off</small><strong>${escapeHtml(item.review_policy === "human" ? "You" : item.review_policy === "independent_agent" ? "Another agent" : "None")}</strong></div><div class="meta-card"><small>Budget</small><strong>${item.budget_tokens === null ? "Not set" : `${formatNumber(item.budget_tokens)} tokens`}</strong></div><div class="meta-card"><small>Runs</small><strong>${item.runs.length}</strong></div></div>
       <div class="detail-actions">${actions.join("")}</div><h3>History</h3><div class="event-list">${events.slice().reverse().map((event) => `<div class="event"><strong>${escapeHtml(formatStatus(event.type))}</strong><br><small>${escapeHtml(event.actor)} · ${escapeHtml(formatDate(event.created_at))}</small></div>`).join("")}</div>`;
     detailDialog.showModal();
   } catch (error) { showNotice(error.message, true); }
 }
 
 async function taskAction(action, workItemId) {
-  if (action === "approve") await api(`/api/v1/work-items/${encodeURIComponent(workItemId)}/transition`, { method: "POST", body: JSON.stringify({ status: "ready", actor: "tony", reason: "Approved in dashboard" }) });
-  if (action === "assign") {
-    const agentId = window.prompt(`Which agent should do it? (${state.agents.map((agent) => agent.agent_id).join(", ")}):`, "codex");
-    if (!agentId) return;
-    await api(`/api/v1/work-items/${encodeURIComponent(workItemId)}/assign`, { method: "POST", body: JSON.stringify({ agent_id: agentId, assigned_by: "tony" }) });
+  const base = `/api/v1/work-items/${encodeURIComponent(workItemId)}`;
+  let message = "Updated.";
+  if (action === "approve-assign") {
+    const agentId = document.querySelector("#approve-agent")?.value;
+    await api(`${base}/transition`, { method: "POST", body: JSON.stringify({ status: "ready", actor: "tony", reason: "Approved in dashboard" }) });
+    if (agentId) await api(`${base}/assign`, { method: "POST", body: JSON.stringify({ agent_id: agentId, assigned_by: "tony" }) });
+    message = agentId ? `Approved and handed to ${agentId}. Message that agent to have it start now.` : "Approved.";
   }
-  if (action === "start") await api(`/api/v1/work-items/${encodeURIComponent(workItemId)}/runs`, { method: "POST", body: JSON.stringify({ actor: "tony", provider: "manual" }) });
-  detailDialog.close(); await load(); showNotice("Updated.");
+  if (action === "assign") {
+    const agentId = document.querySelector("#approve-agent")?.value;
+    if (!agentId) return;
+    await api(`${base}/assign`, { method: "POST", body: JSON.stringify({ agent_id: agentId, assigned_by: "tony" }) });
+    message = `Given to ${agentId}.`;
+  }
+  if (action === "sign-off") {
+    await api(`${base}/review`, { method: "POST", body: JSON.stringify({ reviewer: "tony", decision: "approved", summary: "Approved in dashboard" }) });
+    message = "Signed off. This job is done.";
+  }
+  if (action === "request-changes") {
+    const reason = await ask({
+      title: "Send it back", message: "The agent will see exactly what you write here and pick the job up again.",
+      confirmLabel: "Send it back", inputLabel: "What needs changing?", placeholder: "e.g. the evidence does not cover the mobile layout",
+    });
+    if (!reason) return;
+    await api(`${base}/review`, { method: "POST", body: JSON.stringify({ reviewer: "tony", decision: "changes_requested", summary: reason }) });
+    message = "Sent back. It is with the agent again.";
+  }
+  if (action === "cancel") {
+    const confirmed = await ask({
+      title: "Drop this job?", message: "It stays in the record for history, but stops asking for your attention.",
+      confirmLabel: "Yes, drop it",
+    });
+    if (!confirmed) return;
+    await api(`${base}/transition`, { method: "POST", body: JSON.stringify({ status: "canceled", actor: "tony", reason: "Cancelled in dashboard" }) });
+    message = "Dropped.";
+  }
+  if (action === "start") await api(`${base}/runs`, { method: "POST", body: JSON.stringify({ actor: "tony", provider: "manual" }) });
+  detailDialog.close(); await load(); showNotice(message);
 }
 
 // ---------- events ----------

@@ -8,6 +8,7 @@ import {
   createWorkItem,
   getUsageSummary,
   getWorkItem,
+  getWorkItemReceipt,
   listWorkItemEvents,
   listWorkItems,
   reviewWorkItem,
@@ -139,6 +140,30 @@ test("review-gated work requires an independent agent", async () => {
     );
     assert.equal(reviewed.work_item.status, "done");
     assert.equal(reviewed.work_item.review_status, "approved");
+  });
+});
+
+test("a submitted receipt can be read back so a reviewer can see the evidence", async () => {
+  await withBusRoot(async (root) => {
+    const ready = await createReadyWork(root, { review_policy: "human" });
+    await assignWorkItem({ work_item_id: ready.work_item_id, agent_id: "codex" }, root);
+    await startRun({ work_item_id: ready.work_item_id, actor: "codex" }, root);
+    assert.equal(await getWorkItemReceipt({ work_item_id: ready.work_item_id }, root), null);
+    await submitReceipt({
+      work_item_id: ready.work_item_id,
+      submitted_by: "codex",
+      outcome: "success",
+      summary: "Dashboard implemented and tested.",
+      evidence: [{ target_state: "Test suite passes", location: "test/", verify: "npm test" }],
+      deliverables: ["src/control-plane/server.mjs"],
+      limitations: ["No mobile layout"],
+    }, root);
+    const receipt = await getWorkItemReceipt({ work_item_id: ready.work_item_id }, root);
+    assert.equal(receipt.outcome, "success");
+    assert.equal(receipt.summary, "Dashboard implemented and tested.");
+    assert.equal(receipt.evidence[0].verify, "npm test");
+    assert.deepEqual(receipt.deliverables, ["src/control-plane/server.mjs"]);
+    assert.deepEqual(receipt.limitations, ["No mobile layout"]);
   });
 });
 
