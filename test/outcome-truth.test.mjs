@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { borgScriptCoversLegacySources } from "../src/outcome-truth/probes.mjs";
+import { borgScriptCoversLegacySources, synthesisOutcomeIsClean } from "../src/outcome-truth/probes.mjs";
 import fs from "node:fs/promises";
 import { applyEvaluation, cardId, loadMatrix } from "../src/outcome-truth/core.mjs";
 
@@ -76,4 +76,22 @@ test("Borg legacy coverage reads Bash source arrays without punctuation false ne
   assert.equal(borgScriptCoversLegacySources("sources=(\n  '/share'\n  \"/srv\"\n)"), true);
   assert.equal(borgScriptCoversLegacySources("sources=(/srv /etc/kv)"), false);
   assert.equal(borgScriptCoversLegacySources("echo /share /srv"), false);
+});
+
+test("synthesis treats explicitly non-blocking warnings as semantically clean", () => {
+  const healthyWarning = {
+    event: "run_warning",
+    metadata: {
+      adapter_health: { required: "ok" },
+      dashboard: { rebuilt: true, health: { healthz: 200, kv_data: 200, usage: 200, version: 200 } },
+      email_triage: { fresh: true, status: "completed" },
+      funnel: { auto_errors: 0 },
+      maintenance: { doctor: "warn; no hard failures" },
+      warnings: ["Review-gated work remains."],
+    },
+  };
+  assert.equal(synthesisOutcomeIsClean(healthyWarning), true);
+  assert.equal(synthesisOutcomeIsClean({ ...healthyWarning, metadata: { ...healthyWarning.metadata, maintenance: { doctor: "failed: validation" } } }), false);
+  assert.equal(synthesisOutcomeIsClean({ ...healthyWarning, metadata: { ...healthyWarning.metadata, funnel: { auto_errors: 1 } } }), false);
+  assert.equal(synthesisOutcomeIsClean({ event: "run_failed", metadata: healthyWarning.metadata }), false);
 });

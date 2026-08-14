@@ -5,7 +5,7 @@ import { promisify } from "node:util";
 import { applyEvaluation, loadCards, loadMatrix, saveCards } from "../src/outcome-truth/core.mjs";
 import { renderEstateStatus } from "../src/estate-status/render.mjs";
 import { dispatchOutcomeFailure } from "../src/estate-steward/dispatch.mjs";
-import { borgScriptCoversLegacySources } from "../src/outcome-truth/probes.mjs";
+import { borgScriptCoversLegacySources, synthesisOutcomeIsClean } from "../src/outcome-truth/probes.mjs";
 
 const execFile = promisify(execFileCb);
 const args = Object.fromEntries(process.argv.slice(2).map((v, i, a) => v.startsWith("--") ? [v.slice(2), a[i + 1]] : null).filter(Boolean));
@@ -83,7 +83,7 @@ async function collect() {
     },
     mac,
     synthesis: {
-      latest_clean: synthesisOutcome?.event === "run_completed",
+      latest_clean: synthesisOutcomeIsClean(synthesisOutcome),
       latest_run_age_minutes: synthesisRun ? (Date.now() - Date.parse(synthesisRun.ts)) / 60000 : Number.POSITIVE_INFINITY,
     },
     sandbox: { ok: true },
