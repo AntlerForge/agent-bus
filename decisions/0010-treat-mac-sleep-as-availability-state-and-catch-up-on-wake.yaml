@@ -25,7 +25,7 @@ properties:
     reporter is subject to the same online-only contract and therefore detects an awake Mac
     whose reporter or maintenance jobs have genuinely stopped.
   per_job:
-    a6-share-mount: "wake-robust; Mac-only mount state, four-hour calendar cadence"
+    a6-share-mount: "wake-robust; Mac-only mount state, ten-minute calendar cadence (amended 2026-08-15 after repeated live SMB session loss inside the former four-hour window)"
     kv-developer-mirrors-sync: "wake-robust; local repositories are not remotely exposed, six-hour calendar cadence"
     kv-mac-runtime-check: "wake-robust; macOS application/runtime facts, hourly calendar cadence"
     kv-project-store-sync: "wake-robust; Mac application bridge, two-hour calendar cadence"
