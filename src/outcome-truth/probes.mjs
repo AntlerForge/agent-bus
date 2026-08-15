@@ -13,13 +13,17 @@ export function synthesisOutcomeIsClean(outcome) {
     ? /healthy|\bok\b/i.test(adapterHealth)
     : adapterHealth?.required === "ok";
   const dashboard = metadata.dashboard || {};
-  const dashboardHealthy = dashboard.rebuilt === true
-    && Object.values(dashboard.health || {}).every((value) => value === 200 || value === "ok" || value === true);
-  const emailHealthy = metadata.email_triage?.fresh === true
-    && metadata.email_triage?.status === "completed";
-  const funnelHealthy = metadata.funnel?.auto_errors === 0;
-  const doctor = String(metadata.maintenance?.doctor || "").toLowerCase();
+  const dashboardHealth = dashboard.health || metadata.dashboard_health || {};
+  const dashboardHealthy = Object.keys(dashboardHealth).length > 0
+    && Object.values(dashboardHealth).every((value) => value === 200 || value === "ok" || value === true)
+    && (dashboard.rebuilt === undefined || dashboard.rebuilt === true);
+  const emailHealthy = metadata.email_triage
+    ? metadata.email_triage.fresh === true && metadata.email_triage.status === "completed"
+    : typeof metadata.email_triage_run_id === "string" && metadata.email_triage_run_id.length > 0;
+  const funnelErrors = metadata.funnel?.auto_errors ?? metadata.auto_errors;
+  const funnelHealthy = funnelErrors === 0;
+  const doctor = String(metadata.maintenance?.doctor || metadata.doctor || "").toLowerCase();
   const doctorHealthy = !/(^|\b)failed\b|hard failures remain/.test(doctor)
-    && (/no hard failures|warn.nonblocking|pass|healthy/.test(doctor));
+    && (/no.hard.failures?|warn.nonblocking|pass|healthy/.test(doctor));
   return adaptersHealthy && dashboardHealthy && emailHealthy && funnelHealthy && doctorHealthy;
 }

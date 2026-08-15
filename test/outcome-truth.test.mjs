@@ -95,3 +95,24 @@ test("synthesis treats explicitly non-blocking warnings as semantically clean", 
   assert.equal(synthesisOutcomeIsClean({ ...healthyWarning, metadata: { ...healthyWarning.metadata, funnel: { auto_errors: 1 } } }), false);
   assert.equal(synthesisOutcomeIsClean({ event: "run_failed", metadata: healthyWarning.metadata }), false);
 });
+
+test("synthesis accepts the current flattened healthy run metadata", () => {
+  const currentRun = {
+    event: "run_warning",
+    metadata: {
+      adapter_health: "required adapters healthy",
+      dashboard_health: { healthz: 200, kv_data: 200, usage: 200, version: 200 },
+      email_triage_run_id: "f1bb35be74d548d881e5222131c77592",
+      email_triage_fallback: false,
+      auto_errors: 0,
+      doctor: "warn-no-hard-failure",
+      warnings: [
+        "Doctor non-blocking warnings: validation, stale references and review proposals.",
+        "Canonical Day Board remains stale.",
+      ],
+    },
+  };
+  assert.equal(synthesisOutcomeIsClean(currentRun), true);
+  assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: { ...currentRun.metadata, auto_errors: 1 } }), false);
+  assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: { ...currentRun.metadata, doctor: "failed: hard validation" } }), false);
+});
