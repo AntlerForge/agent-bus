@@ -1,0 +1,60 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0016-require-typed-intent-and-execution-authority
+namespace: project:agent-bus
+title: "Require typed message intent and explicit execution authority"
+status: active
+owner: tony
+properties:
+  date: 2026-08-16
+  component: agent-adapters
+  tags: [intent, execution-authority, work-ledger, adapters, fail-closed]
+  context: |
+    On 2026-08-15 a statement of understanding was treated as an instruction to
+    change manuscript state. Message prose did not distinguish information,
+    consultation, a recommendation request and an instruction. The originally
+    suggested intent name `propose` would also collide with the existing
+    `propose_work_item` ledger action, giving the same word two meanings.
+  decision: |
+    Add a required message intent vocabulary: `inform`, `consult`,
+    `recommendation` and `execute`. These names do not collide with existing
+    Agent Bus or Work Ledger API/tool verbs; the noun `recommendation` is used
+    deliberately instead of `propose`.
+
+    Treat `inform` as transport-only: adapters acknowledge and record it but do
+    not start a provider turn. `consult` asks for a read-only answer and
+    `recommendation` asks for propose-only analysis. Treat only `execute` as
+    authority to perform state-changing work.
+
+    An `execute` message must carry either an approved current assignment
+    (`work_item_id` plus `assignment_id`, validated against the Work Ledger) or
+    a named explicit trusted policy. Adapters validate that authority before
+    starting the provider turn. Missing or invalid intent, missing authority,
+    non-ready work, stale assignment and agent/recipient mismatch fail closed;
+    the adapter records the refusal reason on the thread and never invokes the
+    provider. New actionable send interfaces require explicit intent, while
+    adapter-side validation remains fail-closed for legacy or malformed stored
+    messages. A response with `requires_response=false` is structurally
+    terminal and is normalized to `inform` at the boundary; this is the only
+    migration exception, and it cannot start a provider turn.
+  consequences:
+    positive: "Informational statements cannot become instructions, and state-changing dispatch is traceable to approved authority."
+    negative: "Every first-party message sender must declare intent; execute callers must attach assignment or trusted-policy authority."
+    neutral: |
+      Message transport remains owned by Agent Bus and assignment authority by
+      the Work Ledger (P-001/P-003). Receipt evidence remains governed by ADR
+      0003; bridge heartbeats remain liveness-only under ADR 0014; Estate
+      Steward routing under ADR 0015 is unchanged.
+  supersedes: null
+  superseded_by: null
+relations:
+  - to: Component:project:agent-bus/agent-adapters
+    type: governs
+  - to: Component:project:agent-bus/bus-core
+    type: governs
+  - to: Component:project:agent-bus/work-ledger
+    type: depends-on
+  - to: Interface:project:agent-bus/agent-bus-mcp
+    type: governs
+source: decisions/0016-require-typed-intent-and-execution-authority.yaml
+last_verified: "2026-08-16"
