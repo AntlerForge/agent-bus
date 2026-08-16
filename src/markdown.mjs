@@ -27,11 +27,12 @@ export function messageBody(subject, body) {
   return `# ${title}\n\n${body.trimEnd()}\n`;
 }
 
-export function appendThreadEntry(existingBody, { seq, id, created, from, to, body }) {
+export function appendThreadEntry(existingBody, { seq, id, created, from, to, body, intent = null }) {
   const entry = [
     `## ${seq}. ${created} - ${from} to ${to}`,
     "",
     `Message: \`${id}\``,
+    ...(intent ? [`Intent: \`${intent}\``] : []),
     "",
     body.trimEnd(),
     "",

@@ -59,6 +59,7 @@ properties:
     - "Relay requests and receipts through Agent Bus"
     - "Heartbeat live bridges and preserve one provider session per message thread"
     - "Materialize remote artifacts into bounded host-local bridge storage"
+    - "Refuse provider execution unless typed intent and execution authority permit it"
   non_responsibilities:
     - "Durable work-item authority"
 ---
@@ -246,7 +247,7 @@ owner: tony
 status: active
 properties:
   type: mcp
-  version: "1"
+  version: "2"
 ---
 apiVersion: arch.kv/v1
 kind: Interface
@@ -258,7 +259,7 @@ owner: tony
 status: active
 properties:
   type: http
-  version: "1.3"
+  version: "1.4"
 ---
 apiVersion: arch.kv/v1
 kind: Interface
@@ -451,12 +452,14 @@ properties:
   trigger: "Approved work is assigned to an agent"
   steps:
     - "Work Ledger records assignment and queued run"
-    - "Agent Bus transports the bounded request"
-    - "A host-local adapter acknowledges delivery and materializes referenced artifacts"
+    - "Agent Bus transports the bounded request with explicit intent and execution authority"
+    - "A host-local adapter validates intent and authority against the current Work Ledger assignment or trusted policy"
+    - "The adapter refuses and logs missing or invalid authority before any provider turn"
+    - "An authorized adapter acknowledges delivery and materializes referenced artifacts"
     - "The adapter starts or resumes the provider-native session for that thread"
     - "The adapter returns the provider reply on the same thread and records terminal transport status"
     - "Run events and usage are returned to the ledger"
-  data: [work_item_id, assignment_id, run_id, thread_id, provider_session_ref]
+  data: [intent, execution_authority, work_item_id, assignment_id, run_id, thread_id, provider_session_ref]
 relations:
   - to: Component:project:agent-bus/work-ledger
     type: depends-on

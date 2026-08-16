@@ -1,4 +1,5 @@
 import path from "node:path";
+import { authorityPrompt } from "./message-intent.mjs";
 
 const ALLOWED_RESPONSE_STATUSES = new Set(["completed", "input_required", "blocked", "failed"]);
 
@@ -55,6 +56,8 @@ export function buildAgentBusPrompt(message, threadMarkdown, options, artifacts 
     `Message ID: ${message.message_id}`,
     `Thread ID: ${message.thread_id}`,
     `Sequence: ${message.seq}`,
+    `Intent: ${message.intent}`,
+    authorityPrompt(message.intent, message.state_changes_allowed === true),
     "",
     "Current thread transcript:",
     threadMarkdown || "(thread transcript unavailable)",

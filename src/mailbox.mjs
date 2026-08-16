@@ -13,6 +13,7 @@ import {
 import { ensureBusLayout } from "./paths.mjs";
 import { assertNoObviousSecrets } from "./security.mjs";
 import { configuredRemoteBus } from "./remote-bus.mjs";
+import { assertMessageIntent } from "./message-intent.mjs";
 
 const ALLOWED_STATUSES = new Set([
   "open",
@@ -69,12 +70,16 @@ export async function sendMessage(
     requires_response = false,
     artifact_paths = [],
     idempotency_key,
+    intent,
+    execution_authority = null,
   },
   root,
 ) {
+  assertMessageIntent(intent);
   const remote = configuredRemoteBus();
   if (remote) return remote.sendMessage({
     from, to, subject, body, thread_id, priority, ack_required, requires_response, artifact_paths, idempotency_key,
+    intent, execution_authority,
   });
   if (!from || !to || !subject || !body) {
     throw new Error("from, to, subject, and body are required");
@@ -139,6 +144,8 @@ export async function sendMessage(
     requires_response: Boolean(requires_response),
     artifact_paths,
     idempotency_key: idempotency_key || null,
+    intent,
+    execution_authority,
   };
 
   const registeredArtifacts = await registerArtifacts(
@@ -158,6 +165,7 @@ export async function sendMessage(
     from,
     to,
     body,
+    intent,
   });
   await writeThread(threadFile, threadData, updatedThreadBody);
 
@@ -174,15 +182,30 @@ export async function sendMessage(
 }
 
 export async function replyMessage(
-  { from, to, thread_id, body, priority = "normal", ack_required = false, requires_response = false, artifact_paths = [] },
+  {
+    from, to, thread_id, body, priority = "normal", ack_required = false, requires_response = false,
+    artifact_paths = [], intent, execution_authority = null,
+  },
   root,
 ) {
+  // A terminal response cannot start another turn, so its intent is
+  // structurally `inform`. This bounded migration rule keeps already-running
+  // bridge turns deliverable during the protocol rollout without guessing at
+  // any actionable message. Actionable replies still require explicit intent.
+  const resolvedIntent = intent ?? (requires_response === false ? "inform" : null);
+  assertMessageIntent(resolvedIntent);
   const remote = configuredRemoteBus();
-  if (remote) return remote.replyMessage({ from, to, thread_id, body, priority, ack_required, requires_response, artifact_paths });
+  if (remote) return remote.replyMessage({
+    from, to, thread_id, body, priority, ack_required, requires_response, artifact_paths,
+    intent: resolvedIntent, execution_authority,
+  });
   const paths = await ensureBusLayout(root);
   const thread = await readThread(paths, thread_id);
   const subject = thread.data.subject || `Reply to ${thread_id}`;
-  return sendMessage({ from, to, subject, body, thread_id, priority, ack_required, requires_response, artifact_paths }, root);
+  return sendMessage({
+    from, to, subject, body, thread_id, priority, ack_required, requires_response, artifact_paths,
+    intent: resolvedIntent, execution_authority,
+  }, root);
 }
 
 async function readInboxFile(filePath) {
@@ -228,6 +251,8 @@ export async function readInbox({ agent, include_read = false }, root) {
       read: message.data.read || null,
       artifact_paths: message.data.artifact_paths || [],
       artifacts: message.data.artifacts || [],
+      intent: message.data.intent || null,
+      execution_authority: message.data.execution_authority || null,
       file: message.filePath,
       body: message.body.trim(),
     });

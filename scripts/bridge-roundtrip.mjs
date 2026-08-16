@@ -51,6 +51,7 @@ export async function testTarget(client, target, options, tempDirectory) {
     body,
     ack_required: true,
     requires_response: true,
+    intent: "consult",
     artifact_paths: artifactPaths,
     idempotency_key: `bridge-test-${nonce}`,
   });

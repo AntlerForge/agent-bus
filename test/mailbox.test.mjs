@@ -37,6 +37,7 @@ test("sendMessage creates inbox and thread files", async () => {
         body: "Please review this.",
         ack_required: true,
         requires_response: true,
+        intent: "consult",
       },
       root,
     );
@@ -51,6 +52,7 @@ test("sendMessage creates inbox and thread files", async () => {
     assert.equal(inbox[0].status, "unread");
     assert.equal(inbox[0].ack_required, true);
     assert.equal(inbox[0].requires_response, true);
+    assert.equal(inbox[0].intent, "consult");
 
     const threads = await listThreads(root);
     assert.equal(threads.length, 1);
@@ -59,14 +61,23 @@ test("sendMessage creates inbox and thread files", async () => {
   });
 });
 
+test("new messages require an explicit non-colliding intent", async () => {
+  await withBusRoot(async (root) => {
+    await assert.rejects(
+      () => sendMessage({ from: "claude", to: "codex", subject: "Ambiguous", body: "Do something." }, root),
+      /intent is required/,
+    );
+  });
+});
+
 test("reply increments thread sequence and creates recipient inbox message", async () => {
   await withBusRoot(async (root) => {
     const first = await sendMessage(
-      { from: "claude", to: "codex", subject: "Question", body: "Can you answer?" },
+      { from: "claude", to: "codex", subject: "Question", body: "Can you answer?", intent: "consult" },
       root,
     );
     const reply = await replyMessage(
-      { from: "codex", to: "claude", thread_id: first.thread_id, body: "Yes.", requires_response: false },
+      { from: "codex", to: "claude", thread_id: first.thread_id, body: "Yes.", requires_response: false, intent: "inform" },
       root,
     );
 
@@ -83,7 +94,7 @@ test("reply increments thread sequence and creates recipient inbox message", asy
 test("ackMessage and markRead update message frontmatter in place", async () => {
   await withBusRoot(async (root) => {
     const sent = await sendMessage(
-      { from: "claude", to: "codex", subject: "Ack me", body: "Please ack." },
+      { from: "claude", to: "codex", subject: "Ack me", body: "Please ack.", intent: "inform" },
       root,
     );
 
@@ -109,7 +120,7 @@ test("ackMessage and markRead update message frontmatter in place", async () => 
 test("updateThreadStatus records lifecycle status", async () => {
   await withBusRoot(async (root) => {
     const sent = await sendMessage(
-      { from: "claude", to: "codex", subject: "Status", body: "Track this." },
+      { from: "claude", to: "codex", subject: "Status", body: "Track this.", intent: "inform" },
       root,
     );
 
@@ -129,6 +140,7 @@ test("idempotency key deduplicates send retries", async () => {
       subject: "Retry",
       body: "Send once.",
       idempotency_key: "retry-key-1",
+      intent: "inform",
     };
     const first = await sendMessage(args, root);
     const second = await sendMessage(args, root);
@@ -154,6 +166,7 @@ test("artifacts are registered only from the shared folder", async () => {
         subject: "Artifact",
         body: "See artifact.",
         artifact_paths: [artifactPath],
+        intent: "consult",
       },
       root,
     );
@@ -172,6 +185,7 @@ test("artifacts are registered only from the shared folder", async () => {
             subject: "Bad artifact",
             body: "No.",
             artifact_paths: [path.join(root, "outside.md")],
+            intent: "inform",
           },
           root,
         ),
@@ -190,6 +204,7 @@ test("obvious secrets are blocked", async () => {
             to: "codex",
             subject: "Secret",
             body: "api_key = abcdefghijklmnopqrstuvwxyz",
+            intent: "inform",
           },
           root,
         ),

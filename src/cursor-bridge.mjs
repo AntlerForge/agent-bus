@@ -50,7 +50,8 @@ function createCursorRunner(options) {
   return async ({ prompt, message }) => {
     const stored = await readProviderSession(options.sessionStore, message.thread_id);
     const args = [];
-    if (options.force) args.push("--force");
+    if (message.state_changes_allowed && options.force) args.push("--force");
+    if (!message.state_changes_allowed) args.push("--mode", message.intent === "recommendation" ? "plan" : "ask");
     args.push(
       "--sandbox", options.sandbox,
       "--output-format", "json",

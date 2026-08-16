@@ -77,7 +77,7 @@ Project source lives wherever you cloned this repository:
 
 Implemented first tools:
 
-- `send_message(from, to, subject, body, thread_id?)`
+- `send_message(from, to, subject, body, intent, execution_authority?, thread_id?)`
 - `read_inbox(agent)`
 - `reply(from, to, thread_id, body)`
 - `ack_message(message_id)`
@@ -100,6 +100,12 @@ Work Ledger tools:
 
 Agents can propose and operate their assigned runs. Human approval and assignment
 remain dashboard-owner controls in the first release.
+
+Message intent is mandatory: `inform` is recorded without a provider turn,
+`consult` requests a read-only answer, `recommendation` requests propose-only
+analysis, and `execute` permits changes only when `execution_authority` names the
+current approved assignment or an explicit trusted policy. Missing intent or
+invalid execution authority fails closed and is recorded on the thread.
 
 Model-and-harness routing tools are advisory and never dispatch work:
 

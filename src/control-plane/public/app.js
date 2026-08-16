@@ -543,6 +543,8 @@ document.querySelector("#compose-form").addEventListener("submit", async (event)
       to: data.to,
       subject: data.subject,
       body: data.body,
+      intent: data.intent,
+      execution_authority: data.intent === "execute" ? { type: "trusted_policy", policy_id: "tony-direct-instruction" } : null,
       requires_response: data.requires_response === "on",
       ack_required: true,
     }) });
@@ -561,6 +563,8 @@ document.querySelector("#reply-form").addEventListener("submit", async (event) =
       from: "tony",
       to: data.to,
       body: data.body,
+      intent: data.intent,
+      execution_authority: data.intent === "execute" ? { type: "trusted_policy", policy_id: "tony-direct-instruction" } : null,
       requires_response: data.requires_response === "on",
     }) });
     form.reset();

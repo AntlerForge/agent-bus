@@ -24,6 +24,7 @@ import { DEFAULT_CODEX_HOME, getPersistentSession, runPersistentTurn } from "./c
 import { createQueue } from "./task-queue.mjs";
 import { configuredRemoteBus } from "./remote-bus.mjs";
 import { sendHeartbeat } from "./runtime-bridge.mjs";
+import { createAuthorityLookup, evaluateMessageAuthority } from "./execution-authority.mjs";
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(MODULE_DIR, "..");
@@ -145,6 +146,38 @@ async function handleMessage(message, options, session) {
   let providerCompleted = false;
 
   try {
+    const authority = await evaluateMessageAuthority(message, { getItem: options.authorityLookup });
+    if (authority.disposition === "record_only") {
+      await markRead({ message_id: message.message_id }, options.root);
+      await updateThreadStatus({
+        thread_id: message.thread_id,
+        status: "completed",
+        reason: "Inform intent recorded without starting a provider turn",
+        actor: "codex",
+      }, options.root);
+      log(`Recorded inform message ${message.message_id}; no provider turn started.`);
+      return;
+    }
+    if (authority.disposition === "refuse") {
+      await replyMessage({
+        from: "codex",
+        to: message.from,
+        thread_id: message.thread_id,
+        body: `Execution refused. Reason: ${authority.reason} (${authority.reason_code}).`,
+        requires_response: false,
+        intent: "inform",
+      }, options.root);
+      await markRead({ message_id: message.message_id }, options.root);
+      await updateThreadStatus({
+        thread_id: message.thread_id,
+        status: "failed",
+        reason: `${authority.reason_code}: ${authority.reason}`,
+        actor: "codex",
+      }, options.root);
+      log(`Refused ${message.message_id}: ${authority.reason_code}: ${authority.reason}`);
+      return;
+    }
+    message.state_changes_allowed = authority.state_changes_allowed;
     const remote = configuredRemoteBus();
     const [thread, artifacts] = await Promise.all([
       getThread({ thread_id: message.thread_id }, options.root),
@@ -152,7 +185,10 @@ async function handleMessage(message, options, session) {
         ? remote.materializeMessageArtifacts(message, path.join(path.dirname(options.sessionStore), "artifacts", message.thread_id))
         : Promise.resolve((message.artifact_paths || []).map((artifactPath) => ({ local_path: artifactPath, filename: path.basename(artifactPath) }))),
     ]);
-    const rawReply = await runPersistentTurn(buildAgentBusPrompt(message, thread.body, options, artifacts), options, session, log, { messageId: message.message_id });
+    const turnOptions = message.state_changes_allowed ? options : { ...options, sandbox: "read-only" };
+    const rawReply = await runPersistentTurn(
+      buildAgentBusPrompt(message, thread.body, turnOptions, artifacts), turnOptions, session, log, { messageId: message.message_id },
+    );
     if (!rawReply) {
       throw new Error("Codex produced an empty reply.");
     }
@@ -166,6 +202,7 @@ async function handleMessage(message, options, session) {
         thread_id: message.thread_id,
         body,
         requires_response: false,
+        intent: "inform",
       },
       options.root,
     );
@@ -183,7 +220,9 @@ async function handleMessage(message, options, session) {
       error instanceof Error ? error.message : String(error),
     ].join("\n");
     try {
-      await replyMessage({ from: "codex", to: message.from, thread_id: message.thread_id, body, requires_response: false }, options.root);
+      await replyMessage({
+        from: "codex", to: message.from, thread_id: message.thread_id, body, requires_response: false, intent: "inform",
+      }, options.root);
       await markRead({ message_id: message.message_id }, options.root);
       await updateThreadStatus({ thread_id: message.thread_id, status: "failed" }, options.root);
     } catch (deliveryError) {
@@ -198,7 +237,8 @@ async function handleMessage(message, options, session) {
 
 async function processInbox(options, session, queue, active) {
   const messages = (await readInbox({ agent: "codex", include_read: false }, options.root)).filter(
-    (message) => message.requires_response === true && !active.has(message.message_id),
+    (message) => (message.requires_response === true || message.intent === "inform" || message.intent === "execute")
+      && !active.has(message.message_id),
   );
 
   for (const message of messages) {
@@ -244,6 +284,7 @@ async function sendTerminalMessage(line, options) {
       body,
       ack_required: true,
       requires_response: true,
+      intent: "consult",
     },
     options.root,
   );
@@ -316,6 +357,7 @@ function startTerminalInput(options, session, queue) {
 }
 
 const options = parseArgs(process.argv.slice(2));
+options.authorityLookup = createAuthorityLookup(options.root);
 const active = new Set();
 const queue = createQueue({ log });
 const liveness = { currentThreadId: null };

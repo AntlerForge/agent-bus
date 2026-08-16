@@ -87,6 +87,7 @@ test("codex bridge processes an actionable inbox message with a fake Codex CLI",
         subject: "Bridge acceptance",
         body: "Please answer via bridge.",
         requires_response: true,
+        intent: "consult",
       },
       root,
     );
@@ -182,7 +183,9 @@ test("codex bridge recovers a durable reply when the CLI wrapper exits before it
       "process.exit(2);",
     ].join("\n"), "utf8");
     await chmod(fakeCodex, 0o755);
-    const sent = await sendMessage({ from: "claude-code", to: "codex", subject: "Detached worker", body: "Recover this reply.", requires_response: true }, root);
+    const sent = await sendMessage({
+      from: "claude-code", to: "codex", subject: "Detached worker", body: "Recover this reply.", requires_response: true, intent: "consult",
+    }, root);
     await runBridge(["--once", "--root", root, "--codex-command", fakeCodex, "--session-id", "fake-session", "--session-store", sessionStore]);
     const replies = await readInbox({ agent: "claude-code", include_read: true }, root);
     assert.equal(replies[0].body, "# Detached worker\n\nRecovered worker reply");

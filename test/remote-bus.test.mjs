@@ -14,11 +14,15 @@ test("remote Agent Bus client keeps messages and threads on the control-plane au
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const client = createRemoteBus(`http://127.0.0.1:${server.address().port}/agent-bus`, { writeToken: "secret" });
   try {
-    const sent = await client.sendMessage({ from: "claude", to: "codex", subject: "Remote", body: "Central message", requires_response: true });
+    const sent = await client.sendMessage({
+      from: "claude", to: "codex", subject: "Remote", body: "Central message", requires_response: true, intent: "consult",
+    });
     const inbox = await client.readInbox({ agent: "codex" });
     assert.equal(inbox[0].message_id, sent.message_id);
     await client.ackMessage({ message_id: sent.message_id });
-    const reply = await client.replyMessage({ from: "codex", to: "claude", thread_id: sent.thread_id, body: "Central reply" });
+    const reply = await client.replyMessage({
+      from: "codex", to: "claude", thread_id: sent.thread_id, body: "Central reply", intent: "inform",
+    });
     assert.equal(reply.seq, 2);
     await client.markRead({ message_id: sent.message_id });
     await client.updateThreadStatus({ thread_id: sent.thread_id, status: "completed" });
@@ -48,6 +52,7 @@ test("remote Agent Bus uploads and materializes host-local artifacts", async () 
       body: "Read the attached file",
       artifact_paths: [source],
       requires_response: true,
+      intent: "consult",
     });
     const [message] = await client.readInbox({ agent: "cursor" });
     assert.equal(message.message_id, sent.message_id);

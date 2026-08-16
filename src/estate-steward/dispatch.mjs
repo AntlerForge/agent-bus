@@ -31,6 +31,8 @@ export async function dispatchOutcomeFailure({ transition, bus = estateStewardBu
     priority: "high",
     ack_required: true,
     requires_response: true,
+    intent: "execute",
+    execution_authority: { type: "trusted_policy", policy_id: "estate-steward-repair" },
     idempotency_key: `estate-outcome:${card.card_id}:${card.first_seen}`,
   });
 }
@@ -44,6 +46,8 @@ export async function dispatchSentinelDeadman({ bucket, maxMinutes, bus = estate
     priority: "high",
     ack_required: true,
     requires_response: true,
+    intent: "execute",
+    execution_authority: { type: "trusted_policy", policy_id: "estate-steward-repair" },
     idempotency_key: `estate-outcome-deadman:${bucket}`,
   });
 }

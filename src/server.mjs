@@ -119,6 +119,18 @@ const server = new McpServer({
 });
 
 const artifactPaths = z.array(z.string()).optional().default([]);
+const messageIntent = z.enum(["inform", "consult", "recommendation", "execute"]);
+const executionAuthority = z.union([
+  z.object({
+    type: z.literal("assignment"),
+    work_item_id: z.string(),
+    assignment_id: z.string(),
+  }),
+  z.object({
+    type: z.literal("trusted_policy"),
+    policy_id: z.string(),
+  }),
+]).optional();
 
 registerTool(
   server,
@@ -135,6 +147,8 @@ registerTool(
     requires_response: z.boolean().optional().default(false),
     artifact_paths: artifactPaths,
     idempotency_key: z.string().optional(),
+    intent: messageIntent,
+    execution_authority: executionAuthority,
   },
   (args) => remoteBus ? remoteBus.sendMessage(args) : sendMessage(args, root),
 );
@@ -163,6 +177,8 @@ registerTool(
     ack_required: z.boolean().optional().default(false),
     requires_response: z.boolean().optional().default(false),
     artifact_paths: artifactPaths,
+    intent: messageIntent,
+    execution_authority: executionAuthority,
   },
   (args) => remoteBus ? remoteBus.replyMessage(args) : replyMessage(args, root),
 );

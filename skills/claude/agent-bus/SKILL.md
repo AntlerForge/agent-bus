@@ -81,7 +81,9 @@ same thread, and thread status `completed` for every target.
 Use a message when no governed task lifecycle is needed:
 
 1. Put large material in stable files and pass absolute paths through `artifact_paths`; the remote client uploads supported Mac-local files to A6 before delivery.
-2. Call `send_message` with explicit `from`, `to`, subject and body.
+2. Call `send_message` with explicit `from`, `to`, subject, body and intent
+   (`inform`, `consult`, `recommendation` or `execute`). `execute` also requires
+   the current assignment authority or a named trusted policy.
 3. Set `requires_response: true` only for a question, review request or delegated action.
 4. Set `ack_required: true` only when receipt must be demonstrated.
 5. Report the `message_id` and `thread_id`.

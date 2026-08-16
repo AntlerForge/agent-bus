@@ -7,6 +7,8 @@ import { ackMessage, getThread, markRead, readInbox, replyMessage, updateThreadS
 import { ensureBusLayout } from "./paths.mjs";
 import { configuredRemoteBus } from "./remote-bus.mjs";
 import { createQueue } from "./task-queue.mjs";
+import { createAuthorityLookup, evaluateMessageAuthority } from "./execution-authority.mjs";
+import { authorityPrompt } from "./message-intent.mjs";
 
 const RESPONSE_STATUSES = new Set(["completed", "input_required", "blocked", "failed"]);
 
@@ -61,6 +63,8 @@ export function buildRuntimeBridgePrompt({ agentId, provider, message, thread, a
     `Subject: ${message.subject}`,
     `Message ID: ${message.message_id}`,
     `Thread ID: ${message.thread_id}`,
+    `Intent: ${message.intent}`,
+    authorityPrompt(message.intent, message.state_changes_allowed === true),
     "",
     "Materialized artifacts:",
     ...artifactLines,
@@ -138,6 +142,38 @@ async function handleMessage(message, options) {
   await updateThreadStatus({ thread_id: message.thread_id, status: "in_progress" }, options.root);
 
   try {
+    const authority = await evaluateMessageAuthority(message, { getItem: options.authorityLookup });
+    if (authority.disposition === "record_only") {
+      await markRead({ message_id: message.message_id }, options.root);
+      await updateThreadStatus({
+        thread_id: message.thread_id,
+        status: "completed",
+        reason: "Inform intent recorded without starting a provider turn",
+        actor: options.agentId,
+      }, options.root);
+      options.log(`Recorded inform message ${message.message_id}; no provider turn started.`);
+      return;
+    }
+    if (authority.disposition === "refuse") {
+      await replyMessage({
+        from: options.agentId,
+        to: message.from,
+        thread_id: message.thread_id,
+        body: `Execution refused. Reason: ${authority.reason} (${authority.reason_code}).`,
+        requires_response: false,
+        intent: "inform",
+      }, options.root);
+      await markRead({ message_id: message.message_id }, options.root);
+      await updateThreadStatus({
+        thread_id: message.thread_id,
+        status: "failed",
+        reason: `${authority.reason_code}: ${authority.reason}`,
+        actor: options.agentId,
+      }, options.root);
+      options.log(`Refused ${message.message_id}: ${authority.reason_code}: ${authority.reason}`);
+      return;
+    }
+    message.state_changes_allowed = authority.state_changes_allowed;
     const [thread, artifacts] = await Promise.all([
       getThread({ thread_id: message.thread_id }, options.root),
       materializeArtifacts(message, options),
@@ -159,6 +195,7 @@ async function handleMessage(message, options) {
       thread_id: message.thread_id,
       body: parsed.body,
       requires_response: false,
+      intent: "inform",
     }, options.root);
     await markRead({ message_id: message.message_id }, options.root);
     await updateThreadStatus({ thread_id: message.thread_id, status: parsed.status }, options.root);
@@ -171,6 +208,7 @@ async function handleMessage(message, options) {
       thread_id: message.thread_id,
       body: `${options.displayName} bridge failed while processing this request.\n\n${reason}`,
       requires_response: false,
+      intent: "inform",
     }, options.root);
     await markRead({ message_id: message.message_id }, options.root);
     await updateThreadStatus({ thread_id: message.thread_id, status: "failed" }, options.root);
@@ -185,7 +223,8 @@ async function handleMessage(message, options) {
 
 async function processInbox(options, queue, active) {
   const messages = (await readInbox({ agent: options.agentId, include_read: false }, options.root)).filter(
-    (message) => message.requires_response === true && message.status !== "read" && !active.has(message.message_id),
+    (message) => (message.requires_response === true || message.intent === "inform" || message.intent === "execute")
+      && message.status !== "read" && !active.has(message.message_id),
   );
   for (const message of messages) {
     active.add(message.message_id);
@@ -210,6 +249,7 @@ export async function runRuntimeBridge(options) {
     ...options,
   };
   if (!normalized.agentId || !normalized.runTurn) throw new Error("agentId and runTurn are required");
+  normalized.authorityLookup ||= createAuthorityLookup(normalized.root);
   await mkdir(normalized.stateDirectory, { recursive: true });
   if (!configuredRemoteBus()) await ensureBusLayout(normalized.root);
   await registerHeartbeat(normalized);

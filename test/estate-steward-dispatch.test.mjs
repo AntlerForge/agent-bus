@@ -24,6 +24,8 @@ test("sustained outcome failure is dispatched idempotently to Codex", async () =
   });
   assert.equal(result.thread_id, "t1");
   assert.equal(sent[0].to, "codex");
+  assert.equal(sent[0].intent, "execute");
+  assert.deepEqual(sent[0].execution_authority, { type: "trusted_policy", policy_id: "estate-steward-repair" });
   assert.equal(sent[0].idempotency_key, "estate-outcome:matrix:mac-reporter-freshness:2026-08-12T06:00:00Z");
   assert.match(sent[0].body, /Do not notify Tony/);
   assert.match(sent[0].body, /false positive or recurring defect/);
@@ -38,5 +40,6 @@ test("deadman asks an agent to restore the observer", async () => {
   const sent = [];
   await dispatchSentinelDeadman({ bucket: "2026-08-12T08", maxMinutes: 35, bus: { sendMessage: async (message) => sent.push(message) } });
   assert.equal(sent[0].to, "codex");
+  assert.equal(sent[0].intent, "execute");
   assert.match(sent[0].body, /restore it on A6/);
 });

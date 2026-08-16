@@ -81,6 +81,7 @@
         <p class="form-help">Write it like a message to a colleague. The agent picks it up on its own machine, does the work, and replies on this job — watch it under Happening now on Home.</p>
         <label>Which agent<select name="to" id="compose-to" required></select></label>
         <label>What is the job, in a few words<input name="subject" required maxlength="140" placeholder="Generate 8 image options for AF-004"></label>
+        <label>Message intent<select name="intent" required><option value="execute">Instruction — perform approved work</option><option value="consult">Consultation — answer without changes</option><option value="recommendation">Recommendation — propose, do not apply</option><option value="inform">Information only — record, do not run</option></select></label>
         <label>The details<textarea name="body" required rows="6" placeholder="What you want, where the inputs are, and where the results should go."></textarea></label>
         <label class="checkbox-label"><input type="checkbox" name="requires_response" checked> The agent must reply when done</label>
         <div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" value="submit">Send the job</button></div>
@@ -92,6 +93,7 @@
       <form method="dialog" id="reply-form">
         <label>Reply to<select name="to" id="reply-to" required></select></label>
         <label>Reply<textarea name="body" required rows="4" placeholder="Follow up on this job"></textarea></label>
+        <label>Message intent<select name="intent" required><option value="inform">Information only</option><option value="consult">Ask a question</option><option value="recommendation">Ask for a recommendation</option><option value="execute">Instruction — perform work</option></select></label>
         <label class="checkbox-label"><input type="checkbox" name="requires_response"> Ask for another reply</label>
         <div class="dialog-actions"><button class="button secondary" value="cancel">Close</button><button class="button primary" value="submit">Send reply</button></div>
       </form>

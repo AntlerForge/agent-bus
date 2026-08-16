@@ -58,9 +58,9 @@ function createAntigravityRunner(options) {
     const stored = await readProviderSession(options.sessionStore, message.thread_id);
     const tempDirectory = await mkdtemp(path.join(os.tmpdir(), "agent-bus-antigravity-"));
     const logFile = path.join(tempDirectory, "agy.log");
-    const args = ["--mode", "accept-edits"];
+    const args = ["--mode", message.state_changes_allowed ? "accept-edits" : "plan"];
     if (options.sandbox) args.push("--sandbox");
-    if (options.skipPermissions) args.push("--dangerously-skip-permissions");
+    if (message.state_changes_allowed && options.skipPermissions) args.push("--dangerously-skip-permissions");
     args.push(
       "--model", options.model,
       "--print-timeout", `${Math.ceil(options.timeoutMs / 1000)}s`,
