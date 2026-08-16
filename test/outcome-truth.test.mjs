@@ -116,3 +116,22 @@ test("synthesis accepts the current flattened healthy run metadata", () => {
   assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: { ...currentRun.metadata, auto_errors: 1 } }), false);
   assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: { ...currentRun.metadata, doctor: "failed: hard validation" } }), false);
 });
+
+test("synthesis accepts the current scalar status metadata with advisory doctor warning", () => {
+  const currentRun = {
+    event: "run_warning",
+    metadata: {
+      adapters_status: "ok",
+      dashboard_health: "ok",
+      email_triage_run_id: "082fd07c7bb2412eac5547e164302f65",
+      email_triage_status: "completed",
+      funnel: { auto_errors: 0 },
+      warnings: ["KV Doctor WARN: existing non-blocking validation and deployment findings."],
+    },
+  };
+  assert.equal(synthesisOutcomeIsClean(currentRun), true);
+  assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: {
+    ...currentRun.metadata,
+    warnings: ["KV Doctor failed: hard validation failure."],
+  } }), false);
+});
