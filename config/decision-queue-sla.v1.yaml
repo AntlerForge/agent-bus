@@ -13,8 +13,9 @@ slas_hours:
 expiry_multiple: 2
 weekly_limit: 20
 delivery:
-  phone_base_url: http://antler-a6:8088/Projects/Personal/agent-bus/runtime/decision-queue/
-  estate_status_url: http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md
+  phone_base_url: http://antler-a6:8088/files/Projects/Personal/agent-bus/runtime/decision-queue/
+  # ADR-0015: the KV dashboard Estate page is the single human surface.
+  estate_status_url: https://kv.antlerforge.com/#tasks
   auth_posture: "Private tailnet route plus FileBrowser login; no public or unauthenticated URL"
 baseline_oracle:
   date: 2026-07-18

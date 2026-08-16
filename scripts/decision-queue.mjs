@@ -2,7 +2,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
-import { renderBreachSummary, renderEstateStatus } from "../src/estate-status/render.mjs";
 
 const argv = new Set(process.argv.slice(2));
 const now = new Date(process.env.DECISION_QUEUE_NOW || Date.now());
@@ -166,8 +165,6 @@ const breachedIds = queue.filter((row) => row.breached).map((row) => row.id);
 const newBreaches = previous.initialized ? breachedIds.filter((id) => !previous.breached_ids.includes(id)) : [];
 await atomic(`${outputDir}/state.json`, `${JSON.stringify({ initialized: true, evaluated_at: now.toISOString(), breached_ids: breachedIds }, null, 2)}\n`);
 await atomic(`${outputDir}/last-evaluation.json`, `${JSON.stringify({ evaluated_at: now.toISOString(), new_breaches: newBreaches }, null, 2)}\n`);
-if (newBreaches.length) await renderBreachSummary({ snapshot, newBreaches, outputFile: `${outputDir}/breach-summary.md`, generatedAt: now.toISOString(), statusUrl });
-await renderEstateStatus({ runtimeRoot: root, generatedAt: now.toISOString(), statusUrl });
 
 if (argv.has("--weekly") || now.getUTCDay() === 0) {
   const selected = queue.slice(0, config.weekly_limit);
@@ -176,5 +173,4 @@ if (argv.has("--weekly") || now.getUTCDay() === 0) {
   const packFile = `${outputDir}/decision-pack-${now.toISOString().slice(0, 10)}.md`;
   await atomic(packFile, pack);
 }
-await renderEstateStatus({ runtimeRoot: root, generatedAt: now.toISOString(), statusUrl });
 console.log(JSON.stringify(snapshot));

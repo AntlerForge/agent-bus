@@ -3,7 +3,6 @@ import fs from "node:fs/promises";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { applyEvaluation, loadCards, loadMatrix, saveCards } from "../src/outcome-truth/core.mjs";
-import { renderEstateStatus } from "../src/estate-status/render.mjs";
 import { dispatchOutcomeFailure } from "../src/estate-steward/dispatch.mjs";
 import { borgScriptCoversLegacySources, synthesisOutcomeIsClean } from "../src/outcome-truth/probes.mjs";
 
@@ -15,7 +14,6 @@ const cardsFile = `${stateDir}/cards.json`;
 const snapshotFile = args.snapshot || process.env.OUTCOME_SNAPSHOT;
 const now = process.env.OUTCOME_NOW || new Date().toISOString();
 const runtimeRoot = process.env.AGENT_BUS_RUNTIME || "/srv/projects/Personal/agent-bus/runtime";
-const statusUrl = process.env.ESTATE_STATUS_URL || "http://antler-a6:8088/Projects/Personal/agent-bus/runtime/estate-status/estate-status.md";
 
 async function collect() {
   if (snapshotFile) return JSON.parse(await fs.readFile(snapshotFile, "utf8"));
@@ -100,7 +98,6 @@ catch { await fs.mkdir(stateDir, { recursive: true, mode: 0o700 }); await fs.wri
 const outcome = applyEvaluation({ matrix, snapshot, previous, now, shadowStartedAt });
 await saveCards(cardsFile, outcome.cards);
 await fs.writeFile(`${stateDir}/heartbeat`, `${now}\n`, { mode: 0o600 });
-await renderEstateStatus({ runtimeRoot, generatedAt: now, statusUrl });
 for (const transition of outcome.transitions) {
   const result = await dispatchOutcomeFailure({ transition, evidencePath: cardsFile });
   if (result && transition.card) {
@@ -120,5 +117,4 @@ for (const card of Object.values(outcome.cards)) {
   }
 }
 await saveCards(cardsFile, outcome.cards);
-await renderEstateStatus({ runtimeRoot, generatedAt: now, statusUrl });
 console.log(JSON.stringify(outcome));

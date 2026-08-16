@@ -14,7 +14,10 @@ test("decision queue keeps the audit baseline and bounded weekly contract", () =
   assert.equal(config.baseline_oracle.overdue_tasks, 14);
   assert.ok(config.weekly_limit <= 20);
   assert.match(config.delivery.phone_base_url, /^http:\/\/antler-a6:8088\//);
-  assert.match(config.delivery.estate_status_url, /estate-status\.md$/);
+  // ADR-0015 supersedes ADR-0011: the KV dashboard Estate page is the single
+  // human surface, so this must never point back at the retired estate-status page.
+  assert.doesNotMatch(config.delivery.estate_status_url, /estate-status\.md$/);
+  assert.match(config.delivery.estate_status_url, /^https:\/\/kv\.antlerforge\.com\//);
   assert.match(config.delivery.auth_posture, /FileBrowser login/);
 });
 
@@ -25,7 +28,8 @@ test("decision queue is read-only toward source authorities", () => {
   assert.match(source, /expiry_draft/);
   assert.match(source, /newBreaches/);
   assert.doesNotMatch(source, /ha-notify-tony\.mjs|phoneUrl\(/);
-  assert.match(source, /renderEstateStatus/);
+  // ADR-0015: observation producers no longer render the retired estate-status surface.
+  assert.doesNotMatch(source, /renderEstateStatus|renderBreachSummary|estate-status\/render/);
   assert.match(source, /collectRepoRisks/);
   assert.match(source, /incomplete_work_item_skipped/);
   assert.match(source, /human_attention\?\.required/);
