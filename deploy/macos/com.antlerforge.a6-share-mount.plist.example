@@ -9,6 +9,14 @@
 	</dict>
 	<key>Label</key>
 	<string>com.antlerforge.a6-share-mount</string>
+	<key>KeepAlive</key>
+	<dict>
+		<key>PathState</key>
+		<dict>
+			<key>/Volumes/share</key>
+			<false/>
+		</dict>
+	</dict>
 	<key>ProgramArguments</key>
 	<array>
 		<string>/Users/antonybarfoot/Developer/personal/agent-bus/scripts/outcome-truth-launchagent-wrapper.sh</string>
