@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { borgScriptCoversLegacySources, synthesisOutcomeIsClean } from "../src/outcome-truth/probes.mjs";
+import { borgArchiveAgeMinutes, borgScriptCoversLegacySources, synthesisOutcomeIsClean } from "../src/outcome-truth/probes.mjs";
 import fs from "node:fs/promises";
 import { applyEvaluation, cardId, loadMatrix } from "../src/outcome-truth/core.mjs";
 
@@ -98,6 +98,16 @@ test("Borg legacy coverage reads Bash source arrays without punctuation false ne
   assert.equal(borgScriptCoversLegacySources("sources=(\n  '/share'\n  \"/srv\"\n)"), true);
   assert.equal(borgScriptCoversLegacySources("sources=(/srv /etc/kv)"), false);
   assert.equal(borgScriptCoversLegacySources("echo /share /srv"), false);
+});
+
+test("Borg archive freshness survives missing systemd timestamps after reboot", () => {
+  const now = Date.parse("2026-08-17T14:10:00Z");
+  assert.equal(
+    borgArchiveAgeMinutes({ archives: [{ start: "2026-08-17T14:05:38.000000" }] }, now),
+    4 + 22 / 60,
+  );
+  assert.equal(borgArchiveAgeMinutes({ archives: [] }, now), Number.POSITIVE_INFINITY);
+  assert.equal(borgArchiveAgeMinutes({ archives: [{ start: "invalid" }] }, now), Number.POSITIVE_INFINITY);
 });
 
 test("synthesis treats explicitly non-blocking warnings as semantically clean", () => {

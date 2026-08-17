@@ -4,7 +4,7 @@ import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { applyEvaluation, loadCards, loadMatrix, saveCards } from "../src/outcome-truth/core.mjs";
 import { dispatchOutcomeFailure } from "../src/estate-steward/dispatch.mjs";
-import { borgScriptCoversLegacySources, synthesisOutcomeIsClean } from "../src/outcome-truth/probes.mjs";
+import { borgArchiveAgeMinutes, borgScriptCoversLegacySources, synthesisOutcomeIsClean } from "../src/outcome-truth/probes.mjs";
 
 const execFile = promisify(execFileCb);
 const args = Object.fromEntries(process.argv.slice(2).map((v, i, a) => v.startsWith("--") ? [v.slice(2), a[i + 1]] : null).filter(Boolean));
@@ -23,7 +23,22 @@ async function collect() {
   const borgState = Object.fromEntries(borgOut.trim().split("\n").map((line) => line.split(/=(.*)/s).slice(0, 2)));
   const borgRunning = ["active", "activating"].includes(borgState.ActiveState);
   const borgTime = Date.parse(borgRunning ? borgState.ExecMainStartTimestamp : borgState.ExecMainExitTimestamp);
-  const borgAgeMinutes = (Date.now() - borgTime) / 60000;
+  let borgAgeMinutes = (Date.now() - borgTime) / 60000;
+  let borgFreshnessSource = borgRunning ? "service_start" : "service_exit";
+  if (!borgRunning) {
+    try {
+      const { stdout: borgListOut } = await execFile(
+        "sudo",
+        ["-n", "borg", "list", "--json", "--last", "1", "/mnt/backup/borg/a6-primary"],
+        { maxBuffer: 16 * 1024 * 1024 },
+      );
+      const archiveAgeMinutes = borgArchiveAgeMinutes(JSON.parse(borgListOut));
+      if (Number.isFinite(archiveAgeMinutes)) {
+        borgAgeMinutes = archiveAgeMinutes;
+        borgFreshnessSource = "latest_archive";
+      }
+    } catch {}
+  }
   const macFile = process.env.OUTCOME_MAC_SNAPSHOT || `${stateDir}/mac-snapshot.json`;
   const macOut = await fs.readFile(macFile, "utf8");
   let estateSteward = { healthy: false, age_minutes: Number.POSITIVE_INFINITY, contract_version: null };
@@ -74,9 +89,10 @@ async function collect() {
       report_status: String(doctor.status).toLowerCase(),
     },
     borg: {
-      healthy: Number.isFinite(borgAgeMinutes) && borgAgeMinutes <= 120 && (borgRunning || borgState.Result === "success"),
+      healthy: Number.isFinite(borgAgeMinutes) && borgAgeMinutes <= 120 && (borgRunning || borgFreshnessSource === "latest_archive" || borgState.Result === "success"),
       newest_archive_age_minutes: borgAgeMinutes,
       service_state: borgState.ActiveState,
+      freshness_source: borgFreshnessSource,
       full_legacy_coverage: borgScriptCoversLegacySources(borgScript),
     },
     mac,

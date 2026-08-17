@@ -4,6 +4,15 @@ export function borgScriptCoversLegacySources(script) {
   return declared.has("/share") && declared.has("/srv");
 }
 
+export function borgArchiveAgeMinutes(payload, nowMs = Date.now()) {
+  const archive = payload?.archives?.[0];
+  const rawTimestamp = archive?.start || archive?.time;
+  if (typeof rawTimestamp !== "string" || rawTimestamp.length === 0) return Number.POSITIVE_INFINITY;
+  const timestamp = /(?:Z|[+-]\d\d:\d\d)$/i.test(rawTimestamp) ? rawTimestamp : `${rawTimestamp}Z`;
+  const archiveMs = Date.parse(timestamp);
+  return Number.isFinite(archiveMs) ? (nowMs - archiveMs) / 60000 : Number.POSITIVE_INFINITY;
+}
+
 export function synthesisOutcomeIsClean(outcome) {
   if (outcome?.event === "run_completed") return true;
   if (outcome?.event !== "run_warning") return false;
