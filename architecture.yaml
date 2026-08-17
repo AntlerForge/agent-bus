@@ -105,6 +105,7 @@ properties:
   tech: "Node.js, YAML, systemd and a minimal macOS LaunchAgent reporter"
   responsibilities:
     - "Evaluate declared semantic recovery contracts"
+    - "Respect declared producer schedules so expected quiet windows do not become outcome failures"
     - "Persist stable exception cards and transition-only agent dispatches"
     - "Expose an independently monitored heartbeat"
     - "Regenerate the durable Estate Status projection after every evaluation"

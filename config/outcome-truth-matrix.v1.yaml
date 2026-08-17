@@ -110,7 +110,12 @@ checks:
     source: synthesis.latest_run_age_minutes
     operator: at_most
     expected: 1800
-    recovery: a later synthesis run starts within the 30-hour daily schedule allowance
+    schedule_utc:
+      weekdays: [0, 2, 3, 4, 5, 6]
+      hour: 5
+      minute: 0
+      grace_minutes: 30
+    recovery: during a declared producer window, a later synthesis run starts within the 30-hour allowance; Monday and the pre-run grace window are expected quiet
   - id: sentinel-sandbox-contract
     area: sentinel
     owner: tony

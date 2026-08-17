@@ -71,6 +71,28 @@ test("normal Mac sleep suppresses freshness failures without masking an awake fa
   const awakeFailure = applyEvaluation({ matrix, snapshot: asleep, now: "2026-07-20T09:00:00Z", shadowStartedAt: "2026-07-18T00:00:00Z" });
   assert.equal(awakeFailure.results.find((result) => result.id === "mac-reporter-freshness").state, "fail");
 });
+
+test("synthesis freshness respects the Tuesday-Sunday producer schedule", () => {
+  const stale = structuredClone(july);
+  stale.synthesis.latest_run_age_minutes = 1811;
+  const monday = applyEvaluation({
+    matrix, snapshot: stale, now: "2026-08-17T11:12:00Z", shadowStartedAt: "2026-08-16T00:00:00Z",
+  });
+  const mondayResult = monday.results.find((result) => result.id === "kv-daily-synthesis-run-freshness");
+  assert.equal(mondayResult.state, "pass");
+  assert.equal(mondayResult.suspended, true);
+  assert.equal(mondayResult.suspension_reason, "producer_schedule_quiet");
+
+  const tuesdayGrace = applyEvaluation({
+    matrix, snapshot: stale, now: "2026-08-18T05:29:00Z", shadowStartedAt: "2026-08-16T00:00:00Z",
+  });
+  assert.equal(tuesdayGrace.results.find((result) => result.id === "kv-daily-synthesis-run-freshness").state, "pass");
+
+  const tuesdayMissed = applyEvaluation({
+    matrix, snapshot: stale, now: "2026-08-18T05:31:00Z", shadowStartedAt: "2026-08-16T00:00:00Z",
+  });
+  assert.equal(tuesdayMissed.results.find((result) => result.id === "kv-daily-synthesis-run-freshness").state, "fail");
+});
 test("Borg legacy coverage reads Bash source arrays without punctuation false negatives", () => {
   assert.equal(borgScriptCoversLegacySources("sources=(/share /srv /etc/kv)"), true);
   assert.equal(borgScriptCoversLegacySources("sources=(\n  '/share'\n  \"/srv\"\n)"), true);

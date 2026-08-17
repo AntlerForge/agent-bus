@@ -20,10 +20,29 @@ function passes(check, actual) {
   throw new Error(`Unknown operator ${check.operator}`);
 }
 
-export function evaluateMatrix(matrix, snapshot) {
+function isExpectedQuiet(check, now) {
+  const schedule = check.schedule_utc;
+  if (!schedule) return false;
+  const date = new Date(now);
+  if (Number.isNaN(date.valueOf())) throw new Error(`Invalid evaluation timestamp ${now}`);
+  const weekdays = Array.isArray(schedule.weekdays) ? schedule.weekdays.map(Number) : [];
+  if (!weekdays.includes(date.getUTCDay())) return true;
+  const deadlineMinutes = (Number(schedule.hour ?? 0) * 60)
+    + Number(schedule.minute ?? 0)
+    + Number(schedule.grace_minutes ?? 0);
+  return (date.getUTCHours() * 60) + date.getUTCMinutes() < deadlineMinutes;
+}
+
+export function evaluateMatrix(matrix, snapshot, { now = new Date().toISOString() } = {}) {
   return matrix.checks.map((check) => {
     const actual = get(snapshot, check.source);
-    return { ...check, actual: actual ?? null, state: passes(check, actual) ? "pass" : "fail" };
+    const expectedQuiet = isExpectedQuiet(check, now);
+    return {
+      ...check,
+      actual: actual ?? null,
+      state: expectedQuiet || passes(check, actual) ? "pass" : "fail",
+      ...(expectedQuiet ? { suspended: true, suspension_reason: "producer_schedule_quiet" } : {}),
+    };
   });
 }
 
@@ -35,7 +54,8 @@ export function applyEvaluation({ matrix, snapshot, previous = {}, now = new Dat
   const cards = structuredClone(previous);
   const transitions = [];
   const alertAfterMinutes = Number(matrix.alert_after_minutes || 0);
-  for (const result of evaluateMatrix(matrix, snapshot)) {
+  const results = evaluateMatrix(matrix, snapshot, { now });
+  for (const result of results) {
     const id = cardId(matrix.matrix_id, result.id);
     const prior = cards[id];
     if (result.state === "fail") {
@@ -70,7 +90,7 @@ export function applyEvaluation({ matrix, snapshot, previous = {}, now = new Dat
       transitions.push({ type: "recovered", card: prior, notify: notified });
     }
   }
-  return { cards, transitions, results: evaluateMatrix(matrix, snapshot) };
+  return { cards, transitions, results };
 }
 
 export async function loadCards(file) {
