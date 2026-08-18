@@ -30,6 +30,14 @@ properties:
     whom to message. Capabilities are machine-facing routing facts; role is a
     human-facing explanation of what an agent is for. Role must not become
     ownership of work, which remains on Work Ledger records.
+
+    A cold Codex session on 2026-08-18 discovered the standalone `amb` skill,
+    loaded it, executed `amb status`, and returned the raw seven-agent table
+    with plain-English roles under the normal trusted local execution posture.
+    Repeating the test in a deliberately read-only sandbox produced an exact,
+    visible execution failure rather than interpreting `amb` as prose. This
+    proves the Codex discovery and fail-visible paths, but is not evidence for
+    the other three harnesses.
   decision: |
     Create a standalone canonical skill named `amb`. Its name and description
     explicitly trigger on a user message whose first token is `amb`, in any
@@ -98,6 +106,16 @@ properties:
       Bus remains the only message registry and transport; Work Ledger remains
       the only delegated-work authority; the existing authenticated web UI is
       unchanged.
+  validation: |
+    Acceptance requires cold-session chat-box tests in Codex, Claude Code,
+    Cursor and Antigravity. Each test must begin with literal `amb status`,
+    demonstrate discovery of the standalone skill, and return the adapter's
+    raw role-bearing table. A second negative test must make execution
+    unavailable and confirm an explicit failure with no semantic fallback.
+    Validate the canonical skill with the skill validator, verify its
+    skill-federation source hash, and verify every declared harness deployment
+    path resolves to that canonical source. Codex has passed both its positive
+    and negative tests; Claude Code, Cursor and Antigravity remain required.
   supersedes: null
   superseded_by: null
 relations:
