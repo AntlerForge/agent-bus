@@ -1,0 +1,115 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0017-make-amb-a-chat-first-skill
+namespace: project:agent-bus
+title: "Make amb a chat-first skill over Agent Bus"
+status: draft
+owner: tony
+properties:
+  date: 2026-08-18
+  component: agent-directory
+  tags: [amb, skill, chat, agent-directory, harnesses, safety, typed-intent]
+  context: |
+    Tony asked for `amb` as the universal chat-box name for finding and
+    messaging agents. The first implementation started from a shell CLI and
+    then folded its instructions into the existing `agent-bus` skill. Those
+    choices solved plumbing while removing the requested discovery surface:
+    none of the four harnesses had a skill named `amb`, and a chat message was
+    not guaranteed to invoke the shell command. When `amb status` was missed,
+    a model interpreted `amb` as prose and produced an unrelated medical
+    escalation. This is a safety failure, not merely a help-text defect.
+
+    The native Codex, Claude Code, Cursor and Antigravity chat boxes do not
+    expose one common pre-model command interceptor. MCP still requires the
+    model to select a tool, and only some harnesses expose user-prompt hooks.
+    Claiming a structural interception guarantee across all four would
+    therefore be false. They do share skill discovery, eager host instruction
+    surfaces and local shell execution.
+
+    Agent records also lack the plain-English role needed for Tony to choose
+    whom to message. Capabilities are machine-facing routing facts; role is a
+    human-facing explanation of what an agent is for. Role must not become
+    ownership of work, which remains on Work Ledger records.
+  decision: |
+    Create a standalone canonical skill named `amb`. Its name and description
+    explicitly trigger on a user message whose first token is `amb`, in any
+    case. Deploy the same skill into Codex, Claude Code, Cursor and Antigravity
+    through their existing skill-discovery directories. Keep `agent-bus` as
+    the deeper governance and work-ledger skill; remove duplicated amb usage
+    guidance from it after the standalone skill is live.
+
+    Treat the skill as the user interface. It invokes one bundled deterministic
+    adapter as an implementation detail and returns that adapter's stdout or
+    stderr verbatim. Tony is never asked to open a terminal. The adapter uses
+    the existing loopback Agent Bus API and introduces no service, port,
+    registry or public route. The existing prototype may supply tested API
+    mechanics, but it is not the source of the user contract.
+
+    Add a minimal eager rule to each harness's normal always-loaded instruction
+    surface: if the first user token is `amb`, load the `amb` skill, execute the
+    complete input verbatim, and return raw output without interpretation. If
+    the skill, shell, identity or bus is unavailable, state the exact failure
+    and stop; never answer from model knowledge. Where a harness supports a
+    prompt hook, it may add the same instruction as defence in depth, but hooks
+    are not the portable contract and must not change command semantics.
+
+    Record the limitation honestly: on native chat surfaces without a pre-model
+    interceptor, execution ultimately depends on the harness obeying its eager
+    instruction. Mitigate this with the exact-token rule, a dedicated skill,
+    raw-output-only behavior, and end-to-end chat tests through all four
+    harnesses. Do not claim an impossible structural guarantee.
+
+    Extend agent-directory contract v1 compatibly with an optional `role`
+    string. It is a concise plain-English purpose, not a capability, current
+    task, portfolio, owner or authority grant. `amb status` shows reference
+    name, role and live status; existing agents receive explicit maintained
+    roles, and missing roles render as `role not recorded` rather than being
+    inferred from capabilities. `amb add <name>` means self-registration and
+    its help says so unambiguously; it accepts a role for new identities.
+
+    `amb read` always reads the running agent's configured inbox. Do not create
+    a `tony` agent identity for this command: Tony's clarified requirement is
+    that the current harness reads its own messages. A missing identity fails
+    with the exact registration command instead of guessing from the OS user.
+
+    `amb message <name> <text>` always supplies ADR-0016 typed intent. Default
+    to `consult`, the safest useful interactive behavior: it asks for a
+    read-only response without granting mutation authority. `--intent inform`,
+    `--intent recommendation` and `--intent execute` override it. Execute must
+    also carry and validate a current assignment or named trusted policy; the
+    adapter must not manufacture execution authority.
+
+    Preserve the command vocabulary `status`, `add`, `message`, `read`,
+    `who`, `whoami` and `retire`. State in skill metadata and failures that
+    `amb` is the chat interface to Agent Bus, not a second system, not
+    "ambient", and not a separate population of agents.
+  consequences:
+    positive: |
+      Tony gets the requested discoverable chat surface, the same command
+      semantics across four harnesses, a useful role column, and fail-visible
+      behavior that prevents another prose/medical misinterpretation.
+    negative: |
+      The common native chat surfaces cannot provide a universal pre-model
+      interception guarantee. Four eager instruction deployments and four
+      end-to-end chat checks must remain healthy, and the role field adds a
+      small maintained data contract.
+    neutral: |
+      The CLI-shaped adapter remains an internal implementation detail. Agent
+      Bus remains the only message registry and transport; Work Ledger remains
+      the only delegated-work authority; the existing authenticated web UI is
+      unchanged.
+  supersedes: null
+  superseded_by: null
+relations:
+  - to: Component:project:agent-bus/agent-directory
+    type: governs
+  - to: Component:project:agent-bus/bus-core
+    type: governs
+  - to: Component:project:agent-bus/agent-adapters
+    type: governs
+  - to: Interface:project:agent-bus/agent-bus-mcp
+    type: governs
+  - to: Decision:project:agent-bus/0016-require-typed-intent-and-execution-authority
+    type: depends-on
+source: decisions/0017-make-amb-a-chat-first-skill.yaml
+last_verified: "2026-08-18"
