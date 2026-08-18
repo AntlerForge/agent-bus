@@ -8,6 +8,11 @@ owns transport; the ledger owns delegated-work status, assignments, runs,
 receipts, reviews, and recorded token usage. They share a dashboard without
 conflating message delivery with task completion.
 
+Tony's **AMB (Agent Messaging Board)** is a separate passive subsystem hosted
+by the same private control-plane process. AMB has its own registry and inbox
+under `/api/v1/amb/`; it never reads Agent Bus messages or work state and never
+dispatches provider work. See [AMB User-Level Requirements](docs/amb-user-requirements.md).
+
 Agent Bus gives agents a shared mailbox, shared file area, durable threads, and simple
 operating rules. It is useful when you want one model to stay in charge of a project while
 delegating work to another model for a different strength, capability, or rate limit.

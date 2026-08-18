@@ -5,6 +5,7 @@
   "type": "module",
   "main": "src/server.mjs",
   "bin": {
+    "amb": "bin/amb",
     "agent-bus": "src/server.mjs",
     "agent-bus-antigravity-bridge": "src/antigravity-bridge.mjs",
     "agent-bus-channel": "src/claude-channel.mjs",

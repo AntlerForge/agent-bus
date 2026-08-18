@@ -6,7 +6,8 @@ title: "Agent Bus and Agent Work Ledger"
 description: |
   Local-first transport and an adjacent control plane for Tony and trusted agents.
   Does: exchange durable agent messages, track delegated work, expose a private dashboard,
-  preserve auditable receipts and surface advisory model-routing guidance.
+  preserve auditable receipts, surface advisory model-routing guidance, and host the
+  separately namespaced passive AMB message board.
   Does not: replace provider runtimes, absorb the Knowledge Vault or become the authority for every human task.
 owner: tony
 status: active
@@ -39,6 +40,32 @@ relations:
   - to: Interface:project:agent-bus/agent-bus-mcp
     type: exposes
   - to: DataStore:project:agent-bus/bus-runtime-files
+    type: writes-to
+---
+apiVersion: arch.kv/v1
+kind: Component
+id: amb-board
+namespace: project:agent-bus
+title: "AMB passive message board"
+description: |
+  Does: persist AMB-only identities and passive notes and expose the small AMB API.
+  Does not: reuse Agent Bus records, start provider work or carry governed-work semantics.
+owner: tony
+status: active
+properties:
+  path: "src/amb-board.mjs"
+  tech: "Node.js, Markdown and JSON"
+  responsibilities:
+    - "Persist a separate human-readable AMB registry and per-agent inbox"
+    - "Expose passive register, list, message, read and retire operations"
+    - "Keep AMB records isolated from Agent Bus and Work Ledger state"
+  non_responsibilities:
+    - "Agent Bus transport, threads, bridges, heartbeats or artifacts"
+    - "Typed intent, execution authority, assignments, runs, reviews or receipts"
+relations:
+  - to: Interface:project:agent-bus/amb-http
+    type: exposes
+  - to: DataStore:project:agent-bus/amb-runtime-files
     type: writes-to
 ---
 apiVersion: arch.kv/v1
@@ -202,6 +229,7 @@ properties:
     - "Translate authenticated user and agent actions into ledger operations"
     - "Expose health and version endpoints"
     - "Persist bridge heartbeats and expose read-only agent liveness status"
+    - "Expose the separately namespaced passive AMB API without merging its records into Agent Bus views"
   non_responsibilities:
     - "Direct storage mutation or provider-specific execution"
 relations:
@@ -210,6 +238,8 @@ relations:
   - to: Interface:project:agent-bus/work-ledger-api
     type: exposes
   - to: Interface:project:agent-bus/model-selector-api
+    type: exposes
+  - to: Interface:project:agent-bus/amb-http
     type: exposes
 ---
 apiVersion: arch.kv/v1
@@ -264,6 +294,18 @@ properties:
 ---
 apiVersion: arch.kv/v1
 kind: Interface
+id: amb-http
+namespace: project:agent-bus
+title: "AMB passive board HTTP API"
+description: "Private localhost JSON API for the AMB-only registry and passive per-agent mailbox. It is not an Agent Bus message or work interface."
+owner: tony
+status: active
+properties:
+  type: http
+  version: "1.0"
+---
+apiVersion: arch.kv/v1
+kind: Interface
 id: work-ledger-api
 namespace: project:agent-bus
 title: "Agent Work Ledger API"
@@ -297,6 +339,18 @@ status: active
 properties:
   format: "Markdown and JSON"
   authority: "Agent Bus transport state"
+---
+apiVersion: arch.kv/v1
+kind: DataStore
+id: amb-runtime-files
+namespace: project:agent-bus
+title: "AMB runtime files"
+description: "Human-readable AMB-only registry and inbox records under the dedicated runtime amb/ namespace."
+owner: tony
+status: active
+properties:
+  format: "Markdown and JSON"
+  authority: "Passive AMB board state only; never Agent Bus or delegated-work state"
 ---
 apiVersion: arch.kv/v1
 kind: DataStore
@@ -344,6 +398,17 @@ status: active
 properties:
   code: P-001
   statement: "Agent Bus owns message transport. Agent Work Ledger owns delegated-work lifecycle. Message or thread status must never be treated as task status."
+---
+apiVersion: arch.kv/v1
+kind: Invariant
+id: p-007
+namespace: project:agent-bus
+title: "AMB remains semantically isolated"
+owner: tony
+status: active
+properties:
+  code: P-007
+  statement: "AMB and Agent Bus may share private process plumbing only. They must not share registries, inbox records, lifecycle state or message semantics, and no AMB operation may dispatch work."
 ---
 apiVersion: arch.kv/v1
 kind: Invariant
@@ -399,6 +464,27 @@ status: active
 properties:
   code: P-006
   statement: "A selector recommendation or workflow template may prefill a proposal, but it cannot approve, assign, dispatch or complete work."
+---
+apiVersion: arch.kv/v1
+kind: Flow
+id: amb-passive-note-round-trip
+namespace: project:agent-bus
+title: "AMB passive note round trip"
+owner: tony
+status: active
+properties:
+  trigger: "An agent registers, leaves or reads a passive AMB note"
+  steps:
+    - "The current agent registers its AMB name and plain-English role"
+    - "The sender leaves a note in the recipient's AMB-only inbox"
+    - "No provider bridge or Agent Bus workflow consumes the note"
+    - "The recipient later reads the note and the adapter marks it read"
+  data: [amb_agent_id, role, amb_message_id, sender, recipient, body, read_at]
+relations:
+  - to: Component:project:agent-bus/amb-board
+    type: depends-on
+  - to: DataStore:project:agent-bus/amb-runtime-files
+    type: writes-to
 ---
 apiVersion: arch.kv/v1
 kind: Flow
@@ -569,6 +655,23 @@ relations:
   - to: Invariant:project:agent-bus/p-004
     type: checks
   - to: Invariant:project:agent-bus/p-005
+    type: checks
+---
+apiVersion: arch.kv/v1
+kind: FitnessCheck
+id: amb-boundary-isolation
+namespace: project:agent-bus
+title: "AMB never exposes or mutates Agent Bus state"
+owner: tony
+status: active
+properties:
+  mode: executable
+  command: "node --test test/amb-board.test.mjs test/amb-cli.test.mjs"
+  expected: "AMB uses only the dedicated amb/ registry and inbox, Agent Bus messages remain invisible, and no AMB operation carries execution or work semantics"
+relations:
+  - to: Component:project:agent-bus/amb-board
+    type: checks
+  - to: Invariant:project:agent-bus/p-007
     type: checks
 ---
 apiVersion: arch.kv/v1

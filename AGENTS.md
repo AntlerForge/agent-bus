@@ -6,7 +6,8 @@
 
 Local-first transport and an adjacent control plane for Tony and trusted agents.
 Does: exchange durable agent messages, track delegated work, expose a private dashboard,
-preserve auditable receipts and surface advisory model-routing guidance.
+preserve auditable receipts, surface advisory model-routing guidance, and host the
+separately namespaced passive AMB message board.
 Does not: replace provider runtimes, absorb the Knowledge Vault or become the authority for every human task.
 
 
@@ -19,6 +20,7 @@ Does not: replace provider runtimes, absorb the Knowledge Vault or become the au
 | Component | Description | Layer |
 |-----------|-------------|-------|
 | `bus-core` — Agent Bus Core | Does: persist messages, threads, agents and artifacts and expose MCP transport t |  |
+| `amb-board` — AMB passive message board | Does: persist AMB-only identities and passive notes and expose the small AMB API |  |
 | `agent-adapters` — Agent Runtime Adapters | Does: connect provider-native sessions to Agent Bus on the host where each runti |  |
 | `ha-notification-channel` — Home Assistant notification and approval channel | Does: send deduplicated ALERT/APPROVAL/INFO mobile notifications and capture sta |  |
 | `outcome-truth-sentinel` — Outcome-truth exception sentinel | Does: evaluate versioned semantic outcome contracts on A6, persist deduplicated  |  |
@@ -42,6 +44,21 @@ Do |  |
 
 > For full detail: `arch-graph slice --namespace project:agent-bus --component bus-core`
 
+### Component: AMB passive message board
+
+**Responsibilities:**
+- Persist a separate human-readable AMB registry and per-agent inbox
+- Expose passive register, list, message, read and retire operations
+- Keep AMB records isolated from Agent Bus and Work Ledger state
+**Non-responsibilities (do NOT do):**
+- Agent Bus transport, threads, bridges, heartbeats or artifacts
+- Typed intent, execution authority, assignments, runs, reviews or receipts
+**Relations:**
+- exposes → `Interface:project:agent-bus/amb-http`
+- writes-to → `DataStore:project:agent-bus/amb-runtime-files`
+
+> For full detail: `arch-graph slice --namespace project:agent-bus --component amb-board`
+
 ### Component: Agent Runtime Adapters
 
 **Responsibilities:**
@@ -49,6 +66,7 @@ Do |  |
 - Relay requests and receipts through Agent Bus
 - Heartbeat live bridges and preserve one provider session per message thread
 - Materialize remote artifacts into bounded host-local bridge storage
+- Refuse provider execution unless typed intent and execution authority permit it
 **Non-responsibilities (do NOT do):**
 - Durable work-item authority
 
@@ -72,13 +90,14 @@ Do |  |
 
 **Responsibilities:**
 - Evaluate declared semantic recovery contracts
-- Persist stable exception cards and transition-only notifications
+- Respect declared producer schedules so expected quiet windows do not become outcome failures
+- Persist stable exception cards and transition-only agent dispatches
 - Expose an independently monitored heartbeat
 - Regenerate the durable Estate Status projection after every evaluation
 **Non-responsibilities (do NOT do):**
 - Auto-remediation, telemetry monitoring or approval authority
 **Relations:**
-- depends-on → `Component:project:agent-bus/ha-notification-channel`
+- depends-on → `Component:project:agent-bus/bus-core`
 - writes-to → `DataStore:project:agent-bus/outcome-card-files`
 
 > For full detail: `arch-graph slice --namespace project:agent-bus --component outcome-truth-sentinel`
@@ -88,12 +107,10 @@ Do |  |
 **Responsibilities:**
 - Aggregate declared waiting states without changing their source stores
 - Skip and visibly log incomplete work-item directories while preserving failures for other read errors
-- Emit transition-only SLA alerts and a weekly INFO decision pack
+- Persist transition-only SLA evidence and a weekly decision pack
 - Render queue breach summaries and refresh the shared Estate Status projection
 **Non-responsibilities (do NOT do):**
 - Approval authority, automatic expiry, or dashboard integration
-**Relations:**
-- depends-on → `Component:project:agent-bus/ha-notification-channel`
 
 > For full detail: `arch-graph slice --namespace project:agent-bus --component decision-queue`
 
@@ -128,12 +145,14 @@ Do |  |
 - Translate authenticated user and agent actions into ledger operations
 - Expose health and version endpoints
 - Persist bridge heartbeats and expose read-only agent liveness status
+- Expose the separately namespaced passive AMB API without merging its records into Agent Bus views
 **Non-responsibilities (do NOT do):**
 - Direct storage mutation or provider-specific execution
 **Relations:**
 - exposes → `Interface:project:agent-bus/control-plane-http`
 - exposes → `Interface:project:agent-bus/work-ledger-api`
 - exposes → `Interface:project:agent-bus/model-selector-api`
+- exposes → `Interface:project:agent-bus/amb-http`
 
 > For full detail: `arch-graph slice --namespace project:agent-bus --component control-plane`
 
@@ -155,6 +174,7 @@ Do |  |
 ## Invariants and Principles
 
 - **P-001**: Agent Bus owns message transport. Agent Work Ledger owns delegated-work lifecycle. Message or thread status must never be treated as task status.
+- **P-007**: AMB and Agent Bus may share private process plumbing only. They must not share registries, inbox records, lifecycle state or message semantics, and no AMB operation may dispatch work.
 - **P-002**: Every imported or delegated work item links to its KV, software backlog or GitHub source through source_ref without silently replacing that authority.
 - **P-003**: An agent may propose work, but a proposal cannot dispatch itself unless an explicit trusted policy permits that transition.
 - **P-004**: A work item cannot enter done until it has a receipt recording outcome, evidence, deliverables, limitations and known usage.
@@ -169,19 +189,23 @@ Do |  |
 - **0004-supervise-bridge-results-and-route-ha-approvals**: Persist provider turn results and route approvals through Home Assistant (status: active)
 - **0005-evaluate-outcomes-on-a6-with-a-read-only-mac-probe**: Evaluate outcome contracts on A6 with a minimal Mac reporter (status: active)
 - **0006-fail-closed-on-missing-control-plane-authority**: Fail closed when the authoritative control plane is not configured (status: active)
-- **0007-aggregate-decisions-read-only-on-a6**: Aggregate Tony's decision queue read-only on A6 (status: active)
+- **0007-aggregate-decisions-read-only-on-a6**: Aggregate Tony's decision queue read-only on A6 (status: superseded)
 - **0008-open-decision-packs-through-authenticated-filebrowser**: Open decision packs through the existing authenticated FileBrowser (status: active)
 - **0009-cache-weekly-repo-risk-in-existing-mac-reporter**: Cache the weekly repo-risk sweep through the existing Mac reporter (status: active)
 - **0010-treat-mac-sleep-as-availability-state-and-catch-up-on-wake**: Treat Mac sleep as availability state and catch maintenance up on wake (status: active)
-- **0011-render-one-private-estate-status-surface**: Render one private Estate Status surface for every notification (status: active)
+- **0011-render-one-private-estate-status-surface**: Render one private Estate Status surface for every notification (status: superseded)
 - **0012-require-sustained-failure-and-interactive-mac-state**: Page only sustained failures and evaluate Mac jobs only when interactive (status: active)
 - **0013-select-model-harness-pairs**: Select model-harness pairs rather than models in isolation (status: active)
 - **0014-make-bridge-liveness-first-class**: Make bridge liveness first-class transport telemetry (status: active)
+- **0015-route-observations-to-estate-steward**: Route operational observations to Estate Steward instead of Tony (status: active)
+- **0016-require-typed-intent-and-execution-authority**: Require typed message intent and explicit execution authority (status: active)
+- **0017-make-amb-a-chat-first-skill**: Keep AMB separate from Agent Bus semantics (status: active)
 
 ## Fitness Checks
 
 - **bridge-doctor-health**: bridge:doctor reports transport health with exact repairs
 - **full-test-suite**: Agent Bus and Work Ledger tests pass
+- **amb-boundary-isolation**: AMB never exposes or mutates Agent Bus state
 - **private-service-contract**: A6 service remains private and observable
 - **selector-contract-validation**: Selector contract and advisory-boundary tests pass
 - **provider-bridge-round-trip**: Provider bridges complete text and artifact round trips

@@ -3,6 +3,15 @@ import { createServer } from "node:http";
 import { appendFile, mkdir, readdir, readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import {
+  getAmbAgent,
+  listAmbAgents,
+  markAmbMessageRead,
+  readAmbInbox,
+  registerAmbAgent,
+  retireAmbAgent,
+  sendAmbMessage,
+} from "../amb-board.mjs";
 import { classifyLiveness, heartbeatAgent, listAgents, registerAgent, setAgentLifecycleStatus, LIVENESS_THRESHOLDS } from "../agents.mjs";
 import { readArtifactContent, readArtifactManifest, uploadSharedArtifact } from "../artifacts.mjs";
 import { getThread, listThreads } from "../mailbox.mjs";
@@ -24,7 +33,7 @@ import {
   updateRun,
 } from "../work-ledger/store.mjs";
 
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 const STARTED_AT = new Date().toISOString();
 const STATIC_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "public");
 const STATIC_FILES = {
@@ -256,6 +265,49 @@ export function createControlPlane({
           status: url.searchParams.get("status") || undefined,
           agent_id: url.searchParams.get("agent_id") || undefined,
           project: url.searchParams.get("project") || undefined,
+        }, root));
+      }
+      if (request.method === "GET" && pathname === "/api/v1/amb/agents") {
+        return sendJson(response, 200, await listAmbAgents({
+          include_retired: url.searchParams.get("include_retired") === "true",
+        }, root));
+      }
+      if (request.method === "POST" && pathname === "/api/v1/amb/agents") {
+        requireWriteAccess(request, writeToken);
+        return sendJson(response, 201, await registerAmbAgent(await readJsonBody(request), root));
+      }
+      const ambAgentDetail = pathname.match(/^\/api\/v1\/amb\/agents\/([^/]+)$/);
+      if (request.method === "GET" && ambAgentDetail) {
+        return sendJson(response, 200, await getAmbAgent({
+          agent_id: decodeURIComponent(ambAgentDetail[1]),
+        }, root));
+      }
+      const ambAgentRetire = pathname.match(/^\/api\/v1\/amb\/agents\/([^/]+)\/retire$/);
+      if (request.method === "POST" && ambAgentRetire) {
+        requireWriteAccess(request, writeToken);
+        const body = await readJsonBody(request);
+        return sendJson(response, 200, await retireAmbAgent({
+          ...body,
+          agent_id: decodeURIComponent(ambAgentRetire[1]),
+        }, root));
+      }
+      if (request.method === "POST" && pathname === "/api/v1/amb/messages") {
+        requireWriteAccess(request, writeToken);
+        return sendJson(response, 201, await sendAmbMessage(await readJsonBody(request), root));
+      }
+      if (request.method === "GET" && pathname === "/api/v1/amb/inbox") {
+        return sendJson(response, 200, await readAmbInbox({
+          agent: url.searchParams.get("agent"),
+          include_read: url.searchParams.get("include_read") === "true",
+        }, root));
+      }
+      const ambMessageRead = pathname.match(/^\/api\/v1\/amb\/messages\/([^/]+)\/read$/);
+      if (request.method === "POST" && ambMessageRead) {
+        requireWriteAccess(request, writeToken);
+        const body = await readJsonBody(request);
+        return sendJson(response, 200, await markAmbMessageRead({
+          ...body,
+          message_id: decodeURIComponent(ambMessageRead[1]),
         }, root));
       }
       if (request.method === "GET" && pathname === "/api/v1/agents") {

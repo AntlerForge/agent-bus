@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""amb - Tony's lightweight agent messaging board.
+
+  amb status                     list AMB names and roles
+  amb add <name> [--role text]   register THIS agent on AMB
+  amb message <name> <text>      leave a passive note
+  amb read [--all]               read THIS agent's AMB notes
+  amb who <name>                 show one AMB registration
+  amb whoami                     show this session's AMB identity
+  amb retire <name>              retire an AMB registration
+
+AMB is separate from Agent Bus. It has no work, queue or execution semantics.
+"""
+import json
+import os
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+CANDIDATES = ["http://127.0.0.1:8091/agent-bus", "http://127.0.0.1:18091/agent-bus"]
+IDENTITY = Path(os.environ.get("AMB_HOME", Path.home() / ".config" / "amb")) / "identity"
+
+
+def die(message, code=1):
+    print(f"amb: {message}", file=sys.stderr)
+    raise SystemExit(code)
+
+
+def base_url():
+    configured = os.environ.get("AMB_URL")
+    if configured:
+        return configured.rstrip("/")
+    for candidate in CANDIDATES:
+        try:
+            urllib.request.urlopen(f"{candidate}/api/v1/amb/agents", timeout=3).read()
+            return candidate
+        except Exception:
+            continue
+    die(
+        "cannot reach AMB.\n"
+        "  On A6 it is at 127.0.0.1:8091/agent-bus.\n"
+        "  On the Mac it is at 127.0.0.1:18091/agent-bus through the SSH tunnel.\n"
+        "  Override with AMB_URL if needed.",
+        3,
+    )
+
+
+def call(method, path, payload=None):
+    url = f"{base_url()}/api/v1/amb{path}"
+    data = json.dumps(payload).encode() if payload is not None else None
+    request = urllib.request.Request(
+        url,
+        data=data,
+        method=method,
+        headers={"Content-Type": "application/json"},
+    )
+    token = os.environ.get("AMB_TOKEN")
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            raw = response.read().decode()
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode()[:500]
+        try:
+            detail = json.loads(detail).get("error", detail)
+        except Exception:
+            pass
+        die(f"board returned {error.code}: {detail}", 4)
+    except urllib.error.URLError as error:
+        die(f"cannot reach AMB: {error.reason}", 3)
+
+
+def whoami(required=True):
+    identity = os.environ.get("AMB_AGENT", "").strip()
+    if not identity and IDENTITY.exists():
+        identity = IDENTITY.read_text().strip()
+    if not identity and required:
+        die(
+            "this agent has no AMB identity.\n"
+            "  Run: amb add <name> --role \"what this agent does\"",
+            2,
+        )
+    return identity
+
+
+def ago(stamp):
+    if not stamp:
+        return "unknown"
+    try:
+        then = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return stamp
+    seconds = (datetime.now(timezone.utc) - then).total_seconds()
+    if seconds < 90:
+        return f"{int(seconds)}s ago"
+    if seconds < 5400:
+        return f"{int(seconds // 60)}m ago"
+    if seconds < 172800:
+        return f"{int(seconds // 3600)}h ago"
+    return f"{int(seconds // 86400)}d ago"
+
+
+def table(rows, headers):
+    widths = [max(len(str(row[index])) for row in [headers] + rows) for index in range(len(headers))]
+    output = ["  ".join(str(value).ljust(widths[index]) for index, value in enumerate(headers)).rstrip()]
+    output.append("  ".join("-" * width for width in widths))
+    output.extend(
+        "  ".join(str(value).ljust(widths[index]) for index, value in enumerate(row)).rstrip()
+        for row in rows
+    )
+    return "\n".join(output)
+
+
+def parse_options(arguments, allowed):
+    positional = []
+    options = {}
+    index = 0
+    while index < len(arguments):
+        value = arguments[index]
+        if value in allowed:
+            if index + 1 >= len(arguments):
+                die(f"{value} needs a value")
+            options[value] = arguments[index + 1]
+            index += 2
+        else:
+            positional.append(value)
+            index += 1
+    return positional, options
+
+
+def cmd_status(arguments):
+    include_retired = "--all" in arguments
+    suffix = "?include_retired=true" if include_retired else ""
+    agents = call("GET", f"/agents{suffix}")
+    if not agents:
+        print("No agents registered on AMB.")
+        return
+    rows = []
+    for agent in agents:
+        row = [agent.get("agent_id", "?"), agent.get("role") or "role not recorded"]
+        if include_retired:
+            row.append(agent.get("lifecycle_status", "active"))
+        rows.append(row)
+    headers = ["NAME", "ROLE"] + (["BOARD STATUS"] if include_retired else [])
+    print(table(rows, headers))
+    print(f"\n{len(rows)} registered on AMB")
+    print("Leave a note with:  amb message <NAME> your text here")
+
+
+def cmd_add(arguments):
+    positional, options = parse_options(arguments, {"--display", "--role"})
+    if len(positional) != 1:
+        die('usage: amb add <name> [--display "Full Name"] [--role "what it does"]')
+    agent_id = positional[0]
+    payload = {"agent_id": agent_id}
+    if "--display" in options:
+        payload["display_name"] = options["--display"]
+    if "--role" in options:
+        payload["role"] = options["--role"]
+    agent = call("POST", "/agents", payload)
+    IDENTITY.parent.mkdir(parents=True, exist_ok=True)
+    IDENTITY.write_text(f"{agent_id}\n")
+    print(f"'{agent_id}' is registered on AMB.")
+    print(f"  role: {agent.get('role', 'role not recorded')}")
+    print(f"  others can leave it a note with: amb message {agent_id} ...")
+
+
+def cmd_message(arguments):
+    if len(arguments) < 2:
+        die("usage: amb message <name> <your text>")
+    recipient = arguments[0]
+    body = " ".join(arguments[1:]).strip()
+    message = call("POST", "/messages", {"from": whoami(), "to": recipient, "body": body})
+    print(f"Note left for {recipient}  {message.get('message_id', '')}")
+
+
+def cmd_read(arguments):
+    include_read = "--all" in arguments
+    me = whoami()
+    query = urllib.parse.urlencode({"agent": me, "include_read": "true" if include_read else "false"})
+    messages = call("GET", f"/inbox?{query}")
+    if not messages:
+        print(f"No {'messages' if include_read else 'unread messages'} for {me} on AMB.")
+        return
+    print(f"{len(messages)} {'message(s)' if include_read else 'unread message(s)'} for {me} on AMB:\n")
+    for message in messages:
+        flag = "NEW " if message.get("status") != "read" else ""
+        print(
+            f"--- {flag}{message.get('message_id', '?')}  "
+            f"from {message.get('from', '?')}  {ago(message.get('created_at'))}"
+        )
+        for line in str(message.get("body", "")).splitlines() or [""]:
+            print(f"    {line}")
+        print()
+    for message in messages:
+        if message.get("status") != "read":
+            call("POST", f"/messages/{urllib.parse.quote(message['message_id'])}/read", {"agent": me})
+    if not include_read:
+        print("Older messages:  amb read --all")
+
+
+def cmd_who(arguments):
+    if len(arguments) != 1:
+        die("usage: amb who <name>")
+    name = urllib.parse.quote(arguments[0], safe="")
+    agent = call("GET", f"/agents/{name}")
+    print(f"NAME: {agent.get('agent_id', '?')}")
+    print(f"DISPLAY: {agent.get('display_name', '?')}")
+    print(f"ROLE: {agent.get('role', 'role not recorded')}")
+    print(f"BOARD STATUS: {agent.get('lifecycle_status', 'active')}")
+
+
+def cmd_whoami(_arguments):
+    identity = whoami(required=False)
+    print(identity if identity else "no AMB identity set -- run 'amb add <name> --role \"what it does\"'")
+
+
+def cmd_retire(arguments):
+    if len(arguments) != 1:
+        die("usage: amb retire <name>")
+    name = urllib.parse.quote(arguments[0], safe="")
+    actor = whoami(required=False)
+    call("POST", f"/agents/{name}/retire", {"actor": actor} if actor else {})
+    print(f"'{arguments[0]}' retired from AMB. Agent Bus was not changed.")
+
+
+COMMANDS = {
+    "status": cmd_status,
+    "add": cmd_add,
+    "message": cmd_message,
+    "read": cmd_read,
+    "who": cmd_who,
+    "whoami": cmd_whoami,
+    "retire": cmd_retire,
+}
+
+
+def main():
+    arguments = sys.argv[1:]
+    if not arguments or arguments[0] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return
+    command = COMMANDS.get(arguments[0])
+    if not command:
+        die(f"unknown command '{arguments[0]}'. Try: {', '.join(COMMANDS)}")
+    command(arguments[1:])
+
+
+if __name__ == "__main__":
+    main()
