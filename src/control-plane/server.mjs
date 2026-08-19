@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   getAmbAgent,
+  findAmbAgents,
   listAmbAgents,
   markAmbMessageRead,
   readAmbInbox,
@@ -275,6 +276,11 @@ export function createControlPlane({
       if (request.method === "POST" && pathname === "/api/v1/amb/agents") {
         requireWriteAccess(request, writeToken);
         return sendJson(response, 201, await registerAmbAgent(await readJsonBody(request), root));
+      }
+      if (request.method === "GET" && pathname === "/api/v1/amb/find") {
+        return sendJson(response, 200, await findAmbAgents({
+          query: url.searchParams.get("q"),
+        }, root));
       }
       const ambAgentDetail = pathname.match(/^\/api\/v1\/amb\/agents\/([^/]+)$/);
       if (request.method === "GET" && ambAgentDetail) {

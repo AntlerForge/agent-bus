@@ -1,0 +1,66 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0018-find-amb-agents-by-recent-work
+namespace: project:agent-bus
+title: "Find AMB identities by recent work without dispatching them"
+status: active
+owner: tony
+properties:
+  date: 2026-08-19
+  component: amb-board
+  tags: [amb, discovery, recent-work, chat-location, passive-routing]
+  context: |
+    Tony needs an agent in any supported chat to identify which AMB identity
+    recently worked on a subject, show where that conversation lives, and
+    leave it a passive note. Stable names and roles alone cannot answer that
+    question. Agent Bus work and thread records are deliberately incomplete
+    for this purpose and P-007 forbids reusing them as AMB state.
+  decision: |
+    Extend the AMB-only registration contract with optional recent-work text,
+    topic tags, a human-readable chat/session locator, and explicit
+    last-active/update timestamps. Preserve old records losslessly and supply
+    defaults when older registrations omit the new fields; a later AMB refresh
+    persists them.
+
+    Add a deterministic AMB-only topic lookup. Rank active registrations by
+    normalized query relevance, then last-active recency, then stable AMB name.
+    Return all relevant candidates and make empty or equally ranked top results
+    explicit so callers never silently select an identity. Keep lookup and
+    notes passive: they never query Agent Bus records, wake a provider, or
+    carry work or execution authority.
+
+    Teach the standalone federated `amb` skill to refresh the current identity
+    during substantive work when a meaningful recent-work description and
+    locator are known. For natural-language requests to message the agent
+    recently working on a topic, resolve with AMB lookup first, ask Tony to
+    choose on ambiguity, then leave an ordinary passive AMB note.
+  consequences:
+    positive: |
+      Agents become discoverable using Tony's ordinary topic words while the
+      receiving conversation remains human-locatable and no context copying is
+      required.
+    negative: |
+      Agents must refresh their AMB registration for recent-work and locator
+      data to stay useful; provider chat locators vary in quality and may be a
+      session identifier rather than a clickable URL.
+    neutral: |
+      The AMB HTTP contract advances compatibly from 1.0 to 1.1. Existing AMB
+      identities and notes remain valid and no Agent Bus state is migrated.
+  validation: |
+    Acceptance requires legacy-record compatibility, deterministic ranking and
+    ambiguity tests, isolated-store boundary checks, CLI coverage, a real
+    two-identity register/find/message/read flow, Mac/A6 parity, federated skill
+    validation, full tests and architecture validation.
+  supersedes: null
+  superseded_by: null
+relations:
+  - to: Decision:project:agent-bus/0017-make-amb-a-chat-first-skill
+    type: extends
+  - to: Component:project:agent-bus/amb-board
+    type: governs
+  - to: Interface:project:agent-bus/amb-http
+    type: governs
+  - to: DataStore:project:agent-bus/amb-runtime-files
+    type: governs
+source: decisions/0018-find-amb-agents-by-recent-work.yaml
+last_verified: "2026-08-19"

@@ -2,7 +2,7 @@
 
 Status: authoritative  
 Owner: Tony  
-Date: 2026-08-18
+Date: 2026-08-19
 
 ## Purpose
 
@@ -35,6 +35,12 @@ AMB and Agent Bus are different things with different purposes:
 | UR-AMB-010 | Agent Bus traffic never appears in `amb read`, and AMB traffic never appears in an Agent Bus inbox. |
 | UR-AMB-011 | The same AMB registry and mailbox are reached from Mac and A6 through the existing private localhost route. Failure is explicit and never interpreted as prose. |
 | UR-AMB-012 | The adapter is deterministic and version-controlled. The skill is canonical in the KV skills catalog and deployed to every active harness path. |
+| UR-AMB-013 | Registration or refresh can record a current/recent-work description, topic tags, a human-usable chat/session locator, and trustworthy last-active/update timestamps without discarding older registrations. |
+| UR-AMB-014 | `amb find <query>` deterministically ranks active AMB identities using only AMB recent-work metadata and recency, and shows each matching name and chat locator. |
+| UR-AMB-015 | Empty and equally ranked top results are explicit; neither the adapter nor the skill silently guesses which identity Tony meant. |
+| UR-AMB-016 | During substantive work, a registered agent refreshes its AMB recent-work and locator metadata when those facts are known and safe to publish on Tony's private board. |
+| UR-AMB-017 | A natural-language request such as “message the agent recently working on X” resolves through AMB, asks Tony to choose if ambiguous, then leaves only a passive AMB note. |
+| UR-AMB-018 | Recent-work discovery and chat locators remain AMB-only records; they never query or mirror Agent Bus agents, work, threads, runs, bridges or lifecycle state. |
 
 ## Current-agent identity
 
@@ -63,3 +69,8 @@ tracking. Those belong to Agent Bus and the Agent Work Ledger.
    never Agent Bus operational messages.
 4. `amb status` contains DadCare and Chief of Staff if they registered, but it
    contains no queue, work item, heartbeat or bridge columns.
+5. Agent A refreshes with “GitHub repository rationalisation” and its chat
+   locator. Agent B runs `amb find github repository`, sees A and the locator,
+   leaves A a note, and A later reads the full note and sender.
+6. Two equally relevant recent-work registrations produce an explicit
+   ambiguous result and require Tony to select a name before messaging.

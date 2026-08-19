@@ -57,7 +57,8 @@ properties:
   tech: "Node.js, Markdown and JSON"
   responsibilities:
     - "Persist a separate human-readable AMB registry and per-agent inbox"
-    - "Expose passive register, list, message, read and retire operations"
+    - "Persist AMB-only recent-work metadata and human-readable chat locators"
+    - "Expose passive register, refresh, topic-find, message, read and retire operations"
     - "Keep AMB records isolated from Agent Bus and Work Ledger state"
   non_responsibilities:
     - "Agent Bus transport, threads, bridges, heartbeats or artifacts"
@@ -297,12 +298,12 @@ kind: Interface
 id: amb-http
 namespace: project:agent-bus
 title: "AMB passive board HTTP API"
-description: "Private localhost JSON API for the AMB-only registry and passive per-agent mailbox. It is not an Agent Bus message or work interface."
+description: "Private localhost JSON API for the AMB-only registry, recent-work lookup and passive per-agent mailbox. It is not an Agent Bus message or work interface."
 owner: tony
 status: active
 properties:
   type: http
-  version: "1.0"
+  version: "1.1"
 ---
 apiVersion: arch.kv/v1
 kind: Interface
@@ -667,7 +668,7 @@ status: active
 properties:
   mode: executable
   command: "node --test test/amb-board.test.mjs test/amb-cli.test.mjs"
-  expected: "AMB uses only the dedicated amb/ registry and inbox, Agent Bus messages remain invisible, and no AMB operation carries execution or work semantics"
+  expected: "AMB uses only the dedicated amb/ registry and inbox, deterministic recent-work lookup handles empty and ambiguous results, Agent Bus messages remain invisible, and no AMB operation carries execution or work semantics"
 relations:
   - to: Component:project:agent-bus/amb-board
     type: checks

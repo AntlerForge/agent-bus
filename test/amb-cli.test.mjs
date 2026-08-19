@@ -38,13 +38,22 @@ async function withControlPlane(fn) {
 test("AMB CLI implements the separate passive board user flow", async () => {
   await withControlPlane(async ({ amb, base }) => {
     assert.match((await amb("cos", ["status"])).stdout, /No agents registered on AMB/);
-    await amb("cos", ["add", "chief-of-staff", "--role", "Routes and triages"]);
+    await amb("cos", ["add", "chief-of-staff", "--role", "Routes and triages", "--recent-work", "GitHub repository rationalisation", "--tags", "github,repository", "--chat", "Codex thread cos-chat"]);
     await amb("dad", ["add", "DadCare", "--role", "Maintains Dad care context"]);
 
     const status = (await amb("cos", ["status"])).stdout;
     assert.match(status, /chief-of-staff\s+Routes and triages/);
     assert.match(status, /DadCare\s+Maintains Dad care context/);
     assert.doesNotMatch(status, /QUEUE|WORKING ON|HEARTBEAT/);
+
+    const found = (await amb("dad", ["find", "github", "repository"])).stdout;
+    assert.match(found, /chief-of-staff\s+GitHub repository rationalisation\s+Codex thread cos-chat/);
+    assert.match(found, /Best match: chief-of-staff/);
+
+    await amb("cos", ["refresh", "--recent-work", "Agent repository cleanup", "--tags", "repository,cleanup", "--chat", "Codex thread refreshed-chat"]);
+    const refreshed = (await amb("dad", ["who", "chief-of-staff"])).stdout;
+    assert.match(refreshed, /RECENT WORK: Agent repository cleanup/);
+    assert.match(refreshed, /CHAT: Codex thread refreshed-chat/);
 
     await fetch(`${base}/api/v1/messages`, {
       method: "POST",
@@ -70,12 +79,27 @@ test("AMB CLI implements the separate passive board user flow", async () => {
 
     const who = (await amb("dad", ["who", "DadCare"])).stdout;
     assert.match(who, /ROLE: Maintains Dad care context/);
-    assert.doesNotMatch(who, /capabilit|queue|work/i);
+    assert.doesNotMatch(who, /capabilit|queue|heartbeat/i);
 
     await amb("cos", ["retire", "DadCare"]);
     assert.doesNotMatch((await amb("cos", ["status"])).stdout, /DadCare/);
     const busAgents = await (await fetch(`${base}/api/v1/agents`)).json();
     assert.ok(busAgents.find((agent) => agent.agent_id === "DadCare") === undefined);
+  });
+});
+
+test("AMB CLI refuses empty and ambiguous topic routing", async () => {
+  await withControlPlane(async ({ amb }) => {
+    await amb("one", ["add", "repo-one", "--role", "Repository agent", "--recent-work", "GitHub repository rationalisation", "--tags", "github,repository", "--chat", "Codex thread one"]);
+    await amb("two", ["add", "repo-two", "--role", "Repository agent", "--recent-work", "GitHub repository rationalisation", "--tags", "github,repository", "--chat", "Claude session two"]);
+    await assert.rejects(
+      amb("reader", ["find", "github", "repository"]),
+      (error) => error.code === 2 && /ambiguous top match/.test(error.stderr) && /repo-one/.test(error.stdout) && /repo-two/.test(error.stdout),
+    );
+    await assert.rejects(
+      amb("reader", ["find", "wedding", "venue"]),
+      (error) => error.code === 2 && /no AMB agent matches/.test(error.stderr),
+    );
   });
 });
 

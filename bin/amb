@@ -2,7 +2,9 @@
 """amb - Tony's lightweight agent messaging board.
 
   amb status                     list AMB names and roles
-  amb add <name> [--role text]   register THIS agent on AMB
+  amb add <name> [options]       register THIS agent on AMB
+  amb refresh [options]          refresh recent work and chat location
+  amb find <topic words>         find agents by recent work
   amb message <name> <text>      leave a passive note
   amb read [--all]               read THIS agent's AMB notes
   amb who <name>                 show one AMB registration
@@ -153,21 +155,68 @@ def cmd_status(arguments):
 
 
 def cmd_add(arguments):
-    positional, options = parse_options(arguments, {"--display", "--role"})
+    positional, options = parse_options(arguments, {"--display", "--role", "--recent-work", "--tags", "--chat"})
     if len(positional) != 1:
-        die('usage: amb add <name> [--display "Full Name"] [--role "what it does"]')
+        die('usage: amb add <name> [--display text] [--role text] [--recent-work text] [--tags comma,list] [--chat locator]')
     agent_id = positional[0]
     payload = {"agent_id": agent_id}
     if "--display" in options:
         payload["display_name"] = options["--display"]
     if "--role" in options:
         payload["role"] = options["--role"]
+    if "--recent-work" in options:
+        payload["recent_work"] = options["--recent-work"]
+    if "--tags" in options:
+        payload["tags"] = [tag.strip() for tag in options["--tags"].split(",") if tag.strip()]
+    if "--chat" in options:
+        payload["chat_locator"] = options["--chat"]
     agent = call("POST", "/agents", payload)
     IDENTITY.parent.mkdir(parents=True, exist_ok=True)
     IDENTITY.write_text(f"{agent_id}\n")
     print(f"'{agent_id}' is registered on AMB.")
     print(f"  role: {agent.get('role', 'role not recorded')}")
+    if agent.get("recent_work"):
+        print(f"  recent work: {agent['recent_work']}")
+    if agent.get("chat_locator"):
+        print(f"  chat: {agent['chat_locator']}")
     print(f"  others can leave it a note with: amb message {agent_id} ...")
+
+
+def cmd_refresh(arguments):
+    positional, options = parse_options(arguments, {"--display", "--role", "--recent-work", "--tags", "--chat"})
+    if positional or not options:
+        die('usage: amb refresh [--role text] [--recent-work text] [--tags comma,list] [--chat locator]')
+    payload = {"agent_id": whoami()}
+    mapping = {"--display": "display_name", "--role": "role", "--recent-work": "recent_work", "--chat": "chat_locator"}
+    for option, field in mapping.items():
+        if option in options:
+            payload[field] = options[option]
+    if "--tags" in options:
+        payload["tags"] = [tag.strip() for tag in options["--tags"].split(",") if tag.strip()]
+    agent = call("POST", "/agents", payload)
+    print(f"'{agent['agent_id']}' refreshed on AMB.")
+    print(f"  recent work: {agent.get('recent_work') or 'not recorded'}")
+    print(f"  chat: {agent.get('chat_locator') or 'not recorded'}")
+
+
+def cmd_find(arguments):
+    if not arguments:
+        die("usage: amb find <topic words>")
+    query = " ".join(arguments).strip()
+    result = call("GET", f"/find?{urllib.parse.urlencode({'q': query})}")
+    matches = result.get("results", [])
+    if not matches:
+        die(f"no AMB agent matches '{query}'. Ask the agent to refresh its AMB recent work.", 2)
+    rows = [[
+        agent.get("agent_id", "?"),
+        agent.get("recent_work") or "not recorded",
+        agent.get("chat_locator") or "not recorded",
+        ago(agent.get("last_active_at")),
+    ] for agent in matches]
+    print(table(rows, ["NAME", "RECENT WORK", "CHAT", "LAST ACTIVE"]))
+    if result.get("ambiguous"):
+        die("ambiguous top match -- choose an exact NAME before sending a note", 2)
+    print(f"\nBest match: {matches[0].get('agent_id')}")
 
 
 def cmd_message(arguments):
@@ -212,6 +261,10 @@ def cmd_who(arguments):
     print(f"NAME: {agent.get('agent_id', '?')}")
     print(f"DISPLAY: {agent.get('display_name', '?')}")
     print(f"ROLE: {agent.get('role', 'role not recorded')}")
+    print(f"RECENT WORK: {agent.get('recent_work') or 'not recorded'}")
+    print(f"TAGS: {', '.join(agent.get('tags') or []) or 'not recorded'}")
+    print(f"CHAT: {agent.get('chat_locator') or 'not recorded'}")
+    print(f"LAST ACTIVE: {agent.get('last_active_at') or 'unknown'}")
     print(f"BOARD STATUS: {agent.get('lifecycle_status', 'active')}")
 
 
@@ -232,6 +285,8 @@ def cmd_retire(arguments):
 COMMANDS = {
     "status": cmd_status,
     "add": cmd_add,
+    "refresh": cmd_refresh,
+    "find": cmd_find,
     "message": cmd_message,
     "read": cmd_read,
     "who": cmd_who,
