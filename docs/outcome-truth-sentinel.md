@@ -22,7 +22,10 @@ disabled; van-offline failures and Home Assistant entity availability are delibe
 The heartbeat threshold is 35 minutes and the independent timer runs every 10 minutes, giving
 a worst-case detection bound of 45 minutes.
 
-The daily-synthesis contract reads the authoritative automation run ledger and passes only when
-the latest terminal event is `run_completed`; `run_warning` remains failed even when a process
-exited normally. The legacy rsync contract reads the most recent recorded rsync code rather than
-trusting the later `backup complete` message.
+The daily-synthesis contract reads the authoritative automation run ledger. `run_completed`
+passes directly. A `run_warning` passes only when its metadata proves the required adapter probe,
+dashboard, mail-triage and Funnel outcomes healthy and either the run or this sentinel's current
+Doctor report proves there are no hard Doctor failures. Unverified or review-only warnings do not
+mask a useful completed synthesis, while explicit hard failures still fail the contract. The
+legacy rsync contract reads the most recent recorded rsync code rather than trusting the later
+`backup complete` message.

@@ -13,18 +13,22 @@ export function borgArchiveAgeMinutes(payload, nowMs = Date.now()) {
   return Number.isFinite(archiveMs) ? (nowMs - archiveMs) / 60000 : Number.POSITIVE_INFINITY;
 }
 
-export function synthesisOutcomeIsClean(outcome) {
+export function synthesisOutcomeIsClean(outcome, context = {}) {
   if (outcome?.event === "run_completed") return true;
   if (outcome?.event !== "run_warning") return false;
   const metadata = outcome.metadata || {};
   const adapterHealth = metadata.adapter_health;
   const adaptersHealthy = typeof adapterHealth === "string"
     ? /healthy|\bok\b/i.test(adapterHealth)
-    : adapterHealth?.required === "ok" || /healthy|\bok\b/i.test(String(metadata.adapters_status || ""));
+    : adapterHealth?.required === "ok"
+      || /healthy|\bok\b/i.test(String(metadata.adapters_status || ""))
+      || /healthy|\bok\b/i.test(String(metadata.source_adapters?.required_probe || ""));
   const dashboard = metadata.dashboard || {};
-  const dashboardHealth = dashboard.health || metadata.dashboard_health || {};
+  const dashboardHealth = typeof dashboard === "string"
+    ? dashboard
+    : dashboard.health || metadata.dashboard_health || {};
   const dashboardHealthy = typeof dashboardHealth === "string"
-    ? /healthy|\bok\b/i.test(dashboardHealth)
+    ? /healthy|\bok\b/i.test(dashboardHealth) && !/failed|unhealthy/i.test(dashboardHealth)
     : Object.keys(dashboardHealth).length > 0
       && Object.values(dashboardHealth).every((value) => value === 200 || value === "ok" || value === true)
       && (dashboard.rebuilt === undefined || dashboard.rebuilt === true);
@@ -36,7 +40,8 @@ export function synthesisOutcomeIsClean(outcome) {
   const funnelHealthy = funnelErrors === 0;
   const doctorWarnings = (metadata.warnings || []).filter((warning) => /doctor/i.test(String(warning))).join(" ");
   const doctor = String(metadata.maintenance?.doctor || metadata.doctor || doctorWarnings).toLowerCase();
-  const doctorHealthy = !/(^|\b)failed\b|hard failures remain/.test(doctor)
-    && (/no.hard.failures?|warn.*non.blocking|pass|healthy/.test(doctor));
+  const doctorHasHardFailure = /(^|\b)failed\b|hard failures remain/.test(doctor);
+  const doctorHealthy = !doctorHasHardFailure
+    && (/no.hard.failures?|warn.*non.blocking|pass|healthy/.test(doctor) || context.doctorStatus === "pass");
   return adaptersHealthy && dashboardHealthy && emailHealthy && funnelHealthy && doctorHealthy;
 }

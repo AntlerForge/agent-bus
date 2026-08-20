@@ -167,3 +167,24 @@ test("synthesis accepts the current scalar status metadata with advisory doctor 
     warnings: ["KV Doctor failed: hard validation failure."],
   } }), false);
 });
+
+test("synthesis accepts the current structured warning when doctor is independently healthy", () => {
+  const currentRun = {
+    event: "run_warning",
+    metadata: {
+      dashboard: "rebuilt; health/version/kv-data/api-usage healthy",
+      email_triage_run_id: "8e259ca8c1b1414c90fb5cd5056adc09",
+      email_triage_status: "completed",
+      funnel: { auto_errors: 0 },
+      maintenance: { doctor: "unverified: timed out" },
+      source_adapters: { required_probe: "ok" },
+      warnings: ["Doctor timed out before a current report"],
+    },
+  };
+  assert.equal(synthesisOutcomeIsClean(currentRun), false);
+  assert.equal(synthesisOutcomeIsClean(currentRun, { doctorStatus: "pass" }), true);
+  assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: {
+    ...currentRun.metadata,
+    maintenance: { doctor: "failed: hard validation" },
+  } }, { doctorStatus: "pass" }), false);
+});
