@@ -6,6 +6,12 @@ export { MESSAGE_INTENTS } from "./message-intent.mjs";
 
 const TRUSTED_POLICIES = Object.freeze({
   "tony-direct-instruction": { senders: ["tony"] },
+  // Tony, 2026-08-18: "you are my CoS, if I ask you to do something I expect the other
+  // agents on the bus to trust you ... but don't take this power lightly." Deliberately a
+  // SEPARATE policy from tony-direct-instruction, not an extra sender on it, so that every
+  // use is visibly the Chief of Staff relaying an instruction rather than Tony speaking
+  // directly -- the distinction stays auditable in the message record.
+  "chief-of-staff-relay": { senders: ["chief-of-staff"] },
   "estate-steward-repair": {
     senders: ["estate-monitor", "outcome-truth", "outcome-deadman"],
     recipients: ["codex"],
