@@ -188,3 +188,26 @@ test("synthesis accepts the current structured warning when doctor is independen
     maintenance: { doctor: "failed: hard validation" },
   } }, { doctorStatus: "pass" }), false);
 });
+
+test("synthesis accepts a completed email reconciliation whose dashboard warning was repaired later in the run", () => {
+  const currentRun = {
+    event: "run_warning",
+    metadata: {
+      source_adapters_status: "ok",
+      dashboard: "rebuilt and healthy",
+      doctor: "warn: 0 errors, 103 existing warnings",
+      email_triage_run_id: "0bbb31d366f8493cb34b81df09f6efd2",
+      email_triage_status: "warning",
+      funnel: { auto_errors: 0 },
+      warnings: [
+        "SpanielBus dashboard cache refresh timed out; current vehicle telemetry was not refreshed.",
+        "Automation catalog cannot verify Mac-local scheduler files from A6.",
+      ],
+    },
+  };
+  assert.equal(synthesisOutcomeIsClean(currentRun, { doctorStatus: "pass" }), true);
+  assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: {
+    ...currentRun.metadata,
+    dashboard: "rebuild failed",
+  } }, { doctorStatus: "pass" }), false);
+});

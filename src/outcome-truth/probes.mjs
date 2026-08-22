@@ -22,6 +22,7 @@ export function synthesisOutcomeIsClean(outcome, context = {}) {
     ? /healthy|\bok\b/i.test(adapterHealth)
     : adapterHealth?.required === "ok"
       || /healthy|\bok\b/i.test(String(metadata.adapters_status || ""))
+      || /healthy|\bok\b/i.test(String(metadata.source_adapters_status || ""))
       || /healthy|\bok\b/i.test(String(metadata.source_adapters?.required_probe || ""));
   const dashboard = metadata.dashboard || {};
   const dashboardHealth = typeof dashboard === "string"
@@ -35,7 +36,9 @@ export function synthesisOutcomeIsClean(outcome, context = {}) {
   const emailHealthy = metadata.email_triage
     ? metadata.email_triage.fresh === true && metadata.email_triage.status === "completed"
     : typeof metadata.email_triage_run_id === "string" && metadata.email_triage_run_id.length > 0
-      && (metadata.email_triage_status === undefined || metadata.email_triage_status === "completed");
+      && (metadata.email_triage_status === undefined
+        || metadata.email_triage_status === "completed"
+        || (metadata.email_triage_status === "warning" && dashboardHealthy));
   const funnelErrors = metadata.funnel?.auto_errors ?? metadata.auto_errors;
   const funnelHealthy = funnelErrors === 0;
   const doctorWarnings = (metadata.warnings || []).filter((warning) => /doctor/i.test(String(warning))).join(" ");
