@@ -26,6 +26,27 @@ CANDIDATES = ["http://127.0.0.1:8091/agent-bus", "http://127.0.0.1:18091/agent-b
 IDENTITY = Path(os.environ.get("AMB_HOME", Path.home() / ".config" / "amb")) / "identity"
 
 
+def write_token():
+    """Resolve the shared control-plane token without exposing it."""
+    direct = os.environ.get("AMB_TOKEN") or os.environ.get("AGENT_BUS_WRITE_TOKEN")
+    if direct:
+        return direct.strip()
+    token_file = Path(
+        os.environ.get(
+            "AGENT_BUS_WRITE_TOKEN_FILE",
+            Path.home() / ".config" / "agent-bus" / "write-token.env",
+        )
+    ).expanduser()
+    try:
+        for line in token_file.read_text().splitlines():
+            key, separator, value = line.partition("=")
+            if separator and key.strip() == "AGENT_BUS_WRITE_TOKEN":
+                return value.strip()
+    except (FileNotFoundError, PermissionError, OSError):
+        return None
+    return None
+
+
 def die(message, code=1):
     print(f"amb: {message}", file=sys.stderr)
     raise SystemExit(code)
@@ -59,7 +80,7 @@ def call(method, path, payload=None):
         method=method,
         headers={"Content-Type": "application/json"},
     )
-    token = os.environ.get("AMB_TOKEN")
+    token = write_token()
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     try:

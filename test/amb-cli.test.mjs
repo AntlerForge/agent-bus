@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -109,5 +109,23 @@ test("AMB_AGENT overrides a stale terminal fallback identity", async () => {
     await amb("other", ["add", "second", "--role", "Second role"]);
     const output = await amb("shared", ["whoami"], { AMB_AGENT: "second" });
     assert.equal(output.stdout.trim(), "second");
+  });
+});
+
+test("AMB CLI authenticates from the sanctioned control-plane token file", async () => {
+  await withControlPlane(async ({ amb }) => {
+    const tokenDirectory = await mkdtemp(path.join(os.tmpdir(), "amb-token-"));
+    const tokenFile = path.join(tokenDirectory, "write-token.env");
+    await writeFile(tokenFile, "AGENT_BUS_WRITE_TOKEN=test-token\n", { mode: 0o600 });
+    try {
+      const output = await amb("file-token", ["add", "file-token-agent", "--role", "Token test"], {
+        AMB_TOKEN: "",
+        AGENT_BUS_WRITE_TOKEN: "",
+        AGENT_BUS_WRITE_TOKEN_FILE: tokenFile,
+      });
+      assert.match(output.stdout, /file-token-agent.*registered on AMB/s);
+    } finally {
+      await rm(tokenDirectory, { recursive: true, force: true });
+    }
   });
 });

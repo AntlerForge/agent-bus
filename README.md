@@ -112,6 +112,11 @@ analysis, and `execute` permits changes only when `execution_authority` names th
 current approved assignment or an explicit trusted policy. Missing intent or
 invalid execution authority fails closed and is recorded on the thread.
 
+`execution_authority` is always an object, never a string. Use
+`{"type":"assignment","work_item_id":"work_...","assignment_id":"assignment_..."}`
+for assigned work, or `{"type":"trusted_policy","policy_id":"policy-id"}` for an
+applicable trusted policy. A string such as `"chief-of-staff-relay"` is rejected.
+
 Model-and-harness routing tools are advisory and never dispatch work:
 
 - `get_model_selector(route_id?, task_category?)`

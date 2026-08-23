@@ -5,6 +5,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { createRemoteBus } from "../src/remote-bus.mjs";
+import { getWriteToken } from "../src/write-token.mjs";
 
 function parseArgs(argv) {
   const options = {
@@ -90,7 +91,7 @@ export async function testTarget(client, target, options, tempDirectory) {
 }
 
 export async function runRoundTrip(options) {
-  const client = createRemoteBus(options.baseUrl, { writeToken: process.env.AGENT_BUS_WRITE_TOKEN || null });
+  const client = createRemoteBus(options.baseUrl, { writeToken: getWriteToken() });
   await client.registerAgent({
     agent_id: "bridge-test",
     display_name: "Agent Bus Bridge Test",
