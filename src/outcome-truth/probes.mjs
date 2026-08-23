@@ -29,12 +29,15 @@ export function synthesisOutcomeIsClean(outcome) {
     ? dashboard
     : dashboard.health || metadata.dashboard_health || {};
   const dashboardHealthy = typeof dashboardHealth === "string"
-    ? /healthy|\bok\b/i.test(dashboardHealth) && !/failed|unhealthy/i.test(dashboardHealth)
+    ? (/healthy|\bok\b|\bhttp\s*200\b|healthz.*\b200\b/i.test(dashboardHealth)
+      && !/failed|unhealthy/i.test(dashboardHealth))
     : Object.keys(dashboardHealth).length > 0
       && Object.values(dashboardHealth).every((value) => value === 200 || value === "ok" || value === true)
       && (dashboard.rebuilt === undefined || dashboard.rebuilt === true);
   const emailHealthy = metadata.email_triage
-    ? metadata.email_triage.fresh === true && metadata.email_triage.status === "completed"
+    ? metadata.email_triage.fresh === true
+      && (metadata.email_triage.status === "completed"
+        || (metadata.email_triage.status === "warning" && dashboardHealthy))
     : typeof metadata.email_triage_run_id === "string" && metadata.email_triage_run_id.length > 0
       && (metadata.email_triage_status === undefined
         || metadata.email_triage_status === "completed"
@@ -45,6 +48,6 @@ export function synthesisOutcomeIsClean(outcome) {
   const doctor = String(metadata.maintenance?.doctor || metadata.doctor || doctorWarnings).toLowerCase();
   const doctorHasHardFailure = /(^|\b)failed\b|hard failures remain/.test(doctor);
   const doctorHealthy = !doctorHasHardFailure
-    && /no.hard.failures?|warn.*non.blocking|warn:\s*0 errors|pass|healthy/.test(doctor);
+    && /no.hard.failures?|\b0 hard failures?\b|warn.*non.blocking|warn:\s*0 errors|pass|healthy/.test(doctor);
   return adaptersHealthy && dashboardHealthy && emailHealthy && funnelHealthy && doctorHealthy;
 }

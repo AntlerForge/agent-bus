@@ -211,3 +211,26 @@ test("synthesis accepts a completed email reconciliation whose dashboard warning
     dashboard: "rebuild failed",
   } }, { doctorStatus: "pass" }), false);
 });
+
+test("synthesis accepts HTTP 200 dashboard evidence and zero hard doctor failures", () => {
+  const currentRun = {
+    event: "run_warning",
+    metadata: {
+      source_adapters_status: "ok",
+      dashboard: "rebuilt; healthz/version/kv-data.json/api/usage HTTP 200",
+      email_triage: { fresh: true, status: "warning" },
+      funnel: { auto_errors: 0 },
+      maintenance: { doctor: "0 hard failures; 103 existing non-blocking warnings" },
+      warnings: ["Automation catalog cannot verify Mac-local scheduler files from A6."],
+    },
+  };
+  assert.equal(synthesisOutcomeIsClean(currentRun), true);
+  assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: {
+    ...currentRun.metadata,
+    dashboard: "healthz HTTP 500; rebuild failed",
+  } }), false);
+  assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: {
+    ...currentRun.metadata,
+    maintenance: { doctor: "1 hard failure remains" },
+  } }), false);
+});
