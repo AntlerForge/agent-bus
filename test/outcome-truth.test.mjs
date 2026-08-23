@@ -168,7 +168,7 @@ test("synthesis accepts the current scalar status metadata with advisory doctor 
   } }), false);
 });
 
-test("synthesis accepts the current structured warning when doctor is independently healthy", () => {
+test("synthesis does not retroactively repair an unverified doctor result", () => {
   const currentRun = {
     event: "run_warning",
     metadata: {
@@ -182,7 +182,7 @@ test("synthesis accepts the current structured warning when doctor is independen
     },
   };
   assert.equal(synthesisOutcomeIsClean(currentRun), false);
-  assert.equal(synthesisOutcomeIsClean(currentRun, { doctorStatus: "pass" }), true);
+  assert.equal(synthesisOutcomeIsClean(currentRun, { doctorStatus: "pass" }), false);
   assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: {
     ...currentRun.metadata,
     maintenance: { doctor: "failed: hard validation" },
@@ -205,7 +205,7 @@ test("synthesis accepts a completed email reconciliation whose dashboard warning
       ],
     },
   };
-  assert.equal(synthesisOutcomeIsClean(currentRun, { doctorStatus: "pass" }), true);
+  assert.equal(synthesisOutcomeIsClean(currentRun, { doctorStatus: "fail" }), true);
   assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: {
     ...currentRun.metadata,
     dashboard: "rebuild failed",

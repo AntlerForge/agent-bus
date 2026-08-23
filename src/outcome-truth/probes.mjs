@@ -13,7 +13,7 @@ export function borgArchiveAgeMinutes(payload, nowMs = Date.now()) {
   return Number.isFinite(archiveMs) ? (nowMs - archiveMs) / 60000 : Number.POSITIVE_INFINITY;
 }
 
-export function synthesisOutcomeIsClean(outcome, context = {}) {
+export function synthesisOutcomeIsClean(outcome) {
   if (outcome?.event === "run_completed") return true;
   if (outcome?.event !== "run_warning") return false;
   const metadata = outcome.metadata || {};
@@ -45,6 +45,6 @@ export function synthesisOutcomeIsClean(outcome, context = {}) {
   const doctor = String(metadata.maintenance?.doctor || metadata.doctor || doctorWarnings).toLowerCase();
   const doctorHasHardFailure = /(^|\b)failed\b|hard failures remain/.test(doctor);
   const doctorHealthy = !doctorHasHardFailure
-    && (/no.hard.failures?|warn.*non.blocking|pass|healthy/.test(doctor) || context.doctorStatus === "pass");
+    && /no.hard.failures?|warn.*non.blocking|warn:\s*0 errors|pass|healthy/.test(doctor);
   return adaptersHealthy && dashboardHealthy && emailHealthy && funnelHealthy && doctorHealthy;
 }

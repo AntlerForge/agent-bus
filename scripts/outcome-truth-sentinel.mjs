@@ -97,9 +97,7 @@ async function collect() {
     },
     mac,
     synthesis: {
-      latest_clean: synthesisOutcomeIsClean(synthesisOutcome, {
-        doctorStatus: doctor.checks?.some((check) => check.status === "fail") ? "fail" : "pass",
-      }),
+      latest_clean: synthesisOutcomeIsClean(synthesisOutcome),
       latest_run_age_minutes: synthesisRun ? (Date.now() - Date.parse(synthesisRun.ts)) / 60000 : Number.POSITIVE_INFINITY,
     },
     sandbox: { ok: true },
