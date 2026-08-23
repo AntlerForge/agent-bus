@@ -1,0 +1,73 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0019-record-owner-decisions-through-scoped-relay-authority
+namespace: project:agent-bus
+title: "Record owner decisions through scoped relay authority"
+status: active
+owner: tony
+properties:
+  date: 2026-08-23
+  component: work-ledger
+  tags: [owner-decision, trusted-policy, mcp, write-token, replica-parity]
+  context: |
+    Tony requires a conversational instruction given to his seated Chief of
+    Staff to be sufficient authority for ordinary ledger mechanics. The
+    existing chief-of-staff-relay policy authorizes execute messages only; it
+    cannot record owner approval, assignment, cancellation or review approval.
+    Agents therefore fall back to raw HTTP calls or ask Tony for dashboard
+    clicks, while the A6 control plane still permits unauthenticated writes
+    when AGENT_BUS_WRITE_TOKEN is absent. Authority-file drift between Mac and
+    A6 has also caused a prior relay outage.
+  decision: |
+    Give every trusted policy explicit, independent message and ledger scopes.
+    Initially chief-of-staff-relay retains message relay and gains the bounded
+    owner-decision ledger scope; no other agent gains it implicitly.
+
+    Add one atomic Work Ledger operation, record_owner_decision, exposed through
+    the control-plane API and Agent Bus MCP server. It records an append-only
+    owner_decision_relayed event containing Tony's verbatim words, where they
+    were said, the relaying role, the policy, the decision class and timestamp,
+    then applies only the requested approve, assign, approve-and-assign, cancel
+    or review-approve transition. The relay actor is not rewritten as Tony.
+    The quoted owner decision remains distinguishable from a dashboard action.
+
+    Self-proposal relay remains fail-closed. A relay role may advance its own
+    proposal only when the supplied quote is explicitly scoped to that named
+    item or is declared as an unambiguous blanket decision and contains a
+    recognized blanket instruction. Empty, generic or agent-invented authority
+    cannot advance work. Existing receipt and review gates remain unchanged.
+
+    Enforce a generated A6 write token in the same cutover that deploys the MCP
+    operation. Supply the identical token to the control-plane service, MCP
+    clients, persistent bridges and the authenticated dashboard client. Remove
+    the unauthenticated fallback: a control plane without a configured token
+    fails to start, and every mutation requires the bearer token. Read-only
+    endpoints remain token-free.
+
+    Deploy every shared authority source byte-identically to Mac and A6. Add
+    execution-authority.mjs and the host token configuration as authority-class
+    pairs in the replica-parity sentinel. The sentinel reports drift and never
+    copies either side.
+  consequences:
+    positive: "Tony's quoted instruction can advance governed work through an auditable typed path without a second dashboard ceremony."
+    negative: "Token rotation becomes a coordinated deployment across the control plane and every sanctioned writer; an incomplete cutover fails writes closed."
+    neutral: "Agent Bus still owns transport and Work Ledger still owns lifecycle (P-001); proposals cannot authorize themselves (P-003); receipts and review gates remain mandatory (P-004)."
+  supersedes: null
+  superseded_by: null
+relations:
+  - to: Component:project:agent-bus/work-ledger
+    type: governs
+  - to: Component:project:agent-bus/control-plane
+    type: governs
+  - to: Component:project:agent-bus/agent-adapters
+    type: governs
+  - to: Interface:project:agent-bus/work-ledger-api
+    type: governs
+  - to: Interface:project:agent-bus/agent-bus-mcp
+    type: governs
+  - to: Invariant:project:agent-bus/p-003
+    type: governs
+  - to: Invariant:project:agent-bus/p-004
+    type: governs
+source: decisions/0019-record-owner-decisions-through-scoped-relay-authority.yaml
+last_verified: "2026-08-23"
