@@ -1,7 +1,11 @@
 # Agent Bus write-token cutover inventory
 
-Captured before the estate-wide writer repair on 2026-08-23. Token values are
-never recorded here.
+This is a retrospective inventory, added in repair commit `4062355` at 13:42
+BST on 2026-08-23. It did not predate authentication enforcement. Enforcement
+landed first in `594bc77` at 09:31 BST; missed writers, including the Claude-seat
+MCP process and both AMB installations, then returned HTTP 401 through the
+morning until the estate-wide writer repair. Token values are never recorded
+here.
 
 | Writer class | Write path | Runtime/configuration | Token source | Cutover obligation |
 |---|---|---|---|---|
@@ -24,6 +28,14 @@ all stale/current MCP children, the A6 control-plane container, Estate Monitor,
 and the HA approval listener. Scheduled A6 outcome/deadman jobs are included in
 the post-cutover checks even when inactive at capture time.
 
-Rollback is coordinated: restore the previous binaries/configuration and remove
-the control-plane token environment in the same maintenance window. Removing
-enforcement alone is not a normal operating state.
+The actual rollout order was enforcement first, followed hours later by writer
+repair and retrospective inventory. It was neither writers-first nor a planned,
+documented brief cutover; the resulting morning-long 401 outage is a deviation
+from that acceptance criterion.
+
+Rollback is fail-closed and coordinated: restore the previous control-plane
+binary/configuration and writer configurations in the same maintenance window.
+Under ADR-0019, `startControlPlane` refuses to start without a token, so merely
+unsetting the environment variable does not restore open writes. That differs
+from the original acceptance criterion's rollback wording and is deliberate:
+removing authentication must not silently reopen the write API.
