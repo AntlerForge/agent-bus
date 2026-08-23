@@ -4,6 +4,8 @@ services:
     container_name: agent-bus-control-plane
     restart: unless-stopped
     network_mode: host
+    env_file:
+      - ${AGENT_BUS_WRITE_TOKEN_FILE:-/home/ajbarfoot/.config/agent-bus/write-token.env}
     environment:
       AGENT_BUS_ROOT: /data
       AGENT_BUS_HOST: 127.0.0.1
