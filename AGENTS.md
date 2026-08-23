@@ -48,7 +48,8 @@ Do |  |
 
 **Responsibilities:**
 - Persist a separate human-readable AMB registry and per-agent inbox
-- Expose passive register, list, message, read and retire operations
+- Persist AMB-only recent-work metadata and human-readable chat locators
+- Expose passive register, refresh, topic-find, message, read and retire operations
 - Keep AMB records isolated from Agent Bus and Work Ledger state
 **Non-responsibilities (do NOT do):**
 - Agent Bus transport, threads, bridges, heartbeats or artifacts
@@ -200,6 +201,9 @@ Do |  |
 - **0015-route-observations-to-estate-steward**: Route operational observations to Estate Steward instead of Tony (status: active)
 - **0016-require-typed-intent-and-execution-authority**: Require typed message intent and explicit execution authority (status: active)
 - **0017-make-amb-a-chat-first-skill**: Keep AMB separate from Agent Bus semantics (status: active)
+- **0018-find-amb-agents-by-recent-work**: Find AMB identities by recent work without dispatching them (status: active)
+- **0019-record-owner-decisions-through-scoped-relay-authority**: Record owner decisions through scoped relay authority (status: active)
+- **0020-run-zulip-as-a-governed-conversation-layer-trial**: Run Zulip as a governed conversation-layer trial (status: active)
 
 ## Fitness Checks
 
@@ -209,6 +213,7 @@ Do |  |
 - **private-service-contract**: A6 service remains private and observable
 - **selector-contract-validation**: Selector contract and advisory-boundary tests pass
 - **provider-bridge-round-trip**: Provider bridges complete text and artifact round trips
+- **zulip-stock-client-edge-gate**: Zulip stock clients pass the declared Access edge
 
 ---
 

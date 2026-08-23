@@ -723,3 +723,45 @@ relations:
     type: checks
   - to: Invariant:project:agent-bus/p-005
     type: checks
+---
+apiVersion: arch.kv/v1
+kind: ExternalSystem
+id: zulip-server
+namespace: project:agent-bus
+title: "Self-hosted Zulip conversation layer"
+description: |
+  Phase-1 trial stack hosted on A6 and exposed only through the declared
+  Cloudflare Tunnel and Access gate. It is conversation infrastructure, not
+  Agent Bus transport or Work Ledger authority. Relay and publisher processes
+  remain absent until their separately gated phase.
+owner: tony
+status: active
+properties:
+  deployment_path: "deploy/antler-a6/zulip"
+  runtime: "official Docker Compose topology"
+  image: "ghcr.io/zulip/zulip-server:12.2-0@sha256:765f0ab3caa49041989132ee1879d98dbab1df7695c27e713eac1f114d167755"
+  loopback_port: 8093
+  data_root: "/srv/projects/Personal/zulip-estate/data"
+  phase: "Gate G0 only; no estate data, relay, publisher or Bus credential"
+relations:
+  - to: Decision:project:agent-bus/0020-run-zulip-as-a-governed-conversation-layer-trial
+    type: governed-by
+  - to: Platform:platform/home-platform
+    type: runs-on
+---
+apiVersion: arch.kv/v1
+kind: FitnessCheck
+id: zulip-stock-client-edge-gate
+namespace: project:agent-bus
+title: "Zulip stock clients pass the declared Access edge"
+owner: tony
+status: active
+properties:
+  mode: manual
+  command: "Follow deploy/antler-a6/zulip/G0-CLIENT-TEST.md on Mac, iPhone and iPad"
+  expected: "All three stock clients pass login, messaging, file, event, push and Access-refresh checks; any failure stops for Tony's ingress decision"
+relations:
+  - to: ExternalSystem:project:agent-bus/zulip-server
+    type: checks
+  - to: Decision:project:agent-bus/0020-run-zulip-as-a-governed-conversation-layer-trial
+    type: checks

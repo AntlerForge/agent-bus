@@ -1,0 +1,7 @@
+[Unit]
+Description=Antler Zulip trial
+Wants=antler-zulip-stack.service
+After=antler-zulip-stack.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,117 @@
+---
+name: zulip-estate
+
+services:
+  database:
+    image: "zulip/zulip-postgresql:14@sha256:e71ba8616fa42cdc1b248f51263d9290c29681cb8c1992eb9b498af0bb656b29"
+    restart: unless-stopped
+    secrets: [zulip__postgres_password]
+    environment:
+      POSTGRES_DB: zulip
+      POSTGRES_USER: zulip
+      POSTGRES_PASSWORD_FILE: /run/secrets/zulip__postgres_password
+    volumes:
+      - "${ZULIP_DATA_ROOT:-/srv/projects/Personal/zulip-estate/data}/postgresql:/var/lib/postgresql/data:rw"
+    attach: false
+
+  memcached:
+    image: "memcached:alpine@sha256:c29847751abb41f4c268c84fb3087fee05d4edcbda44409ccb5086e26148e8a7"
+    restart: unless-stopped
+    command:
+      - sh
+      - -euc
+      - |
+        echo 'mech_list: plain' > "$$SASL_CONF_PATH"
+        echo "zulip@$$HOSTNAME:$$(cat $$MEMCACHED_PASSWORD_FILE)" > "$$MEMCACHED_SASL_PWDB"
+        echo "zulip@localhost:$$(cat $$MEMCACHED_PASSWORD_FILE)" >> "$$MEMCACHED_SASL_PWDB"
+        exec memcached -S
+    secrets: [zulip__memcached_password]
+    environment:
+      SASL_CONF_PATH: /home/memcache/memcached.conf
+      MEMCACHED_SASL_PWDB: /home/memcache/memcached-sasl-db
+      MEMCACHED_PASSWORD_FILE: /run/secrets/zulip__memcached_password
+    attach: false
+
+  rabbitmq:
+    image: "rabbitmq:4.2@sha256:8a25df8d395aa7b24ebb20acaf5f29375fb65cf17ae258140d95d082ebfa03f3"
+    restart: unless-stopped
+    command:
+      - sh
+      - -euc
+      - |
+        export RABBITMQ_DEFAULT_PASS="$$(cat $$RABBITMQ_PASSWORD_FILE)"
+        echo 'default_user = $$(RABBITMQ_DEFAULT_USER)' >> /etc/rabbitmq/rabbitmq.conf
+        echo 'default_pass = $$(RABBITMQ_DEFAULT_PASS)' >> /etc/rabbitmq/rabbitmq.conf
+        exec docker-entrypoint.sh rabbitmq-server
+    secrets: [zulip__rabbitmq_password]
+    environment:
+      RABBITMQ_DEFAULT_USER: zulip
+      RABBITMQ_PASSWORD_FILE: /run/secrets/zulip__rabbitmq_password
+    volumes:
+      - "${ZULIP_DATA_ROOT:-/srv/projects/Personal/zulip-estate/data}/rabbitmq:/var/lib/rabbitmq:rw"
+    attach: false
+
+  redis:
+    image: "redis:alpine@sha256:becdda6c7f4b3fb42e42fd7f120bbf5c54c4caaaf16f26da24e4563d2c1f0576"
+    restart: unless-stopped
+    command:
+      - sh
+      - -euc
+      - '/usr/local/bin/docker-entrypoint.sh --requirepass "$$(cat $$REDIS_PASSWORD_FILE)"'
+    secrets: [zulip__redis_password]
+    environment:
+      REDIS_PASSWORD_FILE: /run/secrets/zulip__redis_password
+    volumes:
+      - "${ZULIP_DATA_ROOT:-/srv/projects/Personal/zulip-estate/data}/redis:/data:rw"
+    attach: false
+
+  zulip:
+    image: "ghcr.io/zulip/zulip-server:12.2-0@sha256:765f0ab3caa49041989132ee1879d98dbab1df7695c27e713eac1f114d167755"
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${ZULIP_HTTP_PORT:-8093}:80"
+    secrets:
+      - zulip__postgres_password
+      - zulip__memcached_password
+      - zulip__rabbitmq_password
+      - zulip__redis_password
+      - zulip__secret_key
+      - zulip__email_password
+    environment:
+      SETTING_EXTERNAL_HOST: "${ZULIP_EXTERNAL_HOST:-zulip.antlerforge.com}"
+      SETTING_ZULIP_ADMINISTRATOR: "${ZULIP_ADMINISTRATOR:-tonyjbarfoot@googlemail.com}"
+      SETTING_REMOTE_POSTGRES_HOST: database
+      SETTING_MEMCACHED_LOCATION: memcached:11211
+      SETTING_RABBITMQ_HOST: rabbitmq
+      SETTING_REDIS_HOST: redis
+      SETTING_EMAIL_HOST: "${ZULIP_EMAIL_HOST}"
+      SETTING_EMAIL_HOST_USER: "${ZULIP_EMAIL_HOST_USER}"
+      SETTING_EMAIL_PORT: "${ZULIP_EMAIL_PORT:-587}"
+      SETTING_EMAIL_USE_SSL: "${ZULIP_EMAIL_USE_SSL:-False}"
+      SETTING_EMAIL_USE_TLS: "${ZULIP_EMAIL_USE_TLS:-True}"
+      SETTING_ZULIP_SERVICE_PUSH_NOTIFICATIONS: "${ZULIP_PUSH_NOTIFICATIONS:-True}"
+      SETTING_ZULIP_SERVICE_SUBMIT_USAGE_STATISTICS: "${ZULIP_SUBMIT_USAGE_STATISTICS:-True}"
+      TRUST_GATEWAY_IP: "True"
+      AUTO_BACKUP_ENABLED: "True"
+      AUTO_BACKUP_INTERVAL: "24h"
+    volumes:
+      - "${ZULIP_DATA_ROOT:-/srv/projects/Personal/zulip-estate/data}/zulip:/data:rw"
+    ulimits:
+      nofile:
+        soft: 1000000
+        hard: 1048576
+    depends_on: [database, memcached, rabbitmq, redis]
+
+secrets:
+  zulip__postgres_password:
+    environment: ZULIP__POSTGRES_PASSWORD
+  zulip__memcached_password:
+    environment: ZULIP__MEMCACHED_PASSWORD
+  zulip__rabbitmq_password:
+    environment: ZULIP__RABBITMQ_PASSWORD
+  zulip__redis_password:
+    environment: ZULIP__REDIS_PASSWORD
+  zulip__secret_key:
+    environment: ZULIP__SECRET_KEY
+  zulip__email_password:
+    environment: ZULIP__EMAIL_PASSWORD
