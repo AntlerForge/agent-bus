@@ -10,7 +10,7 @@ import { writeSelectorFixture } from "./selector-fixture.mjs";
 async function withControlPlane(fn, options = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "agent-control-plane-test-"));
   await ensureBusLayout(root);
-  const server = createControlPlane({ root, ...options });
+  const server = createControlPlane({ root, writeToken: "test-token", ...options });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
@@ -35,7 +35,9 @@ test("control plane serves dashboard, health and version", async () => {
     assert.equal((await version.json()).version, "0.6.0");
     const dashboard = await fetch(base);
     assert.equal(dashboard.status, 200);
-    assert.match(await dashboard.text(), /Agent Bus/);
+    const html = await dashboard.text();
+    assert.match(html, /Agent Bus/);
+    assert.match(html, /content="test-token"/);
   });
 });
 
@@ -57,7 +59,7 @@ test("structured request logging suppresses successful health and inbox polling 
     await fetch(`${base}/api/v1/inbox?agent=codex`);
     await fetch(`${base}/api/v1/work-items`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: "Bearer test-token" },
       body: JSON.stringify({ title: "Logged write", objective: "Keep mutations visible.", source_ref: "BL119" }),
     });
     assert.equal(records.length, 1);
@@ -69,14 +71,14 @@ test("work item API creates, promotes and returns auditable detail", async () =>
   await withControlPlane(async (base) => {
     const createdResponse = await fetch(`${base}/api/v1/work-items`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: "Bearer test-token" },
       body: JSON.stringify({ title: "API task", objective: "Prove the API lifecycle.", source_ref: "BL119" }),
     });
     assert.equal(createdResponse.status, 201);
     const created = await createdResponse.json();
     const promoted = await fetch(`${base}/api/v1/work-items/${created.work_item_id}/transition`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: "Bearer test-token" },
       body: JSON.stringify({ status: "ready", actor: "tony" }),
     });
     assert.equal((await promoted.json()).status, "ready");
@@ -87,7 +89,35 @@ test("work item API creates, promotes and returns auditable detail", async () =>
   });
 });
 
-test("optional write token protects mutations but not dashboard reads", async () => {
+test("owner decisions are recorded through the typed control-plane route", async () => {
+  await withControlPlane(async (base) => {
+    const created = await (await fetch(`${base}/api/v1/work-items`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer test-token" },
+      body: JSON.stringify({ title: "Owner-directed repair", objective: "Prove relayed authority.", source_ref: "vault:test", proposed_by: "chief-of-staff" }),
+    })).json();
+    const decision = await fetch(`${base}/api/v1/work-items/${created.work_item_id}/owner-decision`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer test-token" },
+      body: JSON.stringify({
+        decision: "approve_and_assign",
+        owner_quote: "all approved, make it happen",
+        where_said: "Tony chat 2026-08-23",
+        relaying_role: "chief-of-staff",
+        policy_id: "chief-of-staff-relay",
+        decision_scope: "blanket",
+        agent_id: "codex",
+      }),
+    });
+    assert.equal(decision.status, 200);
+    const item = await decision.json();
+    assert.equal(item.current_assignment.agent_id, "codex");
+    const detail = await (await fetch(`${base}/api/v1/work-items/${created.work_item_id}`)).json();
+    assert.ok(detail.events.some((event) => event.type === "owner_decision_relayed" && event.details.owner_quote === "all approved, make it happen"));
+  });
+});
+
+test("required write token protects mutations but not dashboard reads", async () => {
   await withControlPlane(async (base) => {
     assert.equal((await fetch(`${base}/api/v1/overview`)).status, 200);
     const denied = await fetch(`${base}/api/v1/work-items`, {
@@ -118,7 +148,7 @@ test("control plane exposes selector guidance and creates gated workflow proposa
 
       const proposedResponse = await fetch(`${base}/api/v1/model-selector/templates/panel/propose`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", authorization: "Bearer test-token" },
         body: JSON.stringify({ subject: "Chapter 38", source_ref: "book:chapter-38", project: "the-correction", proposed_by: "codex" }),
       });
       assert.equal(proposedResponse.status, 201);

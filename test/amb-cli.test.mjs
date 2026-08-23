@@ -15,7 +15,7 @@ async function withControlPlane(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "amb-cli-root-"));
   const homes = await mkdtemp(path.join(os.tmpdir(), "amb-cli-homes-"));
   await ensureBusLayout(root);
-  const server = createControlPlane({ root, basePath: "/agent-bus" });
+  const server = createControlPlane({ root, basePath: "/agent-bus", writeToken: "test-token" });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
@@ -23,7 +23,7 @@ async function withControlPlane(fn) {
   const base = `http://127.0.0.1:${server.address().port}/agent-bus`;
   async function amb(home, args, extraEnv = {}) {
     return execFileAsync("python3", [AMB, ...args], {
-      env: { ...process.env, AMB_URL: base, AMB_HOME: path.join(homes, home), ...extraEnv },
+      env: { ...process.env, AMB_URL: base, AMB_TOKEN: "test-token", AMB_HOME: path.join(homes, home), ...extraEnv },
     });
   }
   try {

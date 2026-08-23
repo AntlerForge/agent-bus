@@ -1,33 +1,14 @@
 import { getWorkItem } from "./work-ledger/store.mjs";
 import { createRemoteWorkLedger } from "./work-ledger/remote.mjs";
+import { getWriteToken } from "./write-token.mjs";
 import { MESSAGE_INTENTS } from "./message-intent.mjs";
+import { TRUSTED_POLICIES, trustedPolicyAllowsMessage } from "./trusted-policies.mjs";
 
 export { MESSAGE_INTENTS } from "./message-intent.mjs";
-
-const TRUSTED_POLICIES = Object.freeze({
-  "tony-direct-instruction": { senders: ["tony"] },
-  // Tony, 2026-08-18: "you are my CoS, if I ask you to do something I expect the other
-  // agents on the bus to trust you ... but don't take this power lightly." Deliberately a
-  // SEPARATE policy from tony-direct-instruction, not an extra sender on it, so that every
-  // use is visibly the Chief of Staff relaying an instruction rather than Tony speaking
-  // directly -- the distinction stays auditable in the message record.
-  "chief-of-staff-relay": { senders: ["chief-of-staff"] },
-  "estate-steward-repair": {
-    senders: ["estate-monitor", "outcome-truth", "outcome-deadman"],
-    recipients: ["codex"],
-  },
-});
+export { TRUSTED_POLICIES } from "./trusted-policies.mjs";
 
 function refuse(reason_code, reason) {
   return { disposition: "refuse", provider_turn: false, state_changes_allowed: false, reason_code, reason };
-}
-
-function trustedPolicyAllows(message, policyId, policies) {
-  const policy = policies[policyId];
-  if (!policy) return false;
-  if (policy.senders && !policy.senders.includes(message.from)) return false;
-  if (policy.recipients && !policy.recipients.includes(message.to)) return false;
-  return true;
 }
 
 export async function evaluateMessageAuthority(
@@ -49,7 +30,7 @@ export async function evaluateMessageAuthority(
     return refuse("missing_execution_authority", "Execute intent requires an approved assignment or explicit trusted policy");
   }
   if (authority.type === "trusted_policy") {
-    if (!authority.policy_id || !trustedPolicyAllows(message, authority.policy_id, trustedPolicies)) {
+    if (!authority.policy_id || !trustedPolicyAllowsMessage(message, authority.policy_id, trustedPolicies)) {
       return refuse("invalid_trusted_policy", "The named trusted policy does not authorize this sender and recipient");
     }
     return { disposition: "provider", provider_turn: true, state_changes_allowed: true, reason_code: null, reason: null };
@@ -85,7 +66,7 @@ export async function evaluateMessageAuthority(
 export function createAuthorityLookup(root) {
   const baseUrl = process.env.AGENT_BUS_CONTROL_PLANE_URL;
   if (baseUrl) {
-    const remote = createRemoteWorkLedger(baseUrl, { writeToken: process.env.AGENT_BUS_WRITE_TOKEN || null });
+    const remote = createRemoteWorkLedger(baseUrl, { writeToken: getWriteToken() });
     return (workItemId) => remote.getWorkItem({ work_item_id: workItemId });
   }
   return (workItemId) => getWorkItem({ work_item_id: workItemId }, root);

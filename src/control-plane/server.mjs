@@ -28,11 +28,13 @@ import {
   listWorkItemEvents,
   listWorkItems,
   reviewWorkItem,
+  recordOwnerDecision,
   startRun,
   submitReceipt,
   transitionWorkItem,
   updateRun,
 } from "../work-ledger/store.mjs";
+import { getWriteToken } from "../write-token.mjs";
 
 const VERSION = "0.6.0";
 const STARTED_AT = new Date().toISOString();
@@ -96,7 +98,11 @@ async function readJsonBody(request) {
 }
 
 function requireWriteAccess(request, writeToken) {
-  if (!writeToken) return;
+  if (!writeToken) {
+    const error = new Error("Control-plane writes are disabled because AGENT_BUS_WRITE_TOKEN is not configured");
+    error.statusCode = 503;
+    throw error;
+  }
   if (request.headers.authorization !== `Bearer ${writeToken}`) {
     const error = new Error("A valid bearer token is required for write operations");
     error.statusCode = 401;
@@ -204,7 +210,7 @@ async function overview(root, selectorPath) {
 
 export function createControlPlane({
   root = getBusRoot(),
-  writeToken = process.env.AGENT_BUS_WRITE_TOKEN || null,
+  writeToken = getWriteToken(),
   basePath = process.env.AGENT_BUS_BASE_PATH || "",
   selectorPath = process.env.AGENT_BUS_SELECTOR_PATH || null,
   logger = () => {},
@@ -435,6 +441,7 @@ export function createControlPlane({
       const actions = [
         ["transition", transitionWorkItem],
         ["assign", assignWorkItem],
+        ["owner-decision", recordOwnerDecision],
         ["runs", startRun],
         ["receipt", submitReceipt],
         ["review", reviewWorkItem],
@@ -463,7 +470,9 @@ export function createControlPlane({
         const [filename, contentType] = STATIC_FILES[pathname];
         let body = await readFile(path.join(STATIC_ROOT, filename));
         if (filename === "index.html") {
-          body = Buffer.from(body.toString("utf8").replaceAll("__AGENT_BUS_BASE_PATH__", normalizedBasePath));
+          body = Buffer.from(body.toString("utf8")
+            .replaceAll("__AGENT_BUS_BASE_PATH__", normalizedBasePath)
+            .replaceAll("__AGENT_BUS_WRITE_TOKEN__", writeToken || ""));
         }
         response.writeHead(200, {
           "content-type": contentType,
@@ -490,13 +499,16 @@ export async function startControlPlane({
   root = getBusRoot(),
   host = process.env.AGENT_BUS_HOST || "127.0.0.1",
   port = Number(process.env.AGENT_BUS_PORT || 8091),
-  writeToken = process.env.AGENT_BUS_WRITE_TOKEN || null,
+  writeToken = getWriteToken(),
   basePath = process.env.AGENT_BUS_BASE_PATH || "",
   selectorPath = process.env.AGENT_BUS_SELECTOR_PATH || null,
   logDirectory = process.env.AGENT_BUS_LOG_DIR || null,
 } = {}) {
   if (!["127.0.0.1", "::1", "localhost"].includes(host)) {
     throw new Error("Control plane must bind to localhost; use a private reverse proxy for remote access");
+  }
+  if (!writeToken) {
+    throw new Error("AGENT_BUS_WRITE_TOKEN is required; refusing to start an unauthenticated control plane");
   }
   const logger = await createFileLogger(logDirectory);
   const server = createControlPlane({ root, writeToken, basePath, selectorPath, logger });

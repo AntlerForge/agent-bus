@@ -21,6 +21,7 @@ import {
   listWorkItemEvents,
   listWorkItems,
   reviewWorkItem,
+  recordOwnerDecision,
   startRun,
   submitReceipt,
   updateRun,
@@ -29,6 +30,7 @@ import { createRemoteWorkLedger } from "./work-ledger/remote.mjs";
 import { createRemoteBus } from "./remote-bus.mjs";
 import { buildWorkflowProposals, loadModelSelector } from "./model-selector.mjs";
 import { createRemoteModelSelector } from "./model-selector-remote.mjs";
+import { getWriteToken } from "./write-token.mjs";
 
 function toolResult(value) {
   return {
@@ -74,18 +76,19 @@ function registerTool(server, name, description, inputSchema, handler) {
 const root = getBusRoot();
 const remoteWorkLedgerUrl = process.env.AGENT_BUS_CONTROL_PLANE_URL || null;
 const allowLocal = process.env.AGENT_BUS_ALLOW_LOCAL === "1";
+const writeToken = getWriteToken();
 if (!remoteWorkLedgerUrl && !allowLocal) {
   throw new Error("Agent Bus authority is not configured: set AGENT_BUS_CONTROL_PLANE_URL, or explicitly set AGENT_BUS_ALLOW_LOCAL=1 for isolated development");
 }
 if (!remoteWorkLedgerUrl) await ensureBusLayout(root);
 const remoteWorkLedger = remoteWorkLedgerUrl
-  ? createRemoteWorkLedger(remoteWorkLedgerUrl, { writeToken: process.env.AGENT_BUS_WRITE_TOKEN || null })
+  ? createRemoteWorkLedger(remoteWorkLedgerUrl, { writeToken })
   : null;
 const remoteBus = remoteWorkLedgerUrl
-  ? createRemoteBus(remoteWorkLedgerUrl, { writeToken: process.env.AGENT_BUS_WRITE_TOKEN || null })
+  ? createRemoteBus(remoteWorkLedgerUrl, { writeToken })
   : null;
 const remoteModelSelector = remoteWorkLedgerUrl
-  ? createRemoteModelSelector(remoteWorkLedgerUrl, { writeToken: process.env.AGENT_BUS_WRITE_TOKEN || null })
+  ? createRemoteModelSelector(remoteWorkLedgerUrl, { writeToken })
   : null;
 
 const workLedger = {
@@ -98,6 +101,9 @@ const workLedger = {
   updateRun: (args) => remoteWorkLedger ? remoteWorkLedger.updateRun(args) : updateRun(args, root),
   submitReceipt: (args) => remoteWorkLedger ? remoteWorkLedger.submitReceipt(args) : submitReceipt(args, root),
   review: (args) => remoteWorkLedger ? remoteWorkLedger.reviewWorkItem(args) : reviewWorkItem(args, root),
+  recordOwnerDecision: (args) => remoteWorkLedger
+    ? remoteWorkLedger.recordOwnerDecision(args)
+    : recordOwnerDecision(args, root),
 };
 
 const modelSelector = {
@@ -315,6 +321,24 @@ registerTool(
   "Read one work item and its append-only event history.",
   { work_item_id: z.string() },
   (args) => workLedger.get(args),
+);
+
+registerTool(
+  server,
+  "record_owner_decision",
+  "Record Tony's quoted decision through a separately scoped trusted ledger-relay policy and apply only that bounded decision.",
+  {
+    work_item_id: z.string(),
+    decision: z.enum(["approve", "assign", "approve_and_assign", "cancel", "review_approve"]),
+    owner_quote: z.string().min(1),
+    where_said: z.string().min(1),
+    relaying_role: z.string(),
+    policy_id: z.string(),
+    decision_scope: z.enum(["named_item", "blanket"]).optional().default("named_item"),
+    agent_id: z.string().optional(),
+    budget_tokens: z.number().nonnegative().nullable().optional(),
+  },
+  (args) => workLedger.recordOwnerDecision(args),
 );
 
 registerTool(

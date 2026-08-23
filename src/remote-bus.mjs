@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { getWriteToken } from "./write-token.mjs";
 
 function normalizeUrl(value) {
   return String(value || "").trim().replace(/\/+$/, "");
@@ -116,11 +117,12 @@ let cached;
 export function configuredRemoteBus() {
   const baseUrl = process.env.AGENT_BUS_CONTROL_PLANE_URL;
   if (!baseUrl) return null;
-  if (!cached || cached.baseUrl !== baseUrl || cached.writeToken !== (process.env.AGENT_BUS_WRITE_TOKEN || null)) {
+  const writeToken = getWriteToken();
+  if (!cached || cached.baseUrl !== baseUrl || cached.writeToken !== writeToken) {
     cached = {
       baseUrl,
-      writeToken: process.env.AGENT_BUS_WRITE_TOKEN || null,
-      client: createRemoteBus(baseUrl, { writeToken: process.env.AGENT_BUS_WRITE_TOKEN || null }),
+      writeToken,
+      client: createRemoteBus(baseUrl, { writeToken }),
     };
   }
   return cached.client;

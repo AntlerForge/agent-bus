@@ -5,6 +5,7 @@ import { writeFileAtomic } from "../io.mjs";
 import { parseMarkdownWithFrontmatter, stringifyMarkdownWithFrontmatter } from "../markdown.mjs";
 import { ensureBusLayout } from "../paths.mjs";
 import { findDuplicateIntent } from "./intent.mjs";
+import { TRUSTED_POLICIES, trustedPolicyAllowsLedger } from "../trusted-policies.mjs";
 
 export const WORK_STATUSES = ["proposed", "ready", "in_progress", "blocked", "review", "done", "canceled"];
 export const RUN_STATUSES = [
@@ -19,6 +20,7 @@ export const RUN_STATUSES = [
   "completed",
 ];
 export const REVIEW_POLICIES = ["none", "human", "independent_agent"];
+export const OWNER_DECISIONS = ["approve", "assign", "approve_and_assign", "cancel", "review_approve"];
 
 const ALLOWED_TRANSITIONS = {
   proposed: new Set(["ready", "canceled"]),
@@ -149,6 +151,41 @@ function assertTransition(item, nextStatus, actor) {
 
 function isWorkActorAuthorized(item, actor) {
   return actor === item.human_owner || actor === item.current_assignment?.agent_id || actor.startsWith("policy:");
+}
+
+function quoteAuthorizesSelfProposal(item, relayingRole, quote, decisionScope) {
+  if (item.proposed_by !== relayingRole) return true;
+  const normalized = String(quote).toLowerCase().replace(/\s+/g, " ");
+  if (decisionScope === "named_item") {
+    return normalized.includes(item.work_item_id.toLowerCase())
+      || normalized.includes(item.title.toLowerCase());
+  }
+  return decisionScope === "blanket"
+    && /(all approved|everything.{0,40}(approved|actioned)|make (it|everything) (happen|so)|action everything)/i.test(normalized);
+}
+
+function buildAssignment(item, { agent_id, assigned_by, budget_tokens }) {
+  const assignment = {
+    assignment_id: makeId("assignment"),
+    agent_id: cleanText(agent_id, "agent_id"),
+    assigned_by: cleanText(assigned_by, "assigned_by"),
+    assigned_at: nowIso(),
+    budget_tokens: budget_tokens === null || budget_tokens === "" || budget_tokens === undefined
+      ? item.budget_tokens
+      : Number(budget_tokens),
+  };
+  if (assignment.budget_tokens !== null
+    && (!Number.isFinite(assignment.budget_tokens) || assignment.budget_tokens < 0)) {
+    throw new Error("budget_tokens must be a non-negative number or null");
+  }
+  return assignment;
+}
+
+async function applyAssignment(item, assignment) {
+  item.assignments.push(assignment);
+  item.current_assignment = assignment;
+  item.updated_at = assignment.assigned_at;
+  await appendEvent(item.files, eventRecord(item.work_item_id, "work_item_assigned", assignment.assigned_by, assignment));
 }
 
 async function applyTransition(item, nextStatus, actor, reason) {
@@ -310,23 +347,89 @@ export async function assignWorkItem(
     if (!["ready", "blocked"].includes(item.status)) {
       throw new Error("Only ready or blocked work can be assigned");
     }
-    const assignment = {
-      assignment_id: makeId("assignment"),
-      agent_id: cleanText(agent_id, "agent_id"),
-      assigned_by: cleanText(assigned_by, "assigned_by"),
-      assigned_at: nowIso(),
-      budget_tokens: budget_tokens === null || budget_tokens === "" ? item.budget_tokens : Number(budget_tokens),
-    };
-    if (assignment.budget_tokens !== null && !Number.isFinite(assignment.budget_tokens)) {
-      throw new Error("budget_tokens must be numeric or null");
+    const assignment = buildAssignment(item, { agent_id, assigned_by, budget_tokens });
+    await applyAssignment(item, assignment);
+    await writeStoredWorkItem(item);
+    return publicWorkItem(item);
+  });
+}
+
+export async function recordOwnerDecision(
+  {
+    work_item_id,
+    decision,
+    owner_quote,
+    where_said,
+    relaying_role,
+    policy_id,
+    decision_scope = "named_item",
+    agent_id = null,
+    budget_tokens = null,
+  },
+  root,
+  { trustedPolicies = TRUSTED_POLICIES } = {},
+) {
+  const id = cleanText(work_item_id, "work_item_id");
+  const normalizedDecision = cleanText(decision, "decision");
+  if (!OWNER_DECISIONS.includes(normalizedDecision)) throw new Error(`Unsupported owner decision: ${normalizedDecision}`);
+  const relay = cleanText(relaying_role, "relaying_role");
+  const policyId = cleanText(policy_id, "policy_id");
+  const quote = cleanText(owner_quote, "owner_quote");
+  const source = cleanText(where_said, "where_said");
+  if (!["named_item", "blanket"].includes(decision_scope)) throw new Error("decision_scope must be named_item or blanket");
+  if (!trustedPolicyAllowsLedger({ relaying_role: relay, decision: normalizedDecision }, policyId, trustedPolicies)) {
+    throw new Error("The named trusted policy does not grant this role the requested ledger scope");
+  }
+
+  return withItemLock(id, async () => {
+    const item = await readStoredWorkItem(id, root);
+    if (!quoteAuthorizesSelfProposal(item, relay, quote, decision_scope)) {
+      throw new Error("A relay role cannot advance its own proposal without a named-item or unambiguous blanket owner quote");
     }
-    if (assignment.budget_tokens !== null && assignment.budget_tokens < 0) {
-      throw new Error("budget_tokens must be non-negative");
+
+    if (["approve", "approve_and_assign"].includes(normalizedDecision)) {
+      assertTransition(item, "ready", `policy:${policyId}`);
+    } else if (normalizedDecision === "assign" && !["ready", "blocked"].includes(item.status)) {
+      throw new Error("Only ready or blocked work can be assigned");
+    } else if (normalizedDecision === "cancel") {
+      assertTransition(item, "canceled", `policy:${policyId}`);
+    } else if (normalizedDecision === "review_approve") {
+      if (item.status !== "review") throw new Error("Work item is not awaiting review");
+      assertTransition(item, "done", `policy:${policyId}`);
     }
-    item.assignments.push(assignment);
-    item.current_assignment = assignment;
-    item.updated_at = assignment.assigned_at;
-    await appendEvent(item.files, eventRecord(id, "work_item_assigned", assignment.assigned_by, assignment));
+    const assignment = ["assign", "approve_and_assign"].includes(normalizedDecision)
+      ? buildAssignment(item, { agent_id, assigned_by: `policy:${policyId}`, budget_tokens })
+      : null;
+
+    const recordedAt = nowIso();
+    await appendEvent(item.files, eventRecord(id, "owner_decision_relayed", `policy:${policyId}`, {
+      decision: normalizedDecision,
+      owner: item.human_owner,
+      owner_quote: quote,
+      where_said: source,
+      relaying_role: relay,
+      policy_id: policyId,
+      decision_scope,
+      recorded_at: recordedAt,
+    }));
+    if (["approve", "approve_and_assign"].includes(normalizedDecision)) {
+      await applyTransition(item, "ready", `policy:${policyId}`, `Owner decision relayed by ${relay}`);
+    }
+    if (assignment) await applyAssignment(item, assignment);
+    if (normalizedDecision === "cancel") {
+      await applyTransition(item, "canceled", `policy:${policyId}`, `Owner decision relayed by ${relay}`);
+    }
+    if (normalizedDecision === "review_approve") {
+      const review = {
+        review_id: makeId("review"), reviewer: `policy:${policyId}`, decision: "approved",
+        summary: `Owner approval relayed by ${relay}`, evidence: [source], created_at: recordedAt,
+      };
+      item.reviews.push(review);
+      item.review_status = "approved";
+      await appendEvent(item.files, eventRecord(id, "review_recorded", review.reviewer, review));
+      await applyTransition(item, "done", review.reviewer, review.summary);
+    }
+    item.updated_at = recordedAt;
     await writeStoredWorkItem(item);
     return publicWorkItem(item);
   });

@@ -21,7 +21,7 @@ async function withBusRoot(fn) {
 async function withControlPlane(fn, options = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "agent-liveness-cp-test-"));
   await ensureBusLayout(root);
-  const server = createControlPlane({ root, ...options });
+  const server = createControlPlane({ root, writeToken: "test-token", ...options });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
@@ -90,7 +90,7 @@ test("control plane accepts heartbeats and serves the agents status API", async 
   await withControlPlane(async (base) => {
     const heartbeat = await fetch(`${base}/api/v1/agents/heartbeat`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: "Bearer test-token" },
       body: JSON.stringify({
         agent_id: "cursor",
         host: "mac.local",
@@ -122,7 +122,7 @@ test("control plane accepts heartbeats and serves the agents status API", async 
 
     const invalid = await fetch(`${base}/api/v1/agents/heartbeat`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: "Bearer test-token" },
       body: JSON.stringify({ agent_id: "cursor", state: "busy" }),
     });
     assert.equal(invalid.status, 400);
@@ -133,7 +133,7 @@ test("agent lifecycle endpoint stands agents down and reactivates them", async (
   await withControlPlane(async (base) => {
     const retire = await fetch(`${base}/api/v1/agents/codex/lifecycle`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: "Bearer test-token" },
       body: JSON.stringify({ status: "retired", actor: "tony" }),
     });
     assert.equal(retire.status, 200);
@@ -148,20 +148,20 @@ test("agent lifecycle endpoint stands agents down and reactivates them", async (
 
     const reactivate = await fetch(`${base}/api/v1/agents/codex/lifecycle`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: "Bearer test-token" },
       body: JSON.stringify({ status: "active", actor: "tony" }),
     });
     assert.equal((await reactivate.json()).lifecycle_status, "active");
 
     const invalid = await fetch(`${base}/api/v1/agents/codex/lifecycle`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: "Bearer test-token" },
       body: JSON.stringify({ status: "gone" }),
     });
     assert.equal(invalid.status, 400);
     const missing = await fetch(`${base}/api/v1/agents/nobody/lifecycle`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: "Bearer test-token" },
       body: JSON.stringify({ status: "retired" }),
     });
     assert.equal(missing.status, 404);

@@ -53,5 +53,9 @@ export function createRemoteWorkLedger(baseUrl, { writeToken = null } = {}) {
       const { work_item_id, ...body } = args;
       return write(`/api/v1/work-items/${encodeURIComponent(work_item_id)}/review`, body);
     },
+    recordOwnerDecision(args) {
+      const { work_item_id, ...body } = args;
+      return write(`/api/v1/work-items/${encodeURIComponent(work_item_id)}/owner-decision`, body);
+    },
   };
 }

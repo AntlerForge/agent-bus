@@ -1,9 +1,10 @@
 import { createRemoteBus } from "../remote-bus.mjs";
+import { getWriteToken } from "../write-token.mjs";
 
 const DEFAULT_CONTROL_PLANE = "http://127.0.0.1:8091/agent-bus";
 
 export function estateStewardBus({ baseUrl = process.env.AGENT_BUS_CONTROL_PLANE_URL || DEFAULT_CONTROL_PLANE } = {}) {
-  return createRemoteBus(baseUrl, { writeToken: process.env.AGENT_BUS_WRITE_TOKEN || null });
+  return createRemoteBus(baseUrl, { writeToken: getWriteToken() });
 }
 
 export async function dispatchOutcomeFailure({ transition, bus = estateStewardBus(), evidencePath }) {

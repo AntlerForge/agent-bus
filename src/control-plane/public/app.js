@@ -12,6 +12,8 @@ const threadDialog = document.querySelector("#thread-dialog");
 const agentDialog = document.querySelector("#agent-dialog");
 const askDialog = document.querySelector("#ask-dialog");
 const basePath = document.querySelector('meta[name="agent-bus-base-path"]')?.content || "";
+const dashboardWriteToken = document.querySelector('meta[name="agent-bus-write-token"]')?.content || "";
+if (dashboardWriteToken) sessionStorage.setItem("agentBusWriteToken", dashboardWriteToken);
 const STATUS_POLL_MS = 30000;
 
 const labels = {

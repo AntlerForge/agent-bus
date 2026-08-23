@@ -12,6 +12,7 @@ import {
   listWorkItemEvents,
   listWorkItems,
   reviewWorkItem,
+  recordOwnerDecision,
   startRun,
   submitReceipt,
   transitionWorkItem,
@@ -62,6 +63,64 @@ test("work items are human-readable and proposals need owner approval", async ()
     const raw = await readFile(ready.paths.item, "utf8");
     assert.match(raw, /source_ref: BL119/);
     assert.match(raw, /Review the implementation/);
+  });
+});
+
+test("quoted owner decision relay approves and assigns with a first-class audit event", async () => {
+  await withBusRoot(async (root) => {
+    const item = await createWorkItem({
+      title: "Build the authority relay",
+      objective: "Implement the approved authority relay.",
+      source_ref: "requirements:R3-R6",
+      proposed_by: "codex",
+    }, root);
+    const advanced = await recordOwnerDecision({
+      work_item_id: item.work_item_id,
+      decision: "approve_and_assign",
+      owner_quote: "all approved, make it happen",
+      where_said: "Chief of Staff conversation, 2026-08-22 evening",
+      relaying_role: "chief-of-staff",
+      policy_id: "chief-of-staff-relay",
+      decision_scope: "blanket",
+      agent_id: "codex",
+    }, root);
+    assert.equal(advanced.status, "ready");
+    assert.equal(advanced.current_assignment.agent_id, "codex");
+    const events = await listWorkItemEvents({ work_item_id: item.work_item_id }, root);
+    const relayed = events.find((event) => event.type === "owner_decision_relayed");
+    assert.equal(relayed.actor, "policy:chief-of-staff-relay");
+    assert.equal(relayed.details.owner_quote, "all approved, make it happen");
+    assert.equal(relayed.details.where_said, "Chief of Staff conversation, 2026-08-22 evening");
+    assert.equal(relayed.details.relaying_role, "chief-of-staff");
+  });
+});
+
+test("ledger relay scope refuses invented authority and self-proposal ambiguity", async () => {
+  await withBusRoot(async (root) => {
+    const item = await createWorkItem({
+      title: "Chief of Staff self proposal",
+      objective: "Remain gated without a qualifying owner quote.",
+      source_ref: "requirements:R3",
+      proposed_by: "chief-of-staff",
+    }, root);
+    const base = {
+      work_item_id: item.work_item_id,
+      decision: "approve",
+      where_said: "Chief of Staff conversation",
+      relaying_role: "chief-of-staff",
+      policy_id: "chief-of-staff-relay",
+      decision_scope: "blanket",
+    };
+    await assert.rejects(() => recordOwnerDecision({ ...base, owner_quote: "" }, root), /owner_quote is required/);
+    await assert.rejects(
+      () => recordOwnerDecision({ ...base, owner_quote: "I think this is useful" }, root),
+      /cannot advance its own proposal/,
+    );
+    await assert.rejects(
+      () => recordOwnerDecision({ ...base, owner_quote: "all approved", policy_id: "tony-direct-instruction" }, root),
+      /does not grant this role/,
+    );
+    assert.equal((await getWorkItem({ work_item_id: item.work_item_id }, root)).status, "proposed");
   });
 });
 
