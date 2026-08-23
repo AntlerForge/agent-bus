@@ -1,0 +1,147 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0020-run-zulip-as-a-governed-conversation-layer-trial
+namespace: project:agent-bus
+title: "Run Zulip as a governed conversation-layer trial"
+status: active
+owner: tony
+properties:
+  date: 2026-08-23
+  component: global
+  authored_by: "Estate Architect"
+  tags: [zulip, conversation, relay, roles, cloudflare, mobile, alerts, trial]
+  context: |
+    Tony approved a two-week self-hosted Zulip trial because the current estate
+    conversation route is fragmented and Home Assistant notifications cannot be
+    answered in place. Requirements R1-R9, amended by the Coherence Manager on
+    thread_20260823_131059_3678, require a sovereign A6 deployment, stock Mac and
+    mobile clients, mention-gated role wakes, named role replies, a governed
+    alert round trip, no lost raises, and an explicit settle decision.
+
+    Agent Bus already separates conversation transport from Work Ledger
+    authority. ADR-0016 requires typed intent and execution authority, ADR-0019
+    requires authenticated writers, and ADR-0014 separates bridge liveness from
+    task status. The Zulip route must extend those boundaries rather than create
+    another source of work authority.
+
+    Tony has also created antlerforge.zulipchat.com and installed the Mac client.
+    That Cloud organization is useful for learning the client and testing channel
+    naming, but estate conversations contain health, family and financial data and
+    therefore remain self-hosted.
+
+    One technical uncertainty is unresolved. Cloudflare Access requires an
+    Access authorization cookie on every protected HTTP request, or explicit
+    service-token headers for non-browser clients. Zulip's stock mobile clients
+    document organization URL and Zulip authentication, but do not document a way
+    to attach Cloudflare Access headers. Stock-client compatibility with the
+    required Access edge must therefore be proved before deployment continues.
+  decision: |
+    Run the approved trial as four bounded parts.
+
+    1. Deploy the pinned official Zulip Docker Compose stack on A6. Bind its HTTP
+       edge to 127.0.0.1 on a registered platform port. Keep persistent state
+       under /srv/projects/Personal/zulip-estate/data so the existing Borg and
+       Restic source scopes cover it. Enable Zulip's own application backup into
+       the bound /data volume and prove one restore before service acceptance.
+
+    2. Add an inbound conversation adapter and a separate outbound publisher to
+       Agent Bus. The inbound adapter listens to Zulip's real-time events API,
+       durably spools each addressed message before delivery, writes an idempotent
+       consult message to the named role's Agent Bus inbox, and sends a bounded
+       wake consultation to that role's declared execution target. It never posts
+       to Zulip. The outbound publisher reads correlated Agent Bus replies and
+       posts through an allowlisted role account. It has no Agent Bus mutation
+       authority. These processes have separate credentials and code paths.
+
+    3. Keep rooms as conversation, never authority. Inbound room traffic is
+       relayed as consult, not execute. Each Bus message and any resulting Work
+       Ledger event cites the immutable Zulip message id and permalink. Tony's
+       explicit words may become authority only through an existing scoped owner-
+       decision relay that records his quote and its Zulip source. No room reply,
+       bot account, relay rule or wake target can approve, assign or complete work
+       by itself. A Zulip message reference is conversation provenance, not a
+       silent replacement for an existing KV or backlog source authority. Work
+       derived from an existing record retains that record as source_ref and
+       records Zulip in context_ref or where_said; a native room raise may use
+       the immutable Zulip message as its source_ref.
+
+    4. Keep Home Assistant as the alert spine throughout the trial and mirror only
+       the representative alert classes already authorized by R7. A settle
+       decision may move interactive alerts to Zulip only after the round trip is
+       proved. Home Assistant permanently retains any liveness class that the room
+       path cannot report about itself, including A6, Zulip, tunnel and relay loss,
+       plus press-and-hold approvals until Tony separately accepts a proven
+       conversational successor.
+
+    Use one dedicated listener bot, estate-relay, plus Tony, codex and one bot per
+    persistent role, including estate-architect. This remains below the free push
+    threshold of ten non-deactivated users. Store all credentials in 1Password and
+    inject them at service start. Add the inbound adapter to the authenticated
+    writer inventory before enforcement, restart it after credential changes, and
+    make its authenticated heartbeat plus semantic health visible to bridge:doctor.
+
+    Treat role wake routes as trial delivery configuration only. They state where
+    to attempt a consultation and may use a declared fresh fallback bridge. They
+    are not occupancy evidence, do not use role last_seen, and do not close the
+    seat-occupancy or bus-native watcher gap.
+
+    Keep antlerforge.zulipchat.com as a no-estate-data sandbox. The same stock apps
+    may attach to both organizations. Only channel names, topic conventions,
+    notification settings and register descriptions may transfer. Messages,
+    files, memberships, bot keys and authority records do not sync or migrate.
+
+    Before any external edge is accepted, run a stock-client compatibility spike
+    against Cloudflare Tunnel plus Access on Mac, iPhone and iPad. If all three
+    clients pass login, message, upload, event-stream and push tests, retain
+    Access. If any fails, stop and return to Tony with two explicit choices:
+    a dedicated Tunnel hostname protected by Zulip authentication and Cloudflare
+    network controls, recommended for stock-client support, or a private Tailscale
+    route with Tailscale required on every device. Do not silently weaken R1 or R9.
+
+    The trial does not retire AMB, Buzz, the noticeboard or Home Assistant. Each
+    retirement remains a separate evidence-backed proposal at settle. Within one
+    week after the two-week window, Tony records adopt, revert or blend on the
+    Coherence Manager's evidence summary, including operating cost.
+  consequences:
+    positive: |
+      Tony can raise, discuss and answer work in one threaded mobile conversation
+      while Agent Bus and the Work Ledger retain their existing authority and
+      audit trail. Agent-only technical discussion gains a durable room without
+      exposing estate data to Zulip Cloud. Dual-carry makes the trial reversible.
+    negative: |
+      The estate gains a five-container Zulip stack, two adapter processes, one
+      listener key and several role keys. The outbound publisher holds multiple
+      role credentials behind an allowlist, so its compromise has a wider posting
+      blast radius than a single bot. Cloudflare Access may be incompatible with
+      stock mobile clients and can stop the build at its first gate.
+    neutral: |
+      Zulip duplicates some conversation text into Agent Bus transport records
+      during the trial. That duplication is deliberate delivery evidence, not a
+      second work register. The Cloud sandbox remains separate and disposable.
+  supersedes: null
+  superseded_by: null
+relations:
+  - to: Component:project:agent-bus/bus-core
+    type: extends
+  - to: Component:project:agent-bus/agent-adapters
+    type: extends
+  - to: Component:project:agent-bus/ha-notification-channel
+    type: governs
+  - to: Component:project:agent-bus/work-ledger
+    type: depends-on
+  - to: Decision:project:agent-bus/0014-make-bridge-liveness-first-class
+    type: extends
+  - to: Decision:project:agent-bus/0016-require-typed-intent-and-execution-authority
+    type: extends
+  - to: Decision:project:agent-bus/0019-record-owner-decisions-through-scoped-relay-authority
+    type: extends
+  - to: Invariant:project:agent-bus/p-001
+    type: governed-by
+  - to: Invariant:project:agent-bus/p-002
+    type: governed-by
+  - to: Invariant:project:agent-bus/p-003
+    type: governed-by
+  - to: Invariant:project:agent-bus/p-005
+    type: governed-by
+source: decisions/0020-run-zulip-as-a-governed-conversation-layer-trial.yaml
+last_verified: "2026-08-23"
