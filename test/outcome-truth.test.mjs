@@ -234,3 +234,23 @@ test("synthesis accepts HTTP 200 dashboard evidence and zero hard doctor failure
     maintenance: { doctor: "1 hard failure remains" },
   } }), false);
 });
+
+test("synthesis accepts a successful ordinary-mail fallback when scheduled triage is stale", () => {
+  const fallbackRun = {
+    event: "run_warning",
+    metadata: {
+      adapter_health: "all required source adapters ok",
+      dashboard_health: "healthy",
+      doctor_status: "warn_no_hard_failure",
+      funnel: { auto_errors: 0 },
+      ordinary_mail_fallback: true,
+      ordinary_mail_scanned: 37,
+      warnings: ["kv-email-triage stale; 26-hour fallback used"],
+    },
+  };
+  assert.equal(synthesisOutcomeIsClean(fallbackRun), true);
+  assert.equal(synthesisOutcomeIsClean({ ...fallbackRun, metadata: {
+    ...fallbackRun.metadata,
+    ordinary_mail_scanned: 0,
+  } }), false);
+});

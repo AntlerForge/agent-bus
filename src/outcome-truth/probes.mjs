@@ -34,18 +34,24 @@ export function synthesisOutcomeIsClean(outcome) {
     : Object.keys(dashboardHealth).length > 0
       && Object.values(dashboardHealth).every((value) => value === 200 || value === "ok" || value === true)
       && (dashboard.rebuilt === undefined || dashboard.rebuilt === true);
+  const ordinaryMailFallbackHealthy = metadata.ordinary_mail_fallback === true
+    && Number.isInteger(metadata.ordinary_mail_scanned)
+    && metadata.ordinary_mail_scanned > 0;
   const emailHealthy = metadata.email_triage
     ? metadata.email_triage.fresh === true
       && (metadata.email_triage.status === "completed"
         || (metadata.email_triage.status === "warning" && dashboardHealthy))
-    : typeof metadata.email_triage_run_id === "string" && metadata.email_triage_run_id.length > 0
-      && (metadata.email_triage_status === undefined
-        || metadata.email_triage_status === "completed"
-        || (metadata.email_triage_status === "warning" && dashboardHealthy));
+    : (typeof metadata.email_triage_run_id === "string" && metadata.email_triage_run_id.length > 0
+        && (metadata.email_triage_status === undefined
+          || metadata.email_triage_status === "completed"
+          || (metadata.email_triage_status === "warning" && dashboardHealthy)))
+      || ordinaryMailFallbackHealthy;
   const funnelErrors = metadata.funnel?.auto_errors ?? metadata.auto_errors;
   const funnelHealthy = funnelErrors === 0;
   const doctorWarnings = (metadata.warnings || []).filter((warning) => /doctor/i.test(String(warning))).join(" ");
-  const doctor = String(metadata.maintenance?.doctor || metadata.doctor || doctorWarnings).toLowerCase();
+  const doctor = String(
+    metadata.maintenance?.doctor || metadata.doctor || metadata.doctor_status || doctorWarnings,
+  ).toLowerCase();
   const doctorHasHardFailure = /(^|\b)failed\b|hard failures remain/.test(doctor);
   const doctorHealthy = !doctorHasHardFailure
     && /no.hard.failures?|\b0 hard failures?\b|warn.*non.blocking|warn:\s*0 errors|pass|healthy/.test(doctor);
