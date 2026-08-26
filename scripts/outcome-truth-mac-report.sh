@@ -32,5 +32,27 @@ if [[ -x /usr/bin/brctl && -e "$project_store_log" ]]; then
 fi
 
 /usr/local/bin/node "$app_dir/scripts/outcome-truth-mac-probe.mjs" > "$local_snapshot"
-/usr/bin/scp -q "$local_snapshot" ajbarfoot@antler-a6:/srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-snapshot.incoming
-/usr/bin/ssh -o BatchMode=yes ajbarfoot@antler-a6 'chmod 600 /srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-snapshot.incoming && mv /srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-snapshot.incoming /srv/projects/Personal/agent-bus/runtime/outcome-truth/mac-snapshot.json'
+
+upload_snapshot() {
+  /usr/bin/scp -q \
+    -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
+    "$local_snapshot" \
+    ajbarfoot@antler-a6:/srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-snapshot.incoming &&
+    /usr/bin/ssh \
+      -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
+      ajbarfoot@antler-a6 \
+      'chmod 600 /srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-snapshot.incoming && mv /srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-snapshot.incoming /srv/projects/Personal/agent-bus/runtime/outcome-truth/mac-snapshot.json'
+}
+
+# The Mac-to-A6 SSH edge occasionally closes a connection during wake/network
+# convergence. Retry within this scheduled run so a brief transport miss does
+# not defer semantic truth for another fifteen minutes.
+for attempt in 1 2 3; do
+  if upload_snapshot; then
+    exit 0
+  fi
+  (( attempt < 3 )) && sleep $(( attempt * 2 ))
+done
+
+echo "Mac outcome snapshot upload failed after 3 attempts" >&2
+exit 1

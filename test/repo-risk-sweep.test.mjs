@@ -36,3 +36,11 @@ test("existing Mac reporter owns the seven-day refresh; no new scheduler is intr
   assert.match(reporter, /repo-risk-sweep\.mjs/);
   assert.doesNotMatch(reporter, /launchctl|crontab/);
 });
+
+test("Mac reporter retries bounded A6 uploads within one scheduled run", async () => {
+  const reporter = await fs.readFile("scripts/outcome-truth-mac-report.sh", "utf8");
+  assert.match(reporter, /for attempt in 1 2 3/);
+  assert.match(reporter, /ConnectTimeout=8/);
+  assert.match(reporter, /ConnectionAttempts=1/);
+  assert.match(reporter, /Mac outcome snapshot upload failed after 3 attempts/);
+});
