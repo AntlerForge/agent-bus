@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 
 const plistPath = "deploy/macos/com.antlerforge.a6-share-mount.plist.example";
+const reporterPlistPath = "deploy/macos/com.antlerforge.agent-bus-outcome-reporter.plist.example";
 
 test("A6 share mount uses a ten-minute calendar cadence with wake catch-up", async () => {
   const plist = await fs.readFile(plistPath, "utf8");
@@ -16,4 +17,20 @@ test("A6 share mount uses a ten-minute calendar cadence with wake catch-up", asy
   assert.doesNotMatch(plist, /<key>Hour<\/key>/);
   const minutes = [...plist.matchAll(/<key>Minute<\/key><integer>(\d+)<\/integer>/g)].map((match) => Number(match[1]));
   assert.deepEqual(minutes, [0, 10, 20, 30, 40, 50]);
+});
+
+test("Mac outcome reporter samples after, never during, a share-mount repair minute", async () => {
+  const mountPlist = await fs.readFile(plistPath, "utf8");
+  const reporterPlist = await fs.readFile(reporterPlistPath, "utf8");
+  const minutes = (plist) => [...plist.matchAll(/<key>Minute<\/key><integer>(\d+)<\/integer>/g)]
+    .map((match) => Number(match[1]));
+
+  const mountMinutes = minutes(mountPlist);
+  const reporterMinutes = minutes(reporterPlist);
+  assert.deepEqual(reporterMinutes, [2, 17, 32, 47]);
+  assert.equal(reporterMinutes.some((minute) => mountMinutes.includes(minute)), false);
+  assert.equal(reporterMinutes.every((minute) => {
+    const elapsedSinceMount = Math.min(...mountMinutes.map((mountMinute) => (minute - mountMinute + 60) % 60));
+    return elapsedSinceMount >= 2;
+  }), true);
 });
