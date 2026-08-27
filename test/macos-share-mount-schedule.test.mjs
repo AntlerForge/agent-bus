@@ -34,3 +34,12 @@ test("Mac outcome reporter samples after, never during, a share-mount repair min
     return elapsedSinceMount >= 2;
   }), true);
 });
+
+test("Mac runtime check gets one bounded delayed retry for wake-network convergence", async () => {
+  const plist = await fs.readFile("deploy/macos/com.antlerforge.kv-mac-runtime-check.plist.example", "utf8");
+  const wrapper = await fs.readFile("scripts/outcome-truth-launchagent-wrapper.sh", "utf8");
+  assert.match(plist, /<key>OUTCOME_MAX_ATTEMPTS<\/key>\s*<string>2<\/string>/);
+  assert.match(plist, /<key>OUTCOME_RETRY_DELAY_SECONDS<\/key>\s*<string>15<\/string>/);
+  assert.match(wrapper, /attempt >= max_attempts/);
+  assert.match(wrapper, /retry_delay_seconds \* attempt/);
+});
