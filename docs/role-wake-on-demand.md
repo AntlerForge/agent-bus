@@ -2,8 +2,10 @@
 
 The Agent Bus `wake_role` MCP tool queues a fresh bounded seating for
 `coherence-manager`, `estate-operations-manager`, or `estate-architect`. Only `tony` and
-`chief-of-staff` are accepted as requesters and their matching trusted-policy authority is
-validated by the server. The durable `_role-seats.json` record on A6 is
+`chief-of-staff` are accepted as requesters. Each request cites a persisted Agent Bus
+execute message; the server re-reads that record, matches its sender to the requester, and
+evaluates its assignment or trusted-policy authority. Caller-supplied identity text alone is
+never sufficient. The durable `_role-seats.json` record on A6 is
 the occupancy authority; agent `last_seen` and bridge heartbeats are deliberately ignored.
 
 The Mac LaunchAgent runs `scripts/role-wake-worker.mjs` once per minute. It atomically

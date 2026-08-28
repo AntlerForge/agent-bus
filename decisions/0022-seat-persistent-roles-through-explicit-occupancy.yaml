@@ -15,7 +15,8 @@ properties:
     cannot prove occupancy because scheduled automations also act under role identities.
   decision: |
     Agent Bus owns an explicit seat/wake record for each persistent role. Tony or the Chief
-    of Staff may enqueue an on-demand wake through the typed MCP/control-plane boundary. A
+    of Staff may enqueue an on-demand wake through the typed MCP/control-plane boundary by
+    referencing a persisted execute message whose sender and authority the server verifies. A
     Mac worker atomically claims one request, writes the occupied seat before spawning a
     fresh bounded role session at that role's desk, heartbeats a fenced seat generation,
     concurrently supervises other role seats, and always writes the unseat outcome. A later

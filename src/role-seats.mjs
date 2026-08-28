@@ -2,8 +2,9 @@ import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { readJsonFile, writeJsonFileAtomic } from "./io.mjs";
 import { ensureBusLayout } from "./paths.mjs";
-import { sendMessage } from "./mailbox.mjs";
-import { trustedPolicyAllowsMessage } from "./trusted-policies.mjs";
+import { getMessage, sendMessage } from "./mailbox.mjs";
+import { evaluateMessageAuthority } from "./execution-authority.mjs";
+import { getWorkItem } from "./work-ledger/store.mjs";
 
 export const WAKEABLE_ROLES = ["coherence-manager", "estate-operations-manager", "estate-architect"];
 const WAKE_CALLERS = new Set(["tony", "chief-of-staff"]);
@@ -27,13 +28,14 @@ export async function readRoleSeats(root) {
   return readJsonFile(paths.roleSeatsFile, stateDefault());
 }
 
-export async function requestRoleWake({ role, requested_by, reason, source_ref, how_woken = "on-demand", execution_authority }, root) {
+export async function requestRoleWake({ role, requested_by, reason, source_ref, how_woken = "on-demand", authority_message_id }, root) {
   assertRole(role);
   if (!WAKE_CALLERS.has(requested_by)) throw new Error("requested_by must be tony or chief-of-staff");
-  const policyId = execution_authority?.type === "trusted_policy" ? execution_authority.policy_id : null;
-  if (!policyId || !trustedPolicyAllowsMessage({ from: requested_by, to: role }, policyId)) {
-    throw new Error("wake requires server-verified trusted-policy authority for the requester");
-  }
+  if (!authority_message_id) throw new Error("authority_message_id is required");
+  const authorityMessage = await getMessage({ message_id: authority_message_id }, root);
+  if (authorityMessage.from !== requested_by) throw new Error("authority message sender does not match requested_by");
+  const authority = await evaluateMessageAuthority(authorityMessage, { getItem: (workItemId) => getWorkItem({ work_item_id: workItemId }, root) });
+  if (!authority.state_changes_allowed) throw new Error(`authority message does not permit execution: ${authority.reason}`);
   if (!String(reason || "").trim()) throw new Error("reason is required");
   return serial(async () => {
     const paths = await ensureBusLayout(root);
@@ -43,11 +45,13 @@ export async function requestRoleWake({ role, requested_by, reason, source_ref, 
       const event = { event_id: id("seat_event"), type: "wake_noop_occupied", role, requested_by, occupant: occupied.who, created_at: nowIso() };
       state.events.push(event);
       await writeJsonFileAtomic(paths.roleSeatsFile, state);
+      let noteDeliveryError = null;
       await sendMessage({
         from: "role-wake-system", to: role, subject: "Wake request received while your seat is occupied",
-        body: `A wake requested by ${requested_by} was suppressed because seat ${occupied.seat_id} is occupied. Reason: ${reason}`,
+        body: `A wake requested by ${requested_by} was suppressed because seat ${occupied.seat_id} is occupied. Read the durable wake event for the request reason.`,
         intent: "inform", requires_response: false,
-      }, root);
+      }, root).catch((error) => { noteDeliveryError = error.message; });
+      if (noteDeliveryError) { event.note_delivery_error = noteDeliveryError; await writeJsonFileAtomic(paths.roleSeatsFile, state); }
       return { disposition: "occupied_noop", seat: occupied, note: `Seat is occupied by ${occupied.who}; no second seating was created.`, event };
     }
     const existing = state.wake_requests.find((item) => item.role === role && item.status === "pending");

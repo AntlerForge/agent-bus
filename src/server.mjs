@@ -262,7 +262,7 @@ registerTool(server, "list_role_seats", "Read explicit role seat occupancy and w
 registerTool(server, "wake_role", "Request a fresh bounded seating for a persistent role. An occupied seat is a safe no-op.", {
   role: z.enum(["coherence-manager", "estate-operations-manager", "estate-architect"]),
   requested_by: z.enum(["tony", "chief-of-staff"]), reason: z.string().min(1), source_ref: z.string().optional(),
-  execution_authority: z.object({ type: z.literal("trusted_policy"), policy_id: z.enum(["tony-direct-instruction", "chief-of-staff-relay"]) }),
+  authority_message_id: z.string().min(1),
 }, (args) => remoteRoleSeats ? remoteRoleSeats.wake(args) : requestRoleWake(args, root));
 
 registerTool(server, "list_artifacts", "List shared artifact metadata.", {}, () => remoteBus ? remoteBus.listArtifacts() : readArtifactManifest(root));

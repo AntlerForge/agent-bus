@@ -281,6 +281,21 @@ async function findMessageFile(messageId, root) {
   throw new Error(`Message not found: ${messageId}`);
 }
 
+export async function getMessage({ message_id }, root) {
+  const message = await findMessageFile(message_id, root);
+  return {
+    message_id: message.data.id,
+    thread_id: message.data.thread,
+    from: message.data.from,
+    to: message.data.to,
+    intent: message.data.intent || null,
+    execution_authority: message.data.execution_authority || null,
+    created: message.data.created,
+    subject: message.data.subject,
+    body: message.body.trim(),
+  };
+}
+
 export async function ackMessage({ message_id }, root) {
   const remote = configuredRemoteBus();
   if (remote) return remote.ackMessage({ message_id });
