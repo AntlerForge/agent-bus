@@ -45,6 +45,7 @@ function run(role, prompt, seatToken) {
 }
 
 const current = await client.list();
+await client.workerHeartbeat({ worker_id: worker, worker_pid: process.pid, host: os.hostname() });
 const staleMs = Number(process.env.ROLE_WAKE_STALE_AFTER_MS || 180_000);
 const recoveryProofs = [];
 for (const seat of Object.values(current.seats || {})) {

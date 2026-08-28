@@ -1,0 +1,11 @@
+[Unit]
+Description=Verify role-attention health every five minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=5min
+Persistent=true
+Unit=agent-bus-role-attention-health.service
+
+[Install]
+WantedBy=timers.target

@@ -35,7 +35,7 @@ import {
   updateRun,
 } from "../work-ledger/store.mjs";
 import { getWriteToken } from "../write-token.mjs";
-import { attachRoleSeatSession, claimRoleWake, deliverRoleSeatNotes, heartbeatRoleSeat, readRoleSeats, recoverStaleRoleSeats, requestRoleAttentionSignal, requestRoleWake, unseatRole } from "../role-seats.mjs";
+import { attachRoleSeatSession, claimRoleWake, deliverRoleSeatNotes, heartbeatRoleSeat, heartbeatRoleWakeWorker, readRoleSeats, recoverStaleRoleSeats, requestRoleAttentionSignal, requestRoleWake, unseatRole } from "../role-seats.mjs";
 import { authenticateRoleWake, loadRoleWakeCredentials } from "../role-wake-auth.mjs";
 
 const VERSION = "0.8.0";
@@ -359,6 +359,10 @@ export function createControlPlane({
         requireWriteAccess(request, writeToken);
         authenticateRoleWake(request, roleWakeCredentials, "worker");
         return sendJson(response, 200, await deliverRoleSeatNotes(await readJsonBody(request), root));
+      }
+      if (request.method === "POST" && pathname === "/api/v1/role-seats/worker-heartbeat") {
+        authenticateRoleWake(request, roleWakeCredentials, "worker");
+        return sendJson(response, 200, await heartbeatRoleWakeWorker(await readJsonBody(request), root));
       }
       const roleHeartbeat = pathname.match(/^\/api\/v1\/role-seats\/([^/]+)\/heartbeat$/);
       if (request.method === "POST" && roleHeartbeat) {

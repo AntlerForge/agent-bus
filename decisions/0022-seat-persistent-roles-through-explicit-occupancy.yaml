@@ -27,7 +27,13 @@ properties:
     canonical role and waking conveys no authority beyond its role charter.
     An independently scoped A6 monitor may signal only the Estate Operations Manager when
     response-required messages, waiting runs or pending reviews exceed the EOM-owned thresholds,
-    and requests a routine few-hourly patrol without changing alerting policy v1.
+    and requests a routine patrol without changing alerting policy v1. The EOM-owned contract is
+    five-minute mechanical evaluation; 4h active-recipient unread, 4h waiting-run unless a later
+    declared gate applies, 24h from the current review-entry transition, and a maximum 4h between
+    completed monitor-owned EOM passes. Per-transition episode keys, a durable pre-submit snapshot,
+    idempotent signal replay, pending-context merge and one occupant note per episode prevent
+    whole-set churn from causing duplicate wakes. A health timer checks both the monitor snapshot
+    and the Mac worker heartbeat at a 15-minute freshness bound.
   consequences:
     positive: "Wake latency is bounded by the one-minute worker cadence, roles do not block each other, and seat contention is mechanically prevented."
     negative: "On-demand seating waits for the Mac worker when the Mac is unavailable."

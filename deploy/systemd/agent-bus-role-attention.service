@@ -11,7 +11,10 @@ Environment=AGENT_BUS_CONTROL_PLANE_URL=http://127.0.0.1:8091/agent-bus
 Environment=AGENT_BUS_ROLE_WAKE_IDENTITY=estate-operations-monitor
 Environment=AGENT_BUS_ROLE_WAKE_TOKEN_FILE=/home/ajbarfoot/.config/agent-bus/role-wake/estate-operations-monitor.env
 EnvironmentFile=/home/ajbarfoot/.config/agent-bus/write-token.env
+Environment=ROLE_ATTENTION_UNREAD_SECONDS=14400
+Environment=ROLE_ATTENTION_WAITING_RUN_SECONDS=14400
+Environment=ROLE_ATTENTION_REVIEW_SECONDS=86400
+Environment=ROLE_ATTENTION_PATROL_SECONDS=14400
 ExecStart=/usr/bin/node scripts/role-attention-monitor.mjs
 NoNewPrivileges=true
 PrivateTmp=true
-

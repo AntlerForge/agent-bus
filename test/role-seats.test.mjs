@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { attachRoleSeatSession, claimRoleWake, readRoleSeats, recoverStaleRoleSeats, requestRoleWake, unseatRole } from "../src/role-seats.mjs";
+import { attachRoleSeatSession, claimRoleWake, readRoleSeats, recoverStaleRoleSeats, requestRoleAttentionSignal, requestRoleWake, unseatRole } from "../src/role-seats.mjs";
 import { readInbox } from "../src/mailbox.mjs";
 
 test("role wake records occupancy and occupied wake is a safe no-op", async () => {
@@ -56,4 +56,24 @@ test("stale recovery refuses an unproved live session", async () => {
   const recovered = await recoverStaleRoleSeats({ worker_id: "new", host: "mac", stale_after_seconds: 1, now_ms: Date.now() + 2_000, recovery_proofs: [{ role: cm.seat.role, seat_id: cm.seat.seat_id, generation: cm.seat.generation, worker_pid: 101, worker_dead: true, session_pid: 201, session_dead: true, session_identity_verified: false }] }, root);
   assert.equal(recovered.length, 0);
   assert.equal((await readRoleSeats(root)).seats[cm.seat.role].status, "occupied");
+});
+
+test("attention episodes are idempotent, merge pending context, and do not duplicate occupied notes", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "role-seat-"));
+  const one = await requestRoleAttentionSignal({ signal_type: "stalled_work", signal_key: "episode:one", episode_keys: ["one"], reason: "one", source_ref: "test" }, root);
+  assert.equal(one.disposition, "queued");
+  const two = await requestRoleAttentionSignal({ signal_type: "stalled_work", signal_key: "episode:two", episode_keys: ["two"], reason: "two", source_ref: "test" }, root);
+  assert.equal(two.disposition, "already_pending");
+  let state = await readRoleSeats(root);
+  assert.deepEqual(state.wake_requests.at(-1).episode_keys.sort(), ["one", "two"]);
+  const claimed = await claimRoleWake({ worker_id: "worker", worker_identity: "mac-role-wake-worker", worker_pid: 101, host: "mac" }, root);
+  const occupied = await requestRoleAttentionSignal({ signal_type: "stalled_work", signal_key: "episode:three", episode_keys: ["three"], reason: "three", source_ref: "test" }, root);
+  assert.equal(occupied.disposition, "occupied_noop");
+  await requestRoleAttentionSignal({ signal_type: "stalled_work", signal_key: "episode:three", episode_keys: ["three"], reason: "three", source_ref: "test" }, root);
+  state = await readRoleSeats(root);
+  assert.equal(state.occupant_notes.filter((item) => item.signal_key === "episode:three").length, 1);
+  await unseatRole({ role: "estate-operations-manager", seat_id: claimed.seat.seat_id, generation: claimed.seat.generation, worker_id: "worker", outcome: "failed" }, root);
+  state = await readRoleSeats(root);
+  assert.equal(state.wake_requests.at(-1).status, "pending");
+  assert.match(state.wake_requests.at(-1).reason, /Follow up/);
 });

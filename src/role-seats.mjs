@@ -19,7 +19,7 @@ function id(prefix) { return `${prefix}_${Date.now()}_${randomUUID().slice(0, 8)
 function assertRole(role) {
   if (!WAKEABLE_ROLES.includes(role)) throw new Error(`role must be one of: ${WAKEABLE_ROLES.join(", ")}`);
 }
-function stateDefault() { return { schema_version: 2, seats: {}, wake_requests: [], occupant_notes: [], signals: [], events: [] }; }
+function stateDefault() { return { schema_version: 2, seats: {}, wake_requests: [], occupant_notes: [], signals: [], events: [], worker: null, attention: null }; }
 function digest(value) { return createHash("sha256").update(String(value)).digest("hex"); }
 
 export async function readRoleSeats(root) {
@@ -34,7 +34,7 @@ export async function readRoleSeats(root) {
   return state;
 }
 
-export async function requestRoleWake({ role, requested_by, reason, source_ref, how_woken = "on-demand", triggered_by = null }, root) {
+export async function requestRoleWake({ role, requested_by, reason, source_ref, how_woken = "on-demand", triggered_by = null, signal_key = null, episode_keys = [] }, root) {
   assertRole(role);
   if (!WAKE_CALLERS.has(requested_by)) throw new Error("requested_by must be tony, chief-of-staff, or estate-operations-manager");
   if (!String(reason || "").trim()) throw new Error("reason is required");
@@ -45,16 +45,24 @@ export async function requestRoleWake({ role, requested_by, reason, source_ref, 
     state.signals ||= [];
     const occupied = state.seats[role];
     if (occupied?.status === "occupied") {
+      const existingNote = signal_key && state.occupant_notes.find((item) => item.signal_key === signal_key);
+      if (existingNote) return { disposition: "occupied_noop", seat: occupied, note: "Signal already delivered to the occupied seat.", event: state.events.find((item) => item.event_id === existingNote.event_id) };
       const event = { event_id: id("seat_event"), type: "wake_noop_occupied", role, requested_by, triggered_by, occupant: occupied.who, reason: String(reason), source_ref: source_ref || null, created_at: nowIso() };
       state.events.push(event);
-      const note = { note_id: id("seat_note"), event_id: event.event_id, role, requested_by, reason: String(reason), source_ref: source_ref || null, status: "pending", attempts: 0, created_at: event.created_at };
+      const note = { note_id: id("seat_note"), event_id: event.event_id, role, requested_by, signal_key, episode_keys, reason: String(reason), source_ref: source_ref || null, status: "pending", attempts: 0, created_at: event.created_at };
       state.occupant_notes.push(note);
       await writeJsonFileAtomic(paths.roleSeatsFile, state);
       return { disposition: "occupied_noop", seat: occupied, note: `Seat is occupied by ${occupied.who}; no second seating was created.`, event };
     }
     const existing = state.wake_requests.find((item) => item.role === role && item.status === "pending");
-    if (existing) return { disposition: "already_pending", request: existing };
-    const request = { request_id: id("wake"), role, requested_by, triggered_by, reason: String(reason), source_ref: source_ref || null, how_woken, status: "pending", requested_at: nowIso() };
+    if (existing) {
+      existing.signal_keys = [...new Set([...(existing.signal_keys || []), ...(signal_key ? [signal_key] : [])])];
+      existing.episode_keys = [...new Set([...(existing.episode_keys || []), ...episode_keys])];
+      if (!existing.reasons?.includes(String(reason))) existing.reasons = [...(existing.reasons || [existing.reason]), String(reason)];
+      await writeJsonFileAtomic(paths.roleSeatsFile, state);
+      return { disposition: "already_pending", request: existing };
+    }
+    const request = { request_id: id("wake"), role, requested_by, triggered_by, signal_keys: signal_key ? [signal_key] : [], episode_keys, reason: String(reason), reasons: [String(reason)], source_ref: source_ref || null, how_woken, status: "pending", requested_at: nowIso() };
     state.wake_requests.push(request);
     state.events.push({ event_id: id("seat_event"), type: "wake_requested", role, request_id: request.request_id, requested_by, created_at: request.requested_at });
     await writeJsonFileAtomic(paths.roleSeatsFile, state);
@@ -148,6 +156,18 @@ export async function unseatRole({ role, seat_id, generation, worker_id, outcome
     const request = state.wake_requests.find((item) => item.request_id === seat.wake_request_id);
     if (request) { request.status = outcome === "completed" ? "completed" : "failed"; request.completed_at = at; }
     state.events.push({ event_id: id("seat_event"), type: "seat_unseated", role, seat_id, outcome, created_at: at });
+    const attentionNotes = role === "estate-operations-manager"
+      ? state.occupant_notes.filter((item) => item.role === role && item.signal_key && item.status === "delivered" && new Date(item.created_at) >= new Date(seat.since))
+      : [];
+    if (outcome === "completed") for (const item of attentionNotes) { item.status = "handled"; item.handled_at = at; item.handled_by_seat_id = seat_id; }
+    if (role === "estate-operations-manager" && outcome !== "completed" && attentionNotes.length && !state.wake_requests.some((item) => item.role === role && item.status === "pending")) {
+      const followup = { request_id: id("wake"), role, requested_by: "estate-operations-manager", triggered_by: "estate-operations-monitor", signal_keys: attentionNotes.map((item) => item.signal_key), episode_keys: attentionNotes.flatMap((item) => item.episode_keys || []), reason: "Follow up monitor findings not handled before the prior EOM seat ended.", reasons: ["Follow up monitor findings not handled before the prior EOM seat ended."], source_ref: "agent-bus:role-attention-monitor", how_woken: "stuck-work-signal", status: "pending", requested_at: at };
+      state.wake_requests.push(followup);
+      state.events.push({ event_id: id("seat_event"), type: "wake_followup_requested", role, request_id: followup.request_id, created_at: at });
+    }
+    if (role === "estate-operations-manager" && outcome === "completed" && (["stuck-work-signal", "routine-patrol"].includes(seat.how_woken) || attentionNotes.length)) {
+      state.attention = { last_completed_at: at, last_completed_seat_id: seat_id };
+    }
     await writeJsonFileAtomic(paths.roleSeatsFile, state);
     return seat;
   });
@@ -181,25 +201,34 @@ export async function deliverRoleSeatNotes({ limit = 20 } = {}, root) {
   return { delivered: delivered.length };
 }
 
-export async function requestRoleAttentionSignal({ signal_type, signal_key, reason, source_ref, detected_at = nowIso(), suppress_for_seconds = 14400 }, root) {
+export async function requestRoleAttentionSignal({ signal_type, signal_key, episode_keys = [], reason, source_ref, detected_at = nowIso() }, root) {
   if (!['stalled_work', 'patrol_due'].includes(signal_type)) throw new Error("signal_type must be stalled_work or patrol_due");
   if (!String(reason || "").trim()) throw new Error("reason is required");
   if (!String(signal_key || "").trim()) throw new Error("signal_key is required");
   const state = await readRoleSeats(root);
   const prior = (state.signals || []).findLast((item) => item.signal_key === signal_key);
-  if (prior && new Date(detected_at).getTime() - new Date(prior.created_at).getTime() < Number(suppress_for_seconds) * 1000) {
-    return { disposition: "signal_suppressed", signal: prior };
-  }
+  if (prior) return { disposition: prior.disposition, signal: prior, idempotent_replay: true };
   const result = await requestRoleWake({
     role: "estate-operations-manager", requested_by: "estate-operations-manager", triggered_by: "estate-operations-monitor",
-    reason, source_ref, how_woken: signal_type === "patrol_due" ? "routine-patrol" : "stuck-work-signal",
+    reason, source_ref, signal_key, episode_keys, how_woken: signal_type === "patrol_due" ? "routine-patrol" : "stuck-work-signal",
   }, root);
   await serial(async () => {
     const paths = await ensureBusLayout(root);
     const state = await readRoleSeats(root);
     state.signals ||= [];
-    state.signals.push({ signal_id: id("role_signal"), signal_type, signal_key, reason: String(reason), source_ref: source_ref || null, detected_at, disposition: result.disposition, created_at: nowIso() });
+    state.signals.push({ signal_id: id("role_signal"), signal_type, signal_key, episode_keys, reason: String(reason), source_ref: source_ref || null, detected_at, disposition: result.disposition, created_at: nowIso() });
     await writeJsonFileAtomic(paths.roleSeatsFile, state);
   });
   return result;
+}
+
+export async function heartbeatRoleWakeWorker({ worker_id, worker_pid, host = os.hostname() }, root) {
+  if (!worker_id || !Number.isInteger(Number(worker_pid))) throw new Error("worker_id and worker_pid are required");
+  return serial(async () => {
+    const paths = await ensureBusLayout(root);
+    const state = await readRoleSeats(root);
+    state.worker = { worker_id, worker_pid: Number(worker_pid), host, last_seen_at: nowIso() };
+    await writeJsonFileAtomic(paths.roleSeatsFile, state);
+    return state.worker;
+  });
 }

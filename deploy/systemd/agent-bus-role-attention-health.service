@@ -1,0 +1,13 @@
+[Unit]
+Description=Verify role-attention monitor and Mac wake-worker freshness
+After=agent-bus-role-attention.service
+
+[Service]
+Type=oneshot
+User=ajbarfoot
+WorkingDirectory=/srv/projects/Personal/agent-bus/app
+Environment=AGENT_BUS_ROOT=/srv/projects/Personal/agent-bus/runtime
+Environment=ROLE_ATTENTION_HEALTH_MAX_AGE_SECONDS=900
+ExecStart=/usr/bin/node scripts/role-attention-health.mjs
+NoNewPrivileges=true
+PrivateTmp=true
