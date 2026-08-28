@@ -23,14 +23,30 @@ function run(role, prompt) {
   });
 }
 
-const claimed = await client.claim({ worker_id: worker, host: os.hostname() });
-if (!claimed) process.exit(0);
-const { request, seat } = claimed;
-const prompt = `You are seated only as ${request.role}. Load that role's canonical skill and run its wake ritual. Consult the explicit Agent Bus seat record ${seat.seat_id}; do not use identity last_seen as occupancy evidence. Work the role queue for: ${request.reason}. Source: ${request.source_ref || "on-demand wake"}. Stay within the role charter; waking grants no new authority. Update the role ledger, then end this bounded seating.`;
-try {
-  await run(request.role, prompt);
-  await client.unseat({ role: request.role, seat_id: seat.seat_id, outcome: "completed" });
-} catch (error) {
-  await client.unseat({ role: request.role, seat_id: seat.seat_id, outcome: "failed", note: error.message });
-  throw error;
+await client.recover({ worker_id: worker, host: os.hostname() });
+const active = new Set();
+async function runClaim(claimed) {
+  const { request, seat } = claimed;
+  const prompt = `You are seated only as ${request.role}. Load that role's canonical skill and run its wake ritual. Consult the explicit Agent Bus seat record ${seat.seat_id}; do not use identity last_seen as occupancy evidence. Work the role queue for: ${request.reason}. Source: ${request.source_ref || "on-demand wake"}. Stay within the role charter; waking grants no new authority. Update the role ledger, then end this bounded seating.`;
+  const heartbeat = setInterval(() => void client.heartbeat({ role: request.role, seat_id: seat.seat_id, worker_id: worker }).catch(() => {}), 30_000);
+  try {
+    await run(request.role, prompt);
+    await client.unseat({ role: request.role, seat_id: seat.seat_id, outcome: "completed" });
+  } catch (error) {
+    await client.unseat({ role: request.role, seat_id: seat.seat_id, outcome: "failed", note: error.message });
+  } finally { clearInterval(heartbeat); }
 }
+
+let idlePasses = 0;
+while (idlePasses < 2 || active.size) {
+  const claimed = await client.claim({ worker_id: worker, host: os.hostname() });
+  if (claimed) {
+    idlePasses = 0;
+    const task = runClaim(claimed).finally(() => active.delete(task));
+    active.add(task);
+  } else {
+    idlePasses += 1;
+    await new Promise((resolve) => setTimeout(resolve, 10_000));
+  }
+}
+await Promise.allSettled(active);

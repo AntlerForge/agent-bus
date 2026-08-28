@@ -35,9 +35,9 @@ import {
   updateRun,
 } from "../work-ledger/store.mjs";
 import { getWriteToken } from "../write-token.mjs";
-import { claimRoleWake, readRoleSeats, requestRoleWake, unseatRole } from "../role-seats.mjs";
+import { claimRoleWake, heartbeatRoleSeat, readRoleSeats, recoverStaleRoleSeats, requestRoleWake, unseatRole } from "../role-seats.mjs";
 
-const VERSION = "0.6.0";
+const VERSION = "0.7.0";
 const STARTED_AT = new Date().toISOString();
 const STATIC_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "public");
 const STATIC_FILES = {
@@ -340,6 +340,15 @@ export function createControlPlane({
       if (request.method === "POST" && pathname === "/api/v1/role-seats/claim") {
         requireWriteAccess(request, writeToken);
         return sendJson(response, 200, await claimRoleWake(await readJsonBody(request), root));
+      }
+      if (request.method === "POST" && pathname === "/api/v1/role-seats/recover") {
+        requireWriteAccess(request, writeToken);
+        return sendJson(response, 200, await recoverStaleRoleSeats(await readJsonBody(request), root));
+      }
+      const roleHeartbeat = pathname.match(/^\/api\/v1\/role-seats\/([^/]+)\/heartbeat$/);
+      if (request.method === "POST" && roleHeartbeat) {
+        requireWriteAccess(request, writeToken);
+        return sendJson(response, 200, await heartbeatRoleSeat({ ...(await readJsonBody(request)), role: decodeURIComponent(roleHeartbeat[1]) }, root));
       }
       const roleUnseat = pathname.match(/^\/api\/v1\/role-seats\/([^/]+)\/unseat$/);
       if (request.method === "POST" && roleUnseat) {

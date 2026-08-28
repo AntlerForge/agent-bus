@@ -11,6 +11,8 @@ export function createRemoteRoleSeats(url, { writeToken } = {}) {
     list: () => call(url, "/api/v1/role-seats"),
     wake: (args) => write("/api/v1/role-seats/wake", args),
     claim: (args) => write("/api/v1/role-seats/claim", args),
+    heartbeat: (args) => write(`/api/v1/role-seats/${encodeURIComponent(args.role)}/heartbeat`, args),
+    recover: (args) => write("/api/v1/role-seats/recover", args),
     unseat: (args) => write(`/api/v1/role-seats/${encodeURIComponent(args.role)}/unseat`, args),
   };
 }
