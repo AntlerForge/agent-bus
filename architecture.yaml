@@ -306,7 +306,7 @@ owner: tony
 status: active
 properties:
   type: mcp
-  version: "2.2"
+  version: "2.3"
 ---
 apiVersion: arch.kv/v1
 kind: Interface
@@ -318,7 +318,7 @@ owner: tony
 status: active
 properties:
   type: http
-  version: "1.6"
+  version: "1.7"
 ---
 apiVersion: arch.kv/v1
 kind: Interface
