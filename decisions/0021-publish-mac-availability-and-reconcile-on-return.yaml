@@ -22,10 +22,15 @@ properties:
     reporter, not a new agent, consumes that id once, runs bounded existing catch-up
     operations, and uploads a summary. Estate Monitor projects the shared state;
     Mac-dependent adapters treat offline as an expected skip. Tailscale is evidence,
-    never sole authority: a fresh reporter snapshot is required for online.
+    never sole authority: a fresh reporter snapshot is required for online. The
+    reporter also compares resident FDA helper processes with their declared
+    output cadence and safely recycles a helper through its LaunchAgent when the
+    process is present but output is stale. Under Tony's recorded R4a decision,
+    the pure API WHOOP daily pull moves to an A6 persistent timer; its Mac plist
+    remains installed but disabled for rollback.
   consequences:
     positive: "Expected Mac absence is quiet and one auditable catch-up pass covers each offline window."
     negative: "Catch-up waits for the existing reporter to run after the Mac returns."
-    neutral: "No inbound Mac service, wake request, credential or LOAD-BEARING conversion is introduced."
+    neutral: "No inbound Mac service or wake request is introduced; WHOOP is the only Tony-approved LOAD-BEARING conversion."
   supersedes: null
   superseded_by: null

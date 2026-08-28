@@ -1,0 +1,10 @@
+[Unit]
+Description=Run WHOOP daily pull at 08:05 Europe/London
+
+[Timer]
+OnCalendar=*-*-* 08:05:00 Europe/London
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

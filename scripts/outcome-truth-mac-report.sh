@@ -6,6 +6,9 @@ app_dir="${OUTCOME_MAC_APP:-/Users/antonybarfoot/Developer/personal/agent-bus}"
 # its declared application checkout before invoking any Node entrypoint.
 cd "$app_dir"
 local_snapshot="${TMPDIR:-/tmp}/agent-bus-outcome-mac-snapshot.json"
+runtimedir="$HOME/Library/Application Support/Agent Bus/wrapper-liveness"
+mkdir -p "$runtimedir"
+/usr/local/bin/node "$app_dir/scripts/mac-wrapper-liveness.mjs" > "$runtimedir/latest.json"
 risk_cache="${REPO_RISK_OUTPUT:-$HOME/Library/Application Support/Agent Bus/repo-risk/latest.json}"
 refresh_risk=0
 if [[ ! -f "$risk_cache" ]]; then

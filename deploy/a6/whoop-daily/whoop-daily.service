@@ -1,0 +1,17 @@
+[Unit]
+Description=Pull WHOOP daily data into the canonical Knowledge Vault
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ajbarfoot
+Group=ajbarfoot
+ExecStart=/usr/bin/flock -n /var/lib/whoop-daily/run.lock /usr/local/libexec/run-whoop-daily
+StateDirectory=whoop-daily
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/srv/kv/vault /home/ajbarfoot/.config/energypoints-pbv
+TimeoutStartSec=20min

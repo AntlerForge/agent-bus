@@ -26,8 +26,8 @@ LOAD-BEARING job.
 | porthole-host | must be Mac | Hosts the local Mac control surface. |
 | porthole-web-tunnel | must be Mac | Tunnels the Mac-hosted control surface. |
 | replica-parity-sentinel | must be Mac | Compares Mac working copies with A6 replicas. |
-| whoop-daily | A6 candidate, LOAD-BEARING decision pending | Pure API pull, but no conversion or disablement without Tony's named decision. |
+| whoop-daily | A6-hosted; Mac rollback agent disabled | Tony accepted the R4a move. The pure API pull now runs from the persistent A6 timer; the Mac plist and probe history are retained for reversible rollback. |
 
-The GFG sweep is not a LaunchAgent. Its hosting choice remains a separate Tony
-decision; the watchdog now records `mac_offline` and return reconciliation owns
-catch-up meanwhile.
+The GFG sweep is not a LaunchAgent. Tony accepted the hosting verdict
+`accepted-Mac-hosted-with-catch-up`: it remains on the Mac, the watchdog records
+`mac_offline`, and first-return reconciliation owns the bounded catch-up pass.

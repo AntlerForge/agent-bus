@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+code_dir="${WHOOP_CODE_DIR:-/srv/projects/Personal/BiometricVault/scripts}"
+vault="${WHOOP_VAULT:-/srv/kv/vault}"
+config="${WHOOP_CONFIG:-/home/ajbarfoot/.config/energypoints-pbv/whoop.json}"
+beacon="$vault/health/_cache/whoop-last-success"
+
+start="$(date -u -d '7 days ago' '+%Y-%m-%dT%H:%M:%SZ')"
+end="$(date -u -d '1 day' '+%Y-%m-%dT%H:%M:%SZ')"
+
+cd "$code_dir"
+python3 whoop_pull.py --backfill --config "$config" --vault "$vault" --start "$start" --end "$end"
+python3 ingest_whoop.py --vault "$vault"
+install -d -m 0755 "$(dirname "$beacon")"
+date -u '+%Y-%m-%dT%H:%M:%SZ' > "$beacon"
+python3 "$vault/skills-catalog/knowledge-vault/tools/feed_watchdog.py" --vault "$vault" --write-flags || true
