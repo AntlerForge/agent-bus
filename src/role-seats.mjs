@@ -136,6 +136,15 @@ export async function recoverStaleRoleSeats({ worker_id, host = os.hostname(), s
       seat.status = "unseated"; seat.unseated_at = at; seat.outcome = "worker_lost"; seat.note = "Recovered by a later worker after the fenced heartbeat expired";
       const request = state.wake_requests.find((item) => item.request_id === seat.wake_request_id);
       if (request) { request.status = "failed"; request.completed_at = at; }
+      if (seat.role === "estate-operations-manager") {
+        const notes = state.occupant_notes.filter((item) => item.role === seat.role && item.signal_key && ["pending", "delivered"].includes(item.status) && new Date(item.created_at) >= new Date(seat.since));
+        const signalKeys = [...new Set([...(seat.signal_keys || []), ...notes.map((item) => item.signal_key)])];
+        if (signalKeys.length && !state.wake_requests.some((item) => item.role === seat.role && item.status === "pending")) {
+          const followup = { request_id: id("wake"), role: seat.role, requested_by: "estate-operations-manager", triggered_by: "estate-operations-monitor", signal_keys: signalKeys, episode_keys: [...new Set([...(seat.episode_keys || []), ...notes.flatMap((item) => item.episode_keys || [])])], reason: "Follow up monitor findings after fenced stale-seat recovery.", reasons: ["Follow up monitor findings after fenced stale-seat recovery."], source_ref: "agent-bus:role-attention-monitor", how_woken: "stuck-work-signal", status: "pending", requested_at: at };
+          state.wake_requests.push(followup);
+          state.events.push({ event_id: id("seat_event"), type: "wake_followup_requested", role: seat.role, request_id: followup.request_id, created_at: at });
+        }
+      }
       state.events.push({ event_id: id("seat_event"), type: "stale_seat_recovered", role: seat.role, seat_id: seat.seat_id, recovered_by: worker_id, created_at: at });
       recovered.push(seat);
     }
