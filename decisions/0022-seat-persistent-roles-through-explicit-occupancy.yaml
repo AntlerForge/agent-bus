@@ -33,7 +33,9 @@ properties:
     completed monitor-owned EOM passes. Per-transition episode keys, a durable pre-submit snapshot,
     idempotent signal replay, pending-context merge and one occupant note per episode prevent
     whole-set churn from causing duplicate wakes. A health timer checks both the monitor snapshot
-    and the Mac worker heartbeat at a 15-minute freshness bound.
+    and the Mac worker heartbeat at a 15-minute freshness bound. Only a fenced, explicit
+    complete-attention-pass action by the occupied EOM seat marks notes handled or advances the
+    patrol clock; process exit alone cannot do either.
   consequences:
     positive: "Wake latency is bounded by the one-minute worker cadence, roles do not block each other, and seat contention is mechanically prevented."
     negative: "On-demand seating waits for the Mac worker when the Mac is unavailable."

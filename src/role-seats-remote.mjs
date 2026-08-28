@@ -18,5 +18,6 @@ export function createRemoteRoleSeats(url, { writeToken, roleWakeCredential } = 
     signal: (args) => write("/api/v1/role-seats/signal", args),
     deliverNotes: (args = {}) => write("/api/v1/role-seats/deliver-notes", args),
     workerHeartbeat: (args = {}) => write("/api/v1/role-seats/worker-heartbeat", args),
+    completeAttentionPass: (args) => write("/api/v1/role-seats/attention-pass", args),
   };
 }

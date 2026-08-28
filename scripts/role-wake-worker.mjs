@@ -46,6 +46,7 @@ function run(role, prompt, seatToken) {
 
 const current = await client.list();
 await client.workerHeartbeat({ worker_id: worker, worker_pid: process.pid, host: os.hostname() });
+const workerHeartbeat = setInterval(() => void client.workerHeartbeat({ worker_id: worker, worker_pid: process.pid, host: os.hostname() }).catch(() => {}), 60_000);
 const staleMs = Number(process.env.ROLE_WAKE_STALE_AFTER_MS || 180_000);
 const recoveryProofs = [];
 for (const seat of Object.values(current.seats || {})) {
@@ -60,7 +61,9 @@ await client.deliverNotes();
 const active = new Set();
 async function runClaim(claimed) {
   const { request, seat } = claimed;
-  const prompt = `You are seated only as ${request.role}. Load that role's canonical skill and run its wake ritual. Consult the explicit Agent Bus seat record ${seat.seat_id}; do not use identity last_seen as occupancy evidence. Work the role queue for: ${request.reason}. Source: ${request.source_ref || "on-demand wake"}. Stay within the role charter; waking grants no new authority. Update the role ledger, then end this bounded seating.`;
+  const attentionInstruction = request.role === "estate-operations-manager" && ["stuck-work-signal", "routine-patrol"].includes(request.how_woken)
+    ? ` After you have actually handled the monitor-owned queue, call complete_role_attention_pass with seat_id ${seat.seat_id} and generation ${seat.generation}; only that fenced action advances the patrol clock.` : "";
+  const prompt = `You are seated only as ${request.role}. Load that role's canonical skill and run its wake ritual. Consult the explicit Agent Bus seat record ${seat.seat_id} at generation ${seat.generation}; do not use identity last_seen as occupancy evidence. Work the role queue for: ${request.reason}. Source: ${request.source_ref || "on-demand wake"}. Stay within the role charter; waking grants no new authority.${attentionInstruction} Update the role ledger, then end this bounded seating.`;
   const seatToken = randomBytes(32).toString("hex");
   const { child, completion } = run(request.role, prompt, seatToken);
   try { await client.attachSession({ role: request.role, seat_id: seat.seat_id, generation: seat.generation, worker_id: worker, session_pid: child.pid, session_token: seatToken }); }
@@ -87,3 +90,4 @@ while (idlePasses < 2 || active.size) {
   }
 }
 await Promise.allSettled(active);
+clearInterval(workerHeartbeat);

@@ -28,6 +28,11 @@ reviews exceed the EOM-owned thresholds, and otherwise requests the configured f
 EOM patrol. Repeated signatures are suppressed for one patrol interval. Signals never notify
 Tony, mutate work state or wake another role; alerting policy v1 is unchanged.
 
+The patrol clock advances only when the fenced EOM seat explicitly calls
+`complete_role_attention_pass` after handling its monitor-owned queue. A normal process exit is
+not treated as proof. Any signal attached to the seat, or delivered during it, that remains
+unhandled at unseat creates one follow-up request.
+
 The EOM-owned operating contract is: 4h unread-response threshold for active recipients, 4h
 waiting-run threshold unless a declared later gate applies, 24h from the current review-entry
 transition, and a maximum 4h between completed monitor-owned EOM passes. Findings are keyed per

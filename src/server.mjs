@@ -31,7 +31,7 @@ import { createRemoteBus } from "./remote-bus.mjs";
 import { buildWorkflowProposals, loadModelSelector } from "./model-selector.mjs";
 import { createRemoteModelSelector } from "./model-selector-remote.mjs";
 import { getWriteToken } from "./write-token.mjs";
-import { claimRoleWake, readRoleSeats, requestRoleWake, unseatRole } from "./role-seats.mjs";
+import { claimRoleWake, completeRoleAttentionPass, readRoleSeats, requestRoleWake, unseatRole } from "./role-seats.mjs";
 import { createRemoteRoleSeats } from "./role-seats-remote.mjs";
 import { getRoleWakeCredential } from "./role-wake-auth.mjs";
 
@@ -267,6 +267,12 @@ registerTool(server, "wake_role", "Request a fresh bounded seating for a persist
 }, (args) => {
   if (!roleWakeCredential) throw new Error("This MCP seating has no scoped role-wake credential");
   return remoteRoleSeats ? remoteRoleSeats.wake(args) : requestRoleWake({ ...args, requested_by: roleWakeCredential.identity }, root);
+});
+registerTool(server, "complete_role_attention_pass", "Explicitly record that the currently fenced EOM seat handled its monitor-owned queue. This alone advances the patrol clock.", {
+  seat_id: z.string().min(1), generation: z.number().int().positive(),
+}, (args) => {
+  if (roleWakeCredential?.identity !== "estate-operations-manager") throw new Error("Only the seated Estate Operations Manager may complete an attention pass");
+  return remoteRoleSeats ? remoteRoleSeats.completeAttentionPass(args) : completeRoleAttentionPass(args, root);
 });
 
 registerTool(server, "list_artifacts", "List shared artifact metadata.", {}, () => remoteBus ? remoteBus.listArtifacts() : readArtifactManifest(root));

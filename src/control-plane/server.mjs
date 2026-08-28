@@ -35,7 +35,7 @@ import {
   updateRun,
 } from "../work-ledger/store.mjs";
 import { getWriteToken } from "../write-token.mjs";
-import { attachRoleSeatSession, claimRoleWake, deliverRoleSeatNotes, heartbeatRoleSeat, heartbeatRoleWakeWorker, readRoleSeats, recoverStaleRoleSeats, requestRoleAttentionSignal, requestRoleWake, unseatRole } from "../role-seats.mjs";
+import { attachRoleSeatSession, claimRoleWake, completeRoleAttentionPass, deliverRoleSeatNotes, heartbeatRoleSeat, heartbeatRoleWakeWorker, readRoleSeats, recoverStaleRoleSeats, requestRoleAttentionSignal, requestRoleWake, unseatRole } from "../role-seats.mjs";
 import { authenticateRoleWake, loadRoleWakeCredentials } from "../role-wake-auth.mjs";
 
 const VERSION = "0.8.0";
@@ -363,6 +363,11 @@ export function createControlPlane({
       if (request.method === "POST" && pathname === "/api/v1/role-seats/worker-heartbeat") {
         authenticateRoleWake(request, roleWakeCredentials, "worker");
         return sendJson(response, 200, await heartbeatRoleWakeWorker(await readJsonBody(request), root));
+      }
+      if (request.method === "POST" && pathname === "/api/v1/role-seats/attention-pass") {
+        const caller = authenticateRoleWake(request, roleWakeCredentials, "caller");
+        if (caller.identity !== "estate-operations-manager") return sendJson(response, 403, { error: "Only the seated Estate Operations Manager may complete an attention pass" });
+        return sendJson(response, 200, await completeRoleAttentionPass(await readJsonBody(request), root));
       }
       const roleHeartbeat = pathname.match(/^\/api\/v1\/role-seats\/([^/]+)\/heartbeat$/);
       if (request.method === "POST" && roleHeartbeat) {

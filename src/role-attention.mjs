@@ -19,12 +19,22 @@ export function attentionSignalKey(episodeKeys) {
   return `stalled:${createHash("sha256").update(JSON.stringify([...episodeKeys].sort())).digest("hex").slice(0, 24)}`;
 }
 
-function currentRunSince(events, run) {
-  const entered = [...events].reverse().find((event) => event.type === "run_updated" && event.details?.run_id === run.run_id && event.details?.status === run.status);
-  return entered?.created_at || run.updated_at;
+export function currentRunStatusSince(events, run) {
+  let status = "running";
+  let since = events.find((event) => event.type === "run_started" && event.details?.run_id === run.run_id)?.created_at || run.started_at || run.updated_at;
+  for (const event of events) {
+    if (event.type !== "run_updated" || event.details?.run_id !== run.run_id) continue;
+    if (event.details.status !== status) { status = event.details.status; since = event.created_at; }
+  }
+  return status === run.status ? since : run.updated_at;
 }
 
-function currentReviewSince(events, item) {
+export function waitingRunThresholdAt(run, enteredAt, thresholdSeconds) {
+  const gate = run.not_before || run.next_check_at || null;
+  return { gate, threshold_ms: gate ? new Date(gate).getTime() : new Date(enteredAt).getTime() + thresholdSeconds * 1000 };
+}
+
+export function currentReviewStatusSince(events, item) {
   const entered = [...events].reverse().find((event) => event.type === "status_changed" && event.details?.to === "review");
   return entered?.created_at || item.updated_at;
 }
@@ -48,9 +58,8 @@ export async function evaluateRoleAttention({ now_ms = Date.now(), thresholds = 
     const events = await listWorkItemEvents({ work_item_id: item.work_item_id }, root);
     for (const run of item.runs || []) {
       if (!["waiting_input", "blocked"].includes(run.status)) continue;
-      const enteredAt = currentRunSince(events, run);
-      const gate = run.not_before || run.next_check_at || null;
-      const thresholdAt = gate ? new Date(gate).getTime() : new Date(enteredAt).getTime() + thresholds.waiting_run_seconds * 1000;
+      const enteredAt = currentRunStatusSince(events, run);
+      const { gate, threshold_ms: thresholdAt } = waitingRunThresholdAt(run, enteredAt, thresholds.waiting_run_seconds);
       if (now_ms >= thresholdAt) findings.push({
         type: "waiting_run", ref: run.run_id, work_item_id: item.work_item_id,
         breach_start: new Date(thresholdAt).toISOString(), episode_key: `waiting_run:${run.run_id}:${enteredAt}`,
@@ -58,7 +67,7 @@ export async function evaluateRoleAttention({ now_ms = Date.now(), thresholds = 
       });
     }
     if (item.status === "review") {
-      const enteredAt = currentReviewSince(events, item);
+      const enteredAt = currentReviewStatusSince(events, item);
       const age = ageSeconds(enteredAt, now_ms);
       if (age >= thresholds.pending_review_seconds) findings.push({
         type: "pending_review", ref: item.work_item_id, breach_start: enteredAt,

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { attachRoleSeatSession, claimRoleWake, readRoleSeats, recoverStaleRoleSeats, requestRoleAttentionSignal, requestRoleWake, unseatRole } from "../src/role-seats.mjs";
+import { attachRoleSeatSession, claimRoleWake, completeRoleAttentionPass, readRoleSeats, recoverStaleRoleSeats, requestRoleAttentionSignal, requestRoleWake, unseatRole } from "../src/role-seats.mjs";
 import { readInbox } from "../src/mailbox.mjs";
 
 test("role wake records occupancy and occupied wake is a safe no-op", async () => {
@@ -76,4 +76,16 @@ test("attention episodes are idempotent, merge pending context, and do not dupli
   state = await readRoleSeats(root);
   assert.equal(state.wake_requests.at(-1).status, "pending");
   assert.match(state.wake_requests.at(-1).reason, /Follow up/);
+});
+
+test("only an explicit fenced attention pass advances patrol and prevents follow-up", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "role-seat-"));
+  await requestRoleAttentionSignal({ signal_type: "stalled_work", signal_key: "episode:handled", episode_keys: ["handled"], reason: "handle", source_ref: "test" }, root);
+  const claimed = await claimRoleWake({ worker_id: "worker", worker_identity: "mac-role-wake-worker", worker_pid: 101, host: "mac" }, root);
+  await assert.rejects(completeRoleAttentionPass({ seat_id: claimed.seat.seat_id, generation: claimed.seat.generation + 1 }, root), /fence/);
+  const completed = await completeRoleAttentionPass({ seat_id: claimed.seat.seat_id, generation: claimed.seat.generation }, root);
+  assert.equal(completed.last_completed_seat_id, claimed.seat.seat_id);
+  await unseatRole({ role: "estate-operations-manager", seat_id: claimed.seat.seat_id, generation: claimed.seat.generation, worker_id: "worker", outcome: "completed" }, root);
+  const state = await readRoleSeats(root);
+  assert.equal(state.wake_requests.filter((item) => item.status === "pending").length, 0);
 });

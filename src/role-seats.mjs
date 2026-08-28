@@ -83,7 +83,7 @@ export async function claimRoleWake({ worker_id, worker_identity, worker_pid, ho
     if (!request) return null;
     const at = nowIso();
     request.status = "claimed"; request.claimed_at = at; request.worker_id = worker_id;
-    const seat = { seat_id: id("seat"), role: request.role, who: request.role, since: at, where: host, how_woken: request.how_woken, wake_request_id: request.request_id, worker_id, worker_identity, worker_pid: Number(worker_pid), heartbeat_at: at, generation: Number(state.seats[request.role]?.generation || 0) + 1, status: "occupied" };
+    const seat = { seat_id: id("seat"), role: request.role, who: request.role, since: at, where: host, how_woken: request.how_woken, wake_request_id: request.request_id, signal_keys: request.signal_keys || [], episode_keys: request.episode_keys || [], worker_id, worker_identity, worker_pid: Number(worker_pid), heartbeat_at: at, generation: Number(state.seats[request.role]?.generation || 0) + 1, status: "occupied" };
     state.seats[request.role] = seat;
     state.events.push({ event_id: id("seat_event"), type: "seat_occupied", role: request.role, seat_id: seat.seat_id, who: seat.who, created_at: at });
     await writeJsonFileAtomic(paths.roleSeatsFile, state);
@@ -157,19 +157,37 @@ export async function unseatRole({ role, seat_id, generation, worker_id, outcome
     if (request) { request.status = outcome === "completed" ? "completed" : "failed"; request.completed_at = at; }
     state.events.push({ event_id: id("seat_event"), type: "seat_unseated", role, seat_id, outcome, created_at: at });
     const attentionNotes = role === "estate-operations-manager"
-      ? state.occupant_notes.filter((item) => item.role === role && item.signal_key && item.status === "delivered" && new Date(item.created_at) >= new Date(seat.since))
+      ? state.occupant_notes.filter((item) => item.role === role && item.signal_key && ["pending", "delivered"].includes(item.status) && new Date(item.created_at) >= new Date(seat.since))
       : [];
-    if (outcome === "completed") for (const item of attentionNotes) { item.status = "handled"; item.handled_at = at; item.handled_by_seat_id = seat_id; }
-    if (role === "estate-operations-manager" && outcome !== "completed" && attentionNotes.length && !state.wake_requests.some((item) => item.role === role && item.status === "pending")) {
-      const followup = { request_id: id("wake"), role, requested_by: "estate-operations-manager", triggered_by: "estate-operations-monitor", signal_keys: attentionNotes.map((item) => item.signal_key), episode_keys: attentionNotes.flatMap((item) => item.episode_keys || []), reason: "Follow up monitor findings not handled before the prior EOM seat ended.", reasons: ["Follow up monitor findings not handled before the prior EOM seat ended."], source_ref: "agent-bus:role-attention-monitor", how_woken: "stuck-work-signal", status: "pending", requested_at: at };
+    const passHandled = state.attention?.last_completed_seat_id === seat_id;
+    const unhandledSignalKeys = [...new Set([...(passHandled ? [] : seat.signal_keys || []), ...attentionNotes.map((item) => item.signal_key)])];
+    if (role === "estate-operations-manager" && unhandledSignalKeys.length && !state.wake_requests.some((item) => item.role === role && item.status === "pending")) {
+      const followup = { request_id: id("wake"), role, requested_by: "estate-operations-manager", triggered_by: "estate-operations-monitor", signal_keys: unhandledSignalKeys, episode_keys: [...new Set([...(seat.episode_keys || []), ...attentionNotes.flatMap((item) => item.episode_keys || [])])], reason: "Follow up monitor findings not explicitly handled before the prior EOM seat ended.", reasons: ["Follow up monitor findings not explicitly handled before the prior EOM seat ended."], source_ref: "agent-bus:role-attention-monitor", how_woken: "stuck-work-signal", status: "pending", requested_at: at };
       state.wake_requests.push(followup);
       state.events.push({ event_id: id("seat_event"), type: "wake_followup_requested", role, request_id: followup.request_id, created_at: at });
     }
-    if (role === "estate-operations-manager" && outcome === "completed" && (["stuck-work-signal", "routine-patrol"].includes(seat.how_woken) || attentionNotes.length)) {
-      state.attention = { last_completed_at: at, last_completed_seat_id: seat_id };
-    }
     await writeJsonFileAtomic(paths.roleSeatsFile, state);
     return seat;
+  });
+}
+
+export async function completeRoleAttentionPass({ seat_id, generation }, root) {
+  return serial(async () => {
+    const paths = await ensureBusLayout(root);
+    const state = await readRoleSeats(root);
+    const seat = state.seats["estate-operations-manager"];
+    if (!seat || seat.status !== "occupied" || seat.seat_id !== seat_id || seat.generation !== generation) throw new Error("active EOM seat fence does not match");
+    const at = nowIso();
+    const handledKeys = new Set(seat.signal_keys || []);
+    for (const note of state.occupant_notes) {
+      if (note.role === seat.role && note.signal_key && new Date(note.created_at) >= new Date(seat.since)) {
+        note.status = "handled"; note.handled_at = at; note.handled_by_seat_id = seat_id; handledKeys.add(note.signal_key);
+      }
+    }
+    state.attention = { last_completed_at: at, last_completed_seat_id: seat_id, handled_signal_keys: [...handledKeys] };
+    state.events.push({ event_id: id("seat_event"), type: "attention_pass_completed", role: seat.role, seat_id, generation, handled_signal_keys: [...handledKeys], created_at: at });
+    await writeJsonFileAtomic(paths.roleSeatsFile, state);
+    return state.attention;
   });
 }
 
