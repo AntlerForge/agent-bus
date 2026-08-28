@@ -9,6 +9,9 @@
     <key>PATH</key><string>/Users/antonybarfoot/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>AGENT_BUS_CONTROL_PLANE_URL</key><string>http://127.0.0.1:18091/agent-bus</string>
     <key>AGENT_BUS_WRITE_TOKEN_FILE</key><string>/Users/antonybarfoot/.config/agent-bus/write-token.env</string>
+    <key>AGENT_BUS_ROLE_WAKE_IDENTITY</key><string>mac-role-wake-worker</string>
+    <key>AGENT_BUS_ROLE_WAKE_TOKEN_FILE</key><string>/Users/antonybarfoot/.config/agent-bus/role-wake/mac-role-wake-worker.env</string>
+    <key>AGENT_BUS_EOM_WAKE_TOKEN_FILE</key><string>/Users/antonybarfoot/.config/agent-bus/role-wake/estate-operations-manager.env</string>
   </dict>
   <key>StandardOutPath</key><string>/Users/antonybarfoot/Library/Logs/agent-bus-role-wake.log</string>
   <key>StandardErrorPath</key><string>/Users/antonybarfoot/Library/Logs/agent-bus-role-wake.err.log</string>

@@ -35,6 +35,7 @@ properties:
     - "Persist human-readable agent messages and threads"
     - "Expose bounded MCP messaging tools"
     - "Persist explicit role seat occupancy and on-demand wake requests"
+    - "Authenticate sanctioned wake callers, Mac worker recovery and operational signals with separate scoped credentials"
   non_responsibilities:
     - "Task authority, scheduling or review policy"
     - "Deriving role occupancy from agent last_seen or bridge liveness"
@@ -43,6 +44,30 @@ relations:
     type: exposes
   - to: DataStore:project:agent-bus/bus-runtime-files
     type: writes-to
+---
+apiVersion: arch.kv/v1
+kind: Component
+id: role-attention-monitor
+namespace: project:agent-bus
+title: "Role attention monitor"
+description: |
+  Does: detect aged response-required messages, waiting runs and pending reviews and request an EOM patrol seating.
+  Does not: notify Tony, approve work, change work state or wake roles other than the Estate Operations Manager.
+owner: estate-operations-manager
+status: active
+properties:
+  path: "scripts/role-attention-monitor.mjs"
+  tech: "Node.js and systemd timer"
+  responsibilities:
+    - "Raise transition-bounded stalled-work signals"
+    - "Request routine EOM patrols at the configured few-hourly cadence"
+  non_responsibilities:
+    - "Alerting-policy changes, Tony notifications or work-item mutation"
+relations:
+  - to: Component:project:agent-bus/bus-core
+    type: depends-on
+  - to: Interface:project:agent-bus/control-plane-http
+    type: uses
 ---
 apiVersion: arch.kv/v1
 kind: Component
@@ -281,7 +306,7 @@ owner: tony
 status: active
 properties:
   type: mcp
-  version: "2.1"
+  version: "2.2"
 ---
 apiVersion: arch.kv/v1
 kind: Interface
@@ -293,7 +318,7 @@ owner: tony
 status: active
 properties:
   type: http
-  version: "1.5"
+  version: "1.6"
 ---
 apiVersion: arch.kv/v1
 kind: Interface

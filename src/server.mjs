@@ -33,6 +33,7 @@ import { createRemoteModelSelector } from "./model-selector-remote.mjs";
 import { getWriteToken } from "./write-token.mjs";
 import { claimRoleWake, readRoleSeats, requestRoleWake, unseatRole } from "./role-seats.mjs";
 import { createRemoteRoleSeats } from "./role-seats-remote.mjs";
+import { getRoleWakeCredential } from "./role-wake-auth.mjs";
 
 function toolResult(value) {
   return {
@@ -79,6 +80,7 @@ const root = getBusRoot();
 const remoteWorkLedgerUrl = process.env.AGENT_BUS_CONTROL_PLANE_URL || null;
 const allowLocal = process.env.AGENT_BUS_ALLOW_LOCAL === "1";
 const writeToken = getWriteToken();
+const roleWakeCredential = getRoleWakeCredential();
 if (!remoteWorkLedgerUrl && !allowLocal) {
   throw new Error("Agent Bus authority is not configured: set AGENT_BUS_CONTROL_PLANE_URL, or explicitly set AGENT_BUS_ALLOW_LOCAL=1 for isolated development");
 }
@@ -92,7 +94,7 @@ const remoteBus = remoteWorkLedgerUrl
 const remoteModelSelector = remoteWorkLedgerUrl
   ? createRemoteModelSelector(remoteWorkLedgerUrl, { writeToken })
   : null;
-const remoteRoleSeats = remoteWorkLedgerUrl ? createRemoteRoleSeats(remoteWorkLedgerUrl, { writeToken }) : null;
+const remoteRoleSeats = remoteWorkLedgerUrl ? createRemoteRoleSeats(remoteWorkLedgerUrl, { writeToken, roleWakeCredential }) : null;
 
 const workLedger = {
   create: (args) => remoteWorkLedger ? remoteWorkLedger.createWorkItem(args) : createWorkItem(args, root),
@@ -261,9 +263,11 @@ registerTool(server, "list_agents", "List known agent identities.", {}, () => re
 registerTool(server, "list_role_seats", "Read explicit role seat occupancy and wake requests. Agent last_seen is not occupancy evidence.", {}, () => remoteRoleSeats ? remoteRoleSeats.list() : readRoleSeats(root));
 registerTool(server, "wake_role", "Request a fresh bounded seating for a persistent role. An occupied seat is a safe no-op.", {
   role: z.enum(["coherence-manager", "estate-operations-manager", "estate-architect"]),
-  requested_by: z.enum(["tony", "chief-of-staff"]), reason: z.string().min(1), source_ref: z.string().optional(),
-  authority_message_id: z.string().min(1),
-}, (args) => remoteRoleSeats ? remoteRoleSeats.wake(args) : requestRoleWake(args, root));
+  reason: z.string().min(1), source_ref: z.string().optional(),
+}, (args) => {
+  if (!roleWakeCredential) throw new Error("This MCP seating has no scoped role-wake credential");
+  return remoteRoleSeats ? remoteRoleSeats.wake(args) : requestRoleWake({ ...args, requested_by: roleWakeCredential.identity }, root);
+});
 
 registerTool(server, "list_artifacts", "List shared artifact metadata.", {}, () => remoteBus ? remoteBus.listArtifacts() : readArtifactManifest(root));
 

@@ -35,9 +35,10 @@ import {
   updateRun,
 } from "../work-ledger/store.mjs";
 import { getWriteToken } from "../write-token.mjs";
-import { claimRoleWake, heartbeatRoleSeat, readRoleSeats, recoverStaleRoleSeats, requestRoleWake, unseatRole } from "../role-seats.mjs";
+import { attachRoleSeatSession, claimRoleWake, deliverRoleSeatNotes, heartbeatRoleSeat, readRoleSeats, recoverStaleRoleSeats, requestRoleAttentionSignal, requestRoleWake, unseatRole } from "../role-seats.mjs";
+import { authenticateRoleWake, loadRoleWakeCredentials } from "../role-wake-auth.mjs";
 
-const VERSION = "0.7.0";
+const VERSION = "0.8.0";
 const STARTED_AT = new Date().toISOString();
 const STATIC_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "public");
 const STATIC_FILES = {
@@ -214,6 +215,7 @@ export function createControlPlane({
   writeToken = getWriteToken(),
   basePath = process.env.AGENT_BUS_BASE_PATH || "",
   selectorPath = process.env.AGENT_BUS_SELECTOR_PATH || null,
+  roleWakeCredentials = loadRoleWakeCredentials(),
   logger = () => {},
 } = {}) {
   const normalizedBasePath = normalizeBasePath(basePath);
@@ -335,24 +337,45 @@ export function createControlPlane({
       }
       if (request.method === "POST" && pathname === "/api/v1/role-seats/wake") {
         requireWriteAccess(request, writeToken);
-        return sendJson(response, 200, await requestRoleWake(await readJsonBody(request), root));
+        const credential = authenticateRoleWake(request, roleWakeCredentials, "caller");
+        return sendJson(response, 200, await requestRoleWake({ ...(await readJsonBody(request)), requested_by: credential.identity }, root));
       }
       if (request.method === "POST" && pathname === "/api/v1/role-seats/claim") {
         requireWriteAccess(request, writeToken);
-        return sendJson(response, 200, await claimRoleWake(await readJsonBody(request), root));
+        const credential = authenticateRoleWake(request, roleWakeCredentials, "worker");
+        return sendJson(response, 200, await claimRoleWake({ ...(await readJsonBody(request)), worker_identity: credential.identity }, root));
       }
       if (request.method === "POST" && pathname === "/api/v1/role-seats/recover") {
         requireWriteAccess(request, writeToken);
+        authenticateRoleWake(request, roleWakeCredentials, "worker");
         return sendJson(response, 200, await recoverStaleRoleSeats(await readJsonBody(request), root));
+      }
+      if (request.method === "POST" && pathname === "/api/v1/role-seats/signal") {
+        requireWriteAccess(request, writeToken);
+        authenticateRoleWake(request, roleWakeCredentials, "monitor");
+        return sendJson(response, 200, await requestRoleAttentionSignal(await readJsonBody(request), root));
+      }
+      if (request.method === "POST" && pathname === "/api/v1/role-seats/deliver-notes") {
+        requireWriteAccess(request, writeToken);
+        authenticateRoleWake(request, roleWakeCredentials, "worker");
+        return sendJson(response, 200, await deliverRoleSeatNotes(await readJsonBody(request), root));
       }
       const roleHeartbeat = pathname.match(/^\/api\/v1\/role-seats\/([^/]+)\/heartbeat$/);
       if (request.method === "POST" && roleHeartbeat) {
         requireWriteAccess(request, writeToken);
+        authenticateRoleWake(request, roleWakeCredentials, "worker");
         return sendJson(response, 200, await heartbeatRoleSeat({ ...(await readJsonBody(request)), role: decodeURIComponent(roleHeartbeat[1]) }, root));
+      }
+      const roleSession = pathname.match(/^\/api\/v1\/role-seats\/([^/]+)\/session$/);
+      if (request.method === "POST" && roleSession) {
+        requireWriteAccess(request, writeToken);
+        authenticateRoleWake(request, roleWakeCredentials, "worker");
+        return sendJson(response, 200, await attachRoleSeatSession({ ...(await readJsonBody(request)), role: decodeURIComponent(roleSession[1]) }, root));
       }
       const roleUnseat = pathname.match(/^\/api\/v1\/role-seats\/([^/]+)\/unseat$/);
       if (request.method === "POST" && roleUnseat) {
         requireWriteAccess(request, writeToken);
+        authenticateRoleWake(request, roleWakeCredentials, "worker");
         return sendJson(response, 200, await unseatRole({ ...(await readJsonBody(request)), role: decodeURIComponent(roleUnseat[1]) }, root));
       }
       if (request.method === "POST" && pathname === "/api/v1/agents") {
@@ -529,6 +552,7 @@ export async function startControlPlane({
   basePath = process.env.AGENT_BUS_BASE_PATH || "",
   selectorPath = process.env.AGENT_BUS_SELECTOR_PATH || null,
   logDirectory = process.env.AGENT_BUS_LOG_DIR || null,
+  roleWakeCredentials = loadRoleWakeCredentials(),
 } = {}) {
   if (!["127.0.0.1", "::1", "localhost"].includes(host)) {
     throw new Error("Control plane must bind to localhost; use a private reverse proxy for remote access");
@@ -536,8 +560,11 @@ export async function startControlPlane({
   if (!writeToken) {
     throw new Error("AGENT_BUS_WRITE_TOKEN is required; refusing to start an unauthenticated control plane");
   }
+  if (!roleWakeCredentials.size) {
+    throw new Error("AGENT_BUS_ROLE_WAKE_CREDENTIALS_FILE is required; refusing to start without scoped role-wake authentication");
+  }
   const logger = await createFileLogger(logDirectory);
-  const server = createControlPlane({ root, writeToken, basePath, selectorPath, logger });
+  const server = createControlPlane({ root, writeToken, basePath, selectorPath, roleWakeCredentials, logger });
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, host, resolve);

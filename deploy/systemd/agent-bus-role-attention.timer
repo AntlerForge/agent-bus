@@ -1,0 +1,10 @@
+[Unit]
+Description=Evaluate Agent Bus attention signals every five minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

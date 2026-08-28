@@ -1,0 +1,17 @@
+[Unit]
+Description=Detect stalled Agent Bus work and wake Estate Operations Manager
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ajbarfoot
+WorkingDirectory=/srv/projects/Personal/agent-bus/app
+Environment=AGENT_BUS_ROOT=/srv/projects/Personal/agent-bus/runtime
+Environment=AGENT_BUS_CONTROL_PLANE_URL=http://127.0.0.1:8091/agent-bus
+Environment=AGENT_BUS_ROLE_WAKE_IDENTITY=estate-operations-monitor
+Environment=AGENT_BUS_ROLE_WAKE_TOKEN_FILE=/home/ajbarfoot/.config/agent-bus/role-wake/estate-operations-monitor.env
+EnvironmentFile=/home/ajbarfoot/.config/agent-bus/write-token.env
+ExecStart=/usr/bin/node scripts/role-attention-monitor.mjs
+NoNewPrivileges=true
+PrivateTmp=true
+

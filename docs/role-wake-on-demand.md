@@ -1,24 +1,37 @@
 # On-demand persistent-role seating
 
 The Agent Bus `wake_role` MCP tool queues a fresh bounded seating for
-`coherence-manager`, `estate-operations-manager`, or `estate-architect`. Only `tony` and
-`chief-of-staff` are accepted as requesters. Each request cites a persisted Agent Bus
-execute message; the server re-reads that record, matches its sender to the requester, and
-evaluates its assignment or trusted-policy authority. Caller-supplied identity text alone is
-never sufficient. The durable `_role-seats.json` record on A6 is
+`coherence-manager`, `estate-operations-manager`, or `estate-architect`. `tony`,
+`chief-of-staff`, and `estate-operations-manager` may each wake any role. The control plane
+binds requester identity to a distinct owner-only credential; the MCP tool does not accept
+caller-supplied identity. Worker and monitor credentials have separate, narrower scopes and
+cannot call the wake route. The durable `_role-seats.json` record on A6 is
 the occupancy authority; agent `last_seen` and bridge heartbeats are deliberately ignored.
 
 The Mac LaunchAgent runs `scripts/role-wake-worker.mjs` once per minute. It atomically
 claims pending wakes, records fenced occupied seats, and concurrently starts fresh Codex
-sessions in the roles' seating desks. It heartbeats each seat and records unseat success or
-failure. A later same-host worker recovers an expired seat left by a crashed predecessor
-before claiming its replacement. The role prompt requires the
+sessions in the roles' seating desks. It records the exact child PID plus a one-use process
+marker, heartbeats the seat generation, and records unseat success or failure. A later
+same-host worker can recover an expired seat only after the old worker PID is dead and the
+exact marker-bearing child has been stopped and verified dead. The role prompt requires the
 canonical skill, wake ritual, role ledger update, and charter boundary. The spawning role
 does not hold the woken seat and no provider suffix is added to the identity.
 
 If the seat is already occupied, the wake call returns `occupied_noop` with the current
-seat, appends a note event, and delivers a durable Agent Bus note to the occupant. It never creates a second session. A second pending request
-is similarly idempotent. Wake-on-message is not enabled in this first tier.
+seat, appends a note event, and puts a durable idempotent note into a retrying outbox for the
+occupant. It never creates a second session. A second pending request
+is similarly idempotent.
+
+`agent-bus-role-attention.timer` evaluates the A6 authority every five minutes. It signals
+an immediate EOM seating when response-required unread messages, waiting runs or pending
+reviews exceed the EOM-owned thresholds, and otherwise requests the configured few-hourly
+EOM patrol. Repeated signatures are suppressed for one patrol interval. Signals never notify
+Tony, mutate work state or wake another role; alerting policy v1 is unchanged.
+
+Credentials are generated once with `scripts/provision-role-wake-credentials.mjs`. The A6
+control plane receives only SHA-256 token digests. Each caller receives only its own token;
+the Mac worker receives its worker token and the EOM token needed by a woken EOM child. Files
+are mode 0600 and are not committed.
 
 Deployment copies the plist example to `~/Library/LaunchAgents/`, substitutes only paths if
 needed, validates it with `plutil`, bootstraps it into the user domain, then verifies both a

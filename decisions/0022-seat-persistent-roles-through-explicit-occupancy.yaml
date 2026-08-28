@@ -14,18 +14,23 @@ properties:
     Scheduled role cadences left response-required work waiting for days. Agent last_seen
     cannot prove occupancy because scheduled automations also act under role identities.
   decision: |
-    Agent Bus owns an explicit seat/wake record for each persistent role. Tony or the Chief
-    of Staff may enqueue an on-demand wake through the typed MCP/control-plane boundary by
-    referencing a persisted execute message whose sender and authority the server verifies. A
+    Agent Bus owns an explicit seat/wake record for each persistent role. Tony, the Chief
+    of Staff, or the Estate Operations Manager may enqueue any role wake on their own judgement
+    through a typed MCP/control-plane boundary authenticated with a distinct scoped credential. A
     Mac worker atomically claims one request, writes the occupied seat before spawning a
     fresh bounded role session at that role's desk, heartbeats a fenced seat generation,
     concurrently supervises other role seats, and always writes the unseat outcome. A later
-    same-host worker recovers an expired heartbeat after the prior launchd process is gone.
-    An occupied seat makes subsequent wakes a recorded no-op. The session identity is the
+    same-host worker recovers an expired heartbeat only after its own worker credential proves
+    the recorded worker is dead and it has identified and stopped the exact token-marked child.
+    An occupied seat makes subsequent wakes a recorded no-op and a retrying idempotent outbox
+    delivers the reason to the occupant. The session identity is the
     canonical role and waking conveys no authority beyond its role charter.
+    An independently scoped A6 monitor may signal only the Estate Operations Manager when
+    response-required messages, waiting runs or pending reviews exceed the EOM-owned thresholds,
+    and requests a routine few-hourly patrol without changing alerting policy v1.
   consequences:
     positive: "Wake latency is bounded by the one-minute worker cadence, roles do not block each other, and seat contention is mechanically prevented."
     negative: "On-demand seating waits for the Mac worker when the Mac is unavailable."
-    neutral: "Wake-on-message remains an optional later tier and no Tony notification is introduced."
+    neutral: "Operational wake signals create no Tony notification and confer no extra role authority."
   supersedes: null
   superseded_by: null

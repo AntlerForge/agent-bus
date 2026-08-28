@@ -1,13 +1,11 @@
 import os from "node:os";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readJsonFile, writeJsonFileAtomic } from "./io.mjs";
 import { ensureBusLayout } from "./paths.mjs";
-import { getMessage, sendMessage } from "./mailbox.mjs";
-import { evaluateMessageAuthority } from "./execution-authority.mjs";
-import { getWorkItem } from "./work-ledger/store.mjs";
+import { sendMessage } from "./mailbox.mjs";
 
 export const WAKEABLE_ROLES = ["coherence-manager", "estate-operations-manager", "estate-architect"];
-const WAKE_CALLERS = new Set(["tony", "chief-of-staff"]);
+const WAKE_CALLERS = new Set(["tony", "chief-of-staff", "estate-operations-manager"]);
 let queue = Promise.resolve();
 
 function serial(operation) {
@@ -21,51 +19,48 @@ function id(prefix) { return `${prefix}_${Date.now()}_${randomUUID().slice(0, 8)
 function assertRole(role) {
   if (!WAKEABLE_ROLES.includes(role)) throw new Error(`role must be one of: ${WAKEABLE_ROLES.join(", ")}`);
 }
-function stateDefault() { return { schema_version: 1, seats: {}, wake_requests: [], events: [] }; }
+function stateDefault() { return { schema_version: 2, seats: {}, wake_requests: [], occupant_notes: [], signals: [], events: [] }; }
+function digest(value) { return createHash("sha256").update(String(value)).digest("hex"); }
 
 export async function readRoleSeats(root) {
   const paths = await ensureBusLayout(root);
   return readJsonFile(paths.roleSeatsFile, stateDefault());
 }
 
-export async function requestRoleWake({ role, requested_by, reason, source_ref, how_woken = "on-demand", authority_message_id }, root) {
+export async function requestRoleWake({ role, requested_by, reason, source_ref, how_woken = "on-demand", triggered_by = null }, root) {
   assertRole(role);
-  if (!WAKE_CALLERS.has(requested_by)) throw new Error("requested_by must be tony or chief-of-staff");
-  if (!authority_message_id) throw new Error("authority_message_id is required");
-  const authorityMessage = await getMessage({ message_id: authority_message_id }, root);
-  if (authorityMessage.from !== requested_by) throw new Error("authority message sender does not match requested_by");
-  const authority = await evaluateMessageAuthority(authorityMessage, { getItem: (workItemId) => getWorkItem({ work_item_id: workItemId }, root) });
-  if (!authority.state_changes_allowed) throw new Error(`authority message does not permit execution: ${authority.reason}`);
+  if (!WAKE_CALLERS.has(requested_by)) throw new Error("requested_by must be tony, chief-of-staff, or estate-operations-manager");
   if (!String(reason || "").trim()) throw new Error("reason is required");
-  return serial(async () => {
+  const result = await serial(async () => {
     const paths = await ensureBusLayout(root);
     const state = await readRoleSeats(root);
+    state.occupant_notes ||= [];
+    state.signals ||= [];
     const occupied = state.seats[role];
     if (occupied?.status === "occupied") {
-      const event = { event_id: id("seat_event"), type: "wake_noop_occupied", role, requested_by, occupant: occupied.who, created_at: nowIso() };
+      const event = { event_id: id("seat_event"), type: "wake_noop_occupied", role, requested_by, triggered_by, occupant: occupied.who, reason: String(reason), source_ref: source_ref || null, created_at: nowIso() };
       state.events.push(event);
+      const note = { note_id: id("seat_note"), event_id: event.event_id, role, requested_by, reason: String(reason), source_ref: source_ref || null, status: "pending", attempts: 0, created_at: event.created_at };
+      state.occupant_notes.push(note);
       await writeJsonFileAtomic(paths.roleSeatsFile, state);
-      let noteDeliveryError = null;
-      await sendMessage({
-        from: "role-wake-system", to: role, subject: "Wake request received while your seat is occupied",
-        body: `A wake requested by ${requested_by} was suppressed because seat ${occupied.seat_id} is occupied. Read the durable wake event for the request reason.`,
-        intent: "inform", requires_response: false,
-      }, root).catch((error) => { noteDeliveryError = error.message; });
-      if (noteDeliveryError) { event.note_delivery_error = noteDeliveryError; await writeJsonFileAtomic(paths.roleSeatsFile, state); }
       return { disposition: "occupied_noop", seat: occupied, note: `Seat is occupied by ${occupied.who}; no second seating was created.`, event };
     }
     const existing = state.wake_requests.find((item) => item.role === role && item.status === "pending");
     if (existing) return { disposition: "already_pending", request: existing };
-    const request = { request_id: id("wake"), role, requested_by, reason: String(reason), source_ref: source_ref || null, how_woken, status: "pending", requested_at: nowIso() };
+    const request = { request_id: id("wake"), role, requested_by, triggered_by, reason: String(reason), source_ref: source_ref || null, how_woken, status: "pending", requested_at: nowIso() };
     state.wake_requests.push(request);
     state.events.push({ event_id: id("seat_event"), type: "wake_requested", role, request_id: request.request_id, requested_by, created_at: request.requested_at });
     await writeJsonFileAtomic(paths.roleSeatsFile, state);
     return { disposition: "queued", request };
   });
+  if (result.disposition === "occupied_noop") await deliverRoleSeatNotes({}, root);
+  return result;
 }
 
-export async function claimRoleWake({ worker_id, host = os.hostname() }, root) {
+export async function claimRoleWake({ worker_id, worker_identity, worker_pid, host = os.hostname() }, root) {
   if (!worker_id) throw new Error("worker_id is required");
+  if (!worker_identity) throw new Error("worker_identity is required");
+  if (!Number.isInteger(Number(worker_pid)) || Number(worker_pid) <= 0) throw new Error("worker_pid is required");
   return serial(async () => {
     const paths = await ensureBusLayout(root);
     const state = await readRoleSeats(root);
@@ -73,7 +68,7 @@ export async function claimRoleWake({ worker_id, host = os.hostname() }, root) {
     if (!request) return null;
     const at = nowIso();
     request.status = "claimed"; request.claimed_at = at; request.worker_id = worker_id;
-    const seat = { seat_id: id("seat"), role: request.role, who: request.role, since: at, where: host, how_woken: request.how_woken, wake_request_id: request.request_id, worker_id, heartbeat_at: at, generation: Number(state.seats[request.role]?.generation || 0) + 1, status: "occupied" };
+    const seat = { seat_id: id("seat"), role: request.role, who: request.role, since: at, where: host, how_woken: request.how_woken, wake_request_id: request.request_id, worker_id, worker_identity, worker_pid: Number(worker_pid), heartbeat_at: at, generation: Number(state.seats[request.role]?.generation || 0) + 1, status: "occupied" };
     state.seats[request.role] = seat;
     state.events.push({ event_id: id("seat_event"), type: "seat_occupied", role: request.role, seat_id: seat.seat_id, who: seat.who, created_at: at });
     await writeJsonFileAtomic(paths.roleSeatsFile, state);
@@ -81,28 +76,47 @@ export async function claimRoleWake({ worker_id, host = os.hostname() }, root) {
   });
 }
 
-export async function heartbeatRoleSeat({ role, seat_id, worker_id }, root) {
+export async function attachRoleSeatSession({ role, seat_id, generation, worker_id, session_pid, session_token }, root) {
+  assertRole(role);
+  if (!Number.isInteger(Number(session_pid)) || Number(session_pid) <= 0 || !session_token) throw new Error("session_pid and session_token are required");
+  return serial(async () => {
+    const paths = await ensureBusLayout(root);
+    const state = await readRoleSeats(root);
+    const seat = state.seats[role];
+    if (!seat || seat.status !== "occupied" || seat.seat_id !== seat_id || seat.generation !== generation || seat.worker_id !== worker_id) throw new Error("active seat fence does not match");
+    seat.session_pid = Number(session_pid);
+    seat.session_token_sha256 = digest(session_token);
+    seat.session_attached_at = nowIso();
+    await writeJsonFileAtomic(paths.roleSeatsFile, state);
+    return seat;
+  });
+}
+
+export async function heartbeatRoleSeat({ role, seat_id, generation, worker_id }, root) {
   assertRole(role);
   return serial(async () => {
     const paths = await ensureBusLayout(root);
     const state = await readRoleSeats(root);
     const seat = state.seats[role];
-    if (!seat || seat.status !== "occupied" || seat.seat_id !== seat_id || seat.worker_id !== worker_id) throw new Error("active seat fence does not match");
+    if (!seat || seat.status !== "occupied" || seat.seat_id !== seat_id || seat.generation !== generation || seat.worker_id !== worker_id) throw new Error("active seat fence does not match");
     seat.heartbeat_at = nowIso();
     await writeJsonFileAtomic(paths.roleSeatsFile, state);
     return seat;
   });
 }
 
-export async function recoverStaleRoleSeats({ worker_id, host = os.hostname(), stale_after_seconds = 180, now_ms = Date.now() }, root) {
+export async function recoverStaleRoleSeats({ worker_id, host = os.hostname(), stale_after_seconds = 180, now_ms = Date.now(), recovery_proofs = [] }, root) {
   if (!worker_id) throw new Error("worker_id is required");
   return serial(async () => {
     const paths = await ensureBusLayout(root);
     const state = await readRoleSeats(root);
     const recovered = [];
-    for (const seat of Object.values(state.seats)) {
+    for (const proof of recovery_proofs) {
+      const seat = state.seats[proof.role];
+      if (!seat || seat.seat_id !== proof.seat_id || seat.generation !== proof.generation) continue;
       const heartbeatMs = new Date(seat.heartbeat_at || seat.since).getTime();
-      if (seat.status !== "occupied" || seat.where !== host || seat.worker_id === worker_id || now_ms - heartbeatMs < stale_after_seconds * 1000) continue;
+      const sessionProvedDead = !seat.session_pid || (proof.session_pid === seat.session_pid && proof.session_token_sha256 === seat.session_token_sha256 && proof.session_identity_verified === true && proof.session_dead === true);
+      if (seat.status !== "occupied" || seat.where !== host || seat.worker_id === worker_id || proof.worker_pid !== seat.worker_pid || proof.worker_dead !== true || !sessionProvedDead || now_ms - heartbeatMs < stale_after_seconds * 1000) continue;
       const at = new Date(now_ms).toISOString();
       seat.status = "unseated"; seat.unseated_at = at; seat.outcome = "worker_lost"; seat.note = "Recovered by a later worker after the fenced heartbeat expired";
       const request = state.wake_requests.find((item) => item.request_id === seat.wake_request_id);
@@ -115,13 +129,13 @@ export async function recoverStaleRoleSeats({ worker_id, host = os.hostname(), s
   });
 }
 
-export async function unseatRole({ role, seat_id, outcome = "completed", note = null }, root) {
+export async function unseatRole({ role, seat_id, generation, worker_id, outcome = "completed", note = null }, root) {
   assertRole(role);
   return serial(async () => {
     const paths = await ensureBusLayout(root);
     const state = await readRoleSeats(root);
     const seat = state.seats[role];
-    if (!seat || seat.status !== "occupied" || seat.seat_id !== seat_id) throw new Error("active seat does not match");
+    if (!seat || seat.status !== "occupied" || seat.seat_id !== seat_id || seat.generation !== generation || seat.worker_id !== worker_id) throw new Error("active seat fence does not match");
     const at = nowIso();
     seat.status = "unseated"; seat.unseated_at = at; seat.outcome = outcome; seat.note = note;
     const request = state.wake_requests.find((item) => item.request_id === seat.wake_request_id);
@@ -130,4 +144,55 @@ export async function unseatRole({ role, seat_id, outcome = "completed", note = 
     await writeJsonFileAtomic(paths.roleSeatsFile, state);
     return seat;
   });
+}
+
+export async function deliverRoleSeatNotes({ limit = 20 } = {}, root) {
+  const delivered = [];
+  const state = await readRoleSeats(root);
+  for (const note of (state.occupant_notes || []).filter((item) => item.status === "pending").slice(0, limit)) {
+    let result;
+    let errorMessage = null;
+    try {
+      result = await sendMessage({
+        from: "role-wake-system", to: note.role, subject: "Wake request received while your seat is occupied",
+        body: `A wake requested by ${note.requested_by} was suppressed because the role seat is occupied. Reason: ${note.reason}${note.source_ref ? `\nSource: ${note.source_ref}` : ""}`,
+        intent: "inform", requires_response: false, idempotency_key: `role-seat-note:${note.note_id}`,
+      }, root);
+    } catch (error) { errorMessage = error.message; }
+    await serial(async () => {
+      const paths = await ensureBusLayout(root);
+      const current = await readRoleSeats(root);
+      const stored = (current.occupant_notes || []).find((item) => item.note_id === note.note_id);
+      if (!stored || stored.status !== "pending") return;
+      stored.attempts = Number(stored.attempts || 0) + 1;
+      stored.last_attempt_at = nowIso();
+      if (result) { stored.status = "delivered"; stored.message_id = result.message_id; stored.delivered_at = stored.last_attempt_at; delivered.push(stored); }
+      else stored.last_error = errorMessage;
+      await writeJsonFileAtomic(paths.roleSeatsFile, current);
+    });
+  }
+  return { delivered: delivered.length };
+}
+
+export async function requestRoleAttentionSignal({ signal_type, signal_key, reason, source_ref, detected_at = nowIso(), suppress_for_seconds = 14400 }, root) {
+  if (!['stalled_work', 'patrol_due'].includes(signal_type)) throw new Error("signal_type must be stalled_work or patrol_due");
+  if (!String(reason || "").trim()) throw new Error("reason is required");
+  if (!String(signal_key || "").trim()) throw new Error("signal_key is required");
+  const state = await readRoleSeats(root);
+  const prior = (state.signals || []).findLast((item) => item.signal_key === signal_key);
+  if (prior && new Date(detected_at).getTime() - new Date(prior.created_at).getTime() < Number(suppress_for_seconds) * 1000) {
+    return { disposition: "signal_suppressed", signal: prior };
+  }
+  const result = await requestRoleWake({
+    role: "estate-operations-manager", requested_by: "estate-operations-manager", triggered_by: "estate-operations-monitor",
+    reason, source_ref, how_woken: signal_type === "patrol_due" ? "routine-patrol" : "stuck-work-signal",
+  }, root);
+  await serial(async () => {
+    const paths = await ensureBusLayout(root);
+    const state = await readRoleSeats(root);
+    state.signals ||= [];
+    state.signals.push({ signal_id: id("role_signal"), signal_type, signal_key, reason: String(reason), source_ref: source_ref || null, detected_at, disposition: result.disposition, created_at: nowIso() });
+    await writeJsonFileAtomic(paths.roleSeatsFile, state);
+  });
+  return result;
 }

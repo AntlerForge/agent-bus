@@ -13,10 +13,12 @@ services:
       AGENT_BUS_BASE_PATH: /agent-bus
       AGENT_BUS_LOG_DIR: /logs
       AGENT_BUS_SELECTOR_PATH: /selector
+      AGENT_BUS_ROLE_WAKE_CREDENTIALS_FILE: /run/secrets/role-wake-credentials.json
     volumes:
       - ${AGENT_BUS_DATA_DIR:-../runtime}:/data
       - ${HOME}/var/log/home-platform/agent-bus:/logs
       - ${AGENT_BUS_SELECTOR_DIR:-/srv/kv/vault/it-setup/llm-selector/v3}:/selector:ro
+      - ${AGENT_BUS_ROLE_WAKE_CREDENTIALS_FILE:-/home/ajbarfoot/.config/agent-bus/role-wake/role-wake-credentials.json}:/run/secrets/role-wake-credentials.json:ro
     read_only: true
     tmpfs:
       - /tmp:size=32m,mode=1777
