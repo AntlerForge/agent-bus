@@ -37,6 +37,10 @@ export function createRemoteWorkLedger(baseUrl, { writeToken = null } = {}) {
     getWorkItem(args) {
       return request(baseUrl, `/api/v1/work-items/${encodeURIComponent(args.work_item_id)}`);
     },
+    transitionWorkItem(args) {
+      const { work_item_id, ...body } = args;
+      return write(`/api/v1/work-items/${encodeURIComponent(work_item_id)}/transition`, body);
+    },
     startRun(args) {
       const { work_item_id, ...body } = args;
       return write(`/api/v1/work-items/${encodeURIComponent(work_item_id)}/runs`, body);

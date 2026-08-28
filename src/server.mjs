@@ -31,6 +31,8 @@ import { createRemoteBus } from "./remote-bus.mjs";
 import { buildWorkflowProposals, loadModelSelector } from "./model-selector.mjs";
 import { createRemoteModelSelector } from "./model-selector-remote.mjs";
 import { getWriteToken } from "./write-token.mjs";
+import { claimRoleWake, readRoleSeats, requestRoleWake, unseatRole } from "./role-seats.mjs";
+import { createRemoteRoleSeats } from "./role-seats-remote.mjs";
 
 function toolResult(value) {
   return {
@@ -90,6 +92,7 @@ const remoteBus = remoteWorkLedgerUrl
 const remoteModelSelector = remoteWorkLedgerUrl
   ? createRemoteModelSelector(remoteWorkLedgerUrl, { writeToken })
   : null;
+const remoteRoleSeats = remoteWorkLedgerUrl ? createRemoteRoleSeats(remoteWorkLedgerUrl, { writeToken }) : null;
 
 const workLedger = {
   create: (args) => remoteWorkLedger ? remoteWorkLedger.createWorkItem(args) : createWorkItem(args, root),
@@ -254,6 +257,12 @@ registerTool(
 );
 
 registerTool(server, "list_agents", "List known agent identities.", {}, () => remoteBus ? remoteBus.listAgents() : listAgents(root));
+
+registerTool(server, "list_role_seats", "Read explicit role seat occupancy and wake requests. Agent last_seen is not occupancy evidence.", {}, () => remoteRoleSeats ? remoteRoleSeats.list() : readRoleSeats(root));
+registerTool(server, "wake_role", "Request a fresh bounded seating for a persistent role. An occupied seat is a safe no-op.", {
+  role: z.enum(["coherence-manager", "estate-operations-manager", "estate-architect"]),
+  requested_by: z.enum(["tony", "chief-of-staff"]), reason: z.string().min(1), source_ref: z.string().optional(),
+}, (args) => remoteRoleSeats ? remoteRoleSeats.wake(args) : requestRoleWake(args, root));
 
 registerTool(server, "list_artifacts", "List shared artifact metadata.", {}, () => remoteBus ? remoteBus.listArtifacts() : readArtifactManifest(root));
 

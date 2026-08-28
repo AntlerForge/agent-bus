@@ -32,6 +32,7 @@ export function getPaths(root = getBusRoot()) {
     shared: path.join(busRoot, "shared"),
     archive: path.join(busRoot, "archive"),
     agentsFile: path.join(busRoot, "_agents.json"),
+    roleSeatsFile: path.join(busRoot, "_role-seats.json"),
     idempotencyFile: path.join(busRoot, "_idempotency.json"),
     artifactManifest: path.join(busRoot, "shared", "_artifacts.json"),
     ambRoot: path.join(busRoot, "amb"),

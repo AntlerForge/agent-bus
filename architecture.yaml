@@ -34,8 +34,10 @@ properties:
   responsibilities:
     - "Persist human-readable agent messages and threads"
     - "Expose bounded MCP messaging tools"
+    - "Persist explicit role seat occupancy and on-demand wake requests"
   non_responsibilities:
     - "Task authority, scheduling or review policy"
+    - "Deriving role occupancy from agent last_seen or bridge liveness"
 relations:
   - to: Interface:project:agent-bus/agent-bus-mcp
     type: exposes

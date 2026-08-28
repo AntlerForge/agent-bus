@@ -35,6 +35,7 @@ import {
   updateRun,
 } from "../work-ledger/store.mjs";
 import { getWriteToken } from "../write-token.mjs";
+import { claimRoleWake, readRoleSeats, requestRoleWake, unseatRole } from "../role-seats.mjs";
 
 const VERSION = "0.6.0";
 const STARTED_AT = new Date().toISOString();
@@ -328,6 +329,22 @@ export function createControlPlane({
         }
         const items = await listWorkItems({}, root);
         return sendJson(response, 200, deriveAgents(await listAgents(root), items));
+      }
+      if (request.method === "GET" && pathname === "/api/v1/role-seats") {
+        return sendJson(response, 200, await readRoleSeats(root));
+      }
+      if (request.method === "POST" && pathname === "/api/v1/role-seats/wake") {
+        requireWriteAccess(request, writeToken);
+        return sendJson(response, 200, await requestRoleWake(await readJsonBody(request), root));
+      }
+      if (request.method === "POST" && pathname === "/api/v1/role-seats/claim") {
+        requireWriteAccess(request, writeToken);
+        return sendJson(response, 200, await claimRoleWake(await readJsonBody(request), root));
+      }
+      const roleUnseat = pathname.match(/^\/api\/v1\/role-seats\/([^/]+)\/unseat$/);
+      if (request.method === "POST" && roleUnseat) {
+        requireWriteAccess(request, writeToken);
+        return sendJson(response, 200, await unseatRole({ ...(await readJsonBody(request)), role: decodeURIComponent(roleUnseat[1]) }, root));
       }
       if (request.method === "POST" && pathname === "/api/v1/agents") {
         requireWriteAccess(request, writeToken);

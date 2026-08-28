@@ -161,3 +161,7 @@ to `~/AgentBus`, because that recreates the split-ledger problem.
 If `AGENT_BUS_WRITE_TOKEN` is enabled on A6, every writing MCP client and LaunchAgent must
 receive it from 1Password at process start. If it is unset, write access is intentionally
 open only inside the private localhost/tunnel boundary.
+
+Persistent roles can be seated on demand with the typed `wake_role` MCP tool. The
+one-minute `com.antlerforge.agent-bus-role-wake` LaunchAgent claims the request and runs a
+fresh bounded session at the role's desk. See `docs/role-wake-on-demand.md`.

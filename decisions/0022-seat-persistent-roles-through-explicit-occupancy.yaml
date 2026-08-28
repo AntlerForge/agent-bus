@@ -1,0 +1,28 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0022-seat-persistent-roles-through-explicit-occupancy
+namespace: project:agent-bus
+title: "Seat persistent roles through explicit occupancy records"
+status: active
+owner: tony
+properties:
+  date: 2026-08-28
+  component: bus-core
+  tags: [role-wake, seating, occupancy, watcher-gap]
+  source_ref: vault:holding-pen/2026-08-28-role-wake-on-demand-requirements.md
+  context: |
+    Scheduled role cadences left response-required work waiting for days. Agent last_seen
+    cannot prove occupancy because scheduled automations also act under role identities.
+  decision: |
+    Agent Bus owns an explicit seat/wake record for each persistent role. Tony or the Chief
+    of Staff may enqueue an on-demand wake through the typed MCP/control-plane boundary. A
+    Mac worker atomically claims one request, writes the occupied seat before spawning a
+    fresh bounded role session at that role's desk, and always writes the unseat outcome.
+    An occupied seat makes subsequent wakes a recorded no-op. The session identity is the
+    canonical role and waking conveys no authority beyond its role charter.
+  consequences:
+    positive: "Wake latency is bounded by the one-minute worker cadence and seat contention is mechanically prevented."
+    negative: "On-demand seating waits for the Mac worker when the Mac is unavailable."
+    neutral: "Wake-on-message remains an optional later tier and no Tony notification is introduced."
+  supersedes: null
+  superseded_by: null
