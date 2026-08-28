@@ -1,5 +1,5 @@
 [Unit]
-Description=Antler Zulip phase-1 trial stack
+Description=AntlerForge Zulip stack
 After=docker.service network-online.target
 Requires=docker.service
 Wants=network-online.target
@@ -8,9 +8,10 @@ Wants=network-online.target
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/srv/projects/Personal/agent-bus/app/deploy/antler-a6/zulip
-ExecStartPre=/usr/bin/test -x /usr/local/bin/op
+ExecStartPre=/usr/bin/test -x /usr/bin/op
 ExecStartPre=/usr/bin/test -r /etc/zulip-estate/op.env
-ExecStart=/usr/local/bin/op run --env-file=/etc/zulip-estate/op.env -- /usr/bin/docker compose up -d --wait
+ExecStartPre=/usr/bin/test -r /etc/1password/service-accounts/zulip-antlerforge.token
+ExecStart=/usr/local/libexec/antler-zulip-op-run /usr/bin/docker compose up -d --wait
 ExecStop=/usr/bin/docker compose down
 TimeoutStartSec=20min
 TimeoutStopSec=5min

@@ -757,7 +757,7 @@ id: zulip-server
 namespace: project:agent-bus
 title: "Self-hosted Zulip conversation layer"
 description: |
-  Phase-1 trial stack hosted on A6 and exposed only through the declared
+  Phase-1 stack hosted on A6 and exposed only through the declared
   Cloudflare Tunnel and Access gate. It is conversation infrastructure, not
   Agent Bus transport or Work Ledger authority. Relay and publisher processes
   remain absent until their separately gated phase.
@@ -770,8 +770,14 @@ properties:
   loopback_port: 8093
   data_root: "/srv/projects/Personal/zulip-estate/data"
   phase: "Gate G0 only; no estate data, relay, publisher or Bus credential"
+  secret_vault: "AntlerForge Deployments"
+  secret_item: "zulip-antlerforge"
+  service_account: "A6 Zulip AntlerForge (read-only, named vault only)"
+  bootstrap_token_path: "/etc/1password/service-accounts/zulip-antlerforge.token (root:root 0600)"
 relations:
   - to: Decision:project:agent-bus/0020-run-zulip-as-a-governed-conversation-layer-trial
+    type: governed-by
+  - to: Decision:project:agent-bus/0023-bootstrap-a6-zulip-from-a-scoped-1password-service-account
     type: governed-by
   - to: Platform:platform/home-platform
     type: runs-on

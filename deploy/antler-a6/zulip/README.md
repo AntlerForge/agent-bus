@@ -1,14 +1,17 @@
-# Zulip phase-1 trial deployment
+# AntlerForge Zulip deployment
 
 This directory deploys only the empty Zulip stack and Gate G0. It contains no
 Agent Bus relay, outbound publisher or Agent Bus credential.
 
 ## Prerequisites
 
-- `/usr/local/bin/op` authenticated for unattended `op run`.
-- A 1Password item containing the fields in `zulip.op.env.example` and a
-  sanctioned SMTP route.
-- `/etc/zulip-estate/op.env`, mode `0600`, containing only `op://` references.
+- `/usr/bin/op` version 2.18.0 or later.
+- 1Password vault `AntlerForge Deployments`, item `zulip-antlerforge`, and
+  read-only service account `A6 Zulip AntlerForge`.
+- `/etc/1password/service-accounts/zulip-antlerforge.token`, root:root mode
+  `0600`; this is the sole headless bootstrap credential.
+- `/etc/zulip-estate/op.env`, root:root mode `0600`, containing only the
+  tracked `op://` references.
 - `zulip.antlerforge.com` routed through the existing local-config
   `kv-dashboard` tunnel to `http://127.0.0.1:8093`.
 - A Cloudflare Access application protecting the whole hostname.
@@ -17,6 +20,7 @@ Agent Bus relay, outbound publisher or Agent Bus credential.
 
 ```bash
 sudo ./scripts/prepare-data.sh
+sudo ./scripts/install-prerequisites.sh
 sudo install -m 0644 systemd/antler-zulip-stack.service systemd/antler-zulip.target /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl start antler-zulip.target
@@ -27,6 +31,9 @@ curl -fsS http://127.0.0.1:8093/api/v1/server_settings | jq -e '.result == "succ
 Create only the disposable Gate G0 organization/admin/channel/topic/message and
 test attachment before running `G0-CLIENT-TEST.md`. Estate accounts and data are
 phase 2 and must not be added here.
+
+Create the organization with realm name exactly `AntlerForge`. No hostname,
+realm, vault, item, service-account or application name is temporary.
 
 ## Backup and isolated restore
 

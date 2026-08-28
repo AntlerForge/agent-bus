@@ -1,5 +1,5 @@
 [Unit]
-Description=Antler Zulip trial
+Description=AntlerForge Zulip
 Wants=antler-zulip-stack.service
 After=antler-zulip-stack.service
 

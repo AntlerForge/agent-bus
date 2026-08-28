@@ -25,7 +25,26 @@ test("phase 1 has no relay, publisher or Agent Bus credential", async () => {
 
 test("stack startup fails closed unless 1Password injection is available", async () => {
   const unit = await readFile(new URL("systemd/antler-zulip-stack.service", root), "utf8");
-  assert.match(unit, /ExecStartPre=\/usr\/bin\/test -x \/usr\/local\/bin\/op/);
-  assert.match(unit, /op run --env-file=\/etc\/zulip-estate\/op\.env/);
+  assert.match(unit, /ExecStartPre=\/usr\/bin\/test -x \/usr\/bin\/op/);
+  assert.match(unit, /zulip-antlerforge\.token/);
+  assert.match(unit, /antler-zulip-op-run/);
   assert.doesNotMatch(unit, /Environment=.*PASSWORD/);
+});
+
+test("1Password deployment names and references are permanent and exact", async () => {
+  const refs = await readFile(new URL("zulip.op.env", root), "utf8");
+  const launcher = await readFile(new URL("scripts/op-service-account-run.sh", root), "utf8");
+  assert.match(refs, /op:\/\/AntlerForge Deployments\/zulip-antlerforge\/secret_key/);
+  assert.doesNotMatch(refs, /REPLACE_|trial/i);
+  assert.match(launcher, /stat -c '%U:%G'/);
+  assert.match(launcher, /test \"\$mode\" = \"600\"/);
+  assert.match(launcher, /OP_SERVICE_ACCOUNT_TOKEN/);
+  assert.match(launcher, /\/usr\/bin\/op run --env-file/);
+});
+
+test("owner-facing names do not describe AntlerForge Zulip as temporary", async () => {
+  const files = ["README.md", "G0-CLIENT-TEST.md", "OWNER-ACTIONS.md", "CLOUDFLARE-ACCESS-SPEC.md"];
+  const text = (await Promise.all(files.map((file) => readFile(new URL(file, root), "utf8")))).join("\n");
+  assert.doesNotMatch(text, /\btrial\b/i);
+  assert.match(text, /AntlerForge Zulip/);
 });

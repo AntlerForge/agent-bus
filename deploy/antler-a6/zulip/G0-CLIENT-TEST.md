@@ -1,4 +1,4 @@
-# Gate G0 — Tony's stock-client test
+# Gate G0 — AntlerForge Zulip stock-client test
 
 Organization URL: `https://zulip.antlerforge.com`
 
