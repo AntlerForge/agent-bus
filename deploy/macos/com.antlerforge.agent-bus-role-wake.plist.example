@@ -2,10 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>com.antlerforge.agent-bus-role-wake</string>
-  <key>ProgramArguments</key><array><string>/opt/homebrew/bin/node</string><string>/Users/antonybarfoot/Developer/personal/agent-bus/scripts/role-wake-worker.mjs</string></array>
+  <key>ProgramArguments</key><array><string>/usr/local/bin/node</string><string>/Users/antonybarfoot/Developer/personal/agent-bus/scripts/role-wake-worker.mjs</string></array>
   <key>StartInterval</key><integer>60</integer>
   <key>RunAtLoad</key><true/>
   <key>EnvironmentVariables</key><dict>
+    <key>PATH</key><string>/Users/antonybarfoot/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>AGENT_BUS_CONTROL_PLANE_URL</key><string>http://127.0.0.1:18091/agent-bus</string>
     <key>AGENT_BUS_WRITE_TOKEN_FILE</key><string>/Users/antonybarfoot/.config/agent-bus/write-token.env</string>
   </dict>
