@@ -41,4 +41,6 @@ test("attention plan signals only new episodes and patrols from completed passes
   assert.equal(repeat.signal, null);
   const patrol = planRoleAttention({ evaluation: { findings: [] }, previous: {}, roleSeats: { attention: { last_completed_at: "2026-08-27T19:59:59Z" } }, now_ms: Date.parse("2026-08-28T00:00:00Z"), thresholds: { patrol_seconds: 14400 } });
   assert.equal(patrol.signal.signal_type, "patrol_due");
+  const inFlight = planRoleAttention({ evaluation: { findings: [] }, previous: {}, roleSeats: { seats: { "estate-operations-manager": { status: "occupied", how_woken: "stuck-work-signal" } } }, now_ms: Date.parse("2026-08-28T00:00:00Z"), thresholds: { patrol_seconds: 14400 } });
+  assert.equal(inFlight.signal, null);
 });

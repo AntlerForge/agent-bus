@@ -79,11 +79,14 @@ export function planRoleAttention({ evaluation, previous = {}, roleSeats = {}, n
     : evaluation.findings.filter((item) => !signaled.has(item.episode_key));
   const lastCompleted = roleSeats.attention?.last_completed_at || previous.last_completed_attention_pass_at || null;
   const patrolDue = !lastCompleted || now_ms - new Date(lastCompleted).getTime() >= thresholds.patrol_seconds * 1000;
+  const eomSeat = roleSeats.seats?.["estate-operations-manager"];
+  const monitorPassInFlight = (eomSeat?.status === "occupied" && ["stuck-work-signal", "routine-patrol"].includes(eomSeat.how_woken))
+    || (roleSeats.wake_requests || []).some((item) => item.role === "estate-operations-manager" && ["pending", "claimed"].includes(item.status) && item.triggered_by === "estate-operations-monitor");
   const signal = newlyBreached.length ? {
     signal_type: "stalled_work",
     episode_keys: newlyBreached.map((item) => item.episode_key),
     signal_key: pending?.signal_key || attentionSignalKey(newlyBreached.map((item) => item.episode_key)),
-  } : patrolDue ? {
+  } : patrolDue && !monitorPassInFlight ? {
     signal_type: "patrol_due", episode_keys: [],
     signal_key: `patrol:${new Date(lastCompleted || 0).toISOString()}`,
   } : null;
