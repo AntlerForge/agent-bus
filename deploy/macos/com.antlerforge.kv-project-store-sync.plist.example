@@ -8,7 +8,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/usr/bin/open</string>
-    <string>-gj</string>
+    <string>-ngj</string>
     <string>/Users/antonybarfoot/Applications/AntlerForge/KV Project Store Sync Bridge.app</string>
   </array>
   <key>WorkingDirectory</key>
