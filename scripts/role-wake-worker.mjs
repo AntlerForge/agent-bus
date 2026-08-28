@@ -1,19 +1,18 @@
 #!/usr/bin/env node
-import { execFile, spawn } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { createRemoteRoleSeats } from "../src/role-seats-remote.mjs";
 import { getWriteToken } from "../src/write-token.mjs";
 import { getRoleWakeCredential, ROLE_WAKE_WORKER } from "../src/role-wake-auth.mjs";
+import { processAlive, stopRecordedRoleSession } from "../src/role-wake-worker-runtime.mjs";
 
 const url = process.env.AGENT_BUS_CONTROL_PLANE_URL || "http://127.0.0.1:18091/agent-bus";
 const roleWakeCredential = getRoleWakeCredential();
 if (roleWakeCredential?.identity !== ROLE_WAKE_WORKER) throw new Error("Mac role-wake worker credential is required");
 const client = createRemoteRoleSeats(url, { writeToken: getWriteToken(), roleWakeCredential });
 const worker = `${roleWakeCredential.identity}:${os.hostname()}:${process.pid}`;
-const runFile = promisify(execFile);
 const desks = {
   "coherence-manager": path.join(os.homedir(), "Documents/Admin/roles/coherence-manager"),
   "estate-operations-manager": path.join(os.homedir(), "Documents/Admin/roles/estate-operations-manager"),
@@ -36,7 +35,7 @@ function run(role, prompt, seatToken) {
   let child;
   const completion = new Promise((resolve, reject) => {
     const command = process.env.ROLE_WAKE_CODEX_COMMAND || path.join(os.homedir(), ".npm-global/bin/codex");
-    child = spawn(command, ["-a", "never", "exec", "--skip-git-repo-check", "--sandbox", "workspace-write", "-C", desks[role], "-"], { stdio: ["pipe", "inherit", "inherit"], env: sessionEnv(role, seatToken) });
+    child = spawn(command, ["-a", "never", "exec", "--skip-git-repo-check", "--sandbox", "workspace-write", "--config", "sandbox_workspace_write.network_access=true", "-C", desks[role], "-"], { stdio: ["pipe", "inherit", "inherit"], env: sessionEnv(role, seatToken) });
     const maxMs = Number(process.env.ROLE_WAKE_MAX_SESSION_MS || 15 * 60 * 1000);
     const timeout = setTimeout(() => { child.kill("SIGTERM"); setTimeout(() => child.kill("SIGKILL"), 5000).unref(); }, maxMs);
     child.once("error", reject); child.once("close", (code) => { clearTimeout(timeout); code === 0 ? resolve() : reject(new Error(`role session exited ${code}`)); });
@@ -45,32 +44,13 @@ function run(role, prompt, seatToken) {
   return { child, completion };
 }
 
-function alive(pid) {
-  if (!pid) return false;
-  try { process.kill(Number(pid), 0); return true; } catch (error) { return error.code === "EPERM"; }
-}
-function hash(value) { return createHash("sha256").update(String(value)).digest("hex"); }
-async function stopRecordedSession(seat) {
-  if (!seat.session_pid || !alive(seat.session_pid)) return { session_dead: true, session_identity_verified: Boolean(seat.session_pid), session_token_sha256: seat.session_token_sha256 };
-  let command = "";
-  try { ({ stdout: command } = await runFile("ps", ["eww", "-p", String(seat.session_pid), "-o", "command="])); } catch { return null; }
-  const token = command.match(/(?:^|\s)AGENT_BUS_ROLE_SEAT_TOKEN=([^\s]+)/)?.[1];
-  if (!token || hash(token) !== seat.session_token_sha256) return null;
-  try { process.kill(seat.session_pid, "SIGTERM"); } catch {}
-  for (let i = 0; i < 20 && alive(seat.session_pid); i++) await new Promise((resolve) => setTimeout(resolve, 250));
-  if (alive(seat.session_pid)) { try { process.kill(seat.session_pid, "SIGKILL"); } catch {} }
-  for (let i = 0; i < 20 && alive(seat.session_pid); i++) await new Promise((resolve) => setTimeout(resolve, 250));
-  if (alive(seat.session_pid)) return null;
-  return { session_dead: true, session_identity_verified: true, session_token_sha256: seat.session_token_sha256 };
-}
-
 const current = await client.list();
 const staleMs = Number(process.env.ROLE_WAKE_STALE_AFTER_MS || 180_000);
 const recoveryProofs = [];
 for (const seat of Object.values(current.seats || {})) {
   if (seat.status !== "occupied" || seat.where !== os.hostname() || seat.worker_id === worker) continue;
-  if (Date.now() - new Date(seat.heartbeat_at || seat.since).getTime() < staleMs || alive(seat.worker_pid)) continue;
-  const session = await stopRecordedSession(seat);
+  if (Date.now() - new Date(seat.heartbeat_at || seat.since).getTime() < staleMs || processAlive(seat.worker_pid)) continue;
+  const session = await stopRecordedRoleSession(seat);
   if (!session) continue;
   recoveryProofs.push({ role: seat.role, seat_id: seat.seat_id, generation: seat.generation, worker_pid: seat.worker_pid, worker_dead: true, session_pid: seat.session_pid || null, ...session });
 }

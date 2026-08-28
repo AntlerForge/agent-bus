@@ -33,6 +33,11 @@ control plane receives only SHA-256 token digests. Each caller receives only its
 the Mac worker receives its worker token and the EOM token needed by a woken EOM child. Files
 are mode 0600 and are not committed.
 
+Bounded role sessions retain workspace-write filesystem isolation but explicitly receive
+network access so their sanctioned Agent Bus MCP transport and A6 authority paths work. This
+does not enlarge the role charter; it removes a transport contradiction that otherwise leaves
+the seat occupied while preventing its required ledger and queue updates.
+
 Deployment copies the plist example to `~/Library/LaunchAgents/`, substitutes only paths if
 needed, validates it with `plutil`, bootstraps it into the user domain, then verifies both a
 queued request and a completed seat/unseat record. Reversal boots out that LaunchAgent;
