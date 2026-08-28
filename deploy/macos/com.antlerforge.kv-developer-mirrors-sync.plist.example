@@ -6,6 +6,10 @@
 	<dict>
 		<key>PATH</key>
 		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+		<key>OUTCOME_MAX_ATTEMPTS</key>
+		<string>2</string>
+		<key>OUTCOME_RETRY_DELAY_SECONDS</key>
+		<string>15</string>
 	</dict>
 	<key>Label</key>
 	<string>com.antlerforge.kv-developer-mirrors-sync</string>

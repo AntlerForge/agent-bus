@@ -43,3 +43,9 @@ test("Mac runtime check gets one bounded delayed retry for wake-network converge
   assert.match(wrapper, /attempt >= max_attempts/);
   assert.match(wrapper, /retry_delay_seconds \* attempt/);
 });
+
+test("Developer-mirror sync gets the same bounded wake-network retry", async () => {
+  const plist = await fs.readFile("deploy/macos/com.antlerforge.kv-developer-mirrors-sync.plist.example", "utf8");
+  assert.match(plist, /<key>OUTCOME_MAX_ATTEMPTS<\/key>\s*<string>2<\/string>/);
+  assert.match(plist, /<key>OUTCOME_RETRY_DELAY_SECONDS<\/key>\s*<string>15<\/string>/);
+});
