@@ -18,7 +18,9 @@ function run(role, prompt) {
   return new Promise((resolve, reject) => {
     const command = process.env.ROLE_WAKE_CODEX_COMMAND || path.join(os.homedir(), ".npm-global/bin/codex");
     const child = spawn(command, ["-a", "never", "exec", "--skip-git-repo-check", "--sandbox", "workspace-write", "-C", desks[role], "-"], { stdio: ["pipe", "inherit", "inherit"], env: process.env });
-    child.once("error", reject); child.once("close", (code) => code === 0 ? resolve() : reject(new Error(`role session exited ${code}`)));
+    const maxMs = Number(process.env.ROLE_WAKE_MAX_SESSION_MS || 15 * 60 * 1000);
+    const timeout = setTimeout(() => { child.kill("SIGTERM"); setTimeout(() => child.kill("SIGKILL"), 5000).unref(); }, maxMs);
+    child.once("error", reject); child.once("close", (code) => { clearTimeout(timeout); code === 0 ? resolve() : reject(new Error(`role session exited ${code}`)); });
     child.stdin.end(prompt);
   });
 }
