@@ -67,7 +67,7 @@ relations:
   - to: Component:project:agent-bus/bus-core
     type: depends-on
   - to: Interface:project:agent-bus/control-plane-http
-    type: uses
+    type: consumes
 ---
 apiVersion: arch.kv/v1
 kind: Component
