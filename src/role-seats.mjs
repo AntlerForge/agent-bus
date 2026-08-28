@@ -24,7 +24,14 @@ function digest(value) { return createHash("sha256").update(String(value)).diges
 
 export async function readRoleSeats(root) {
   const paths = await ensureBusLayout(root);
-  return readJsonFile(paths.roleSeatsFile, stateDefault());
+  const state = await readJsonFile(paths.roleSeatsFile, stateDefault());
+  state.schema_version = 2;
+  state.seats ||= {};
+  state.wake_requests ||= [];
+  state.occupant_notes ||= [];
+  state.signals ||= [];
+  state.events ||= [];
+  return state;
 }
 
 export async function requestRoleWake({ role, requested_by, reason, source_ref, how_woken = "on-demand", triggered_by = null }, root) {
