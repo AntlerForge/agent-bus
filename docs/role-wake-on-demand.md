@@ -43,6 +43,10 @@ pending and last signals, last successful evaluation, the last completed attenti
 next patrol due time. `agent-bus-role-attention-health.timer` fails visibly if either the snapshot
 or Mac worker heartbeat is more than 15 minutes old.
 
+The sanctioned `start_work_run` and `update_work_run` contracts accept nullable ISO
+`next_check_at`. It is persisted in the run and its append-only update event; while present it
+replaces the default four-hour waiting threshold. Clearing it with `null` restores the default.
+
 Operations runbook (A6):
 
 ```sh

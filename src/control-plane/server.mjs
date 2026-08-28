@@ -38,7 +38,7 @@ import { getWriteToken } from "../write-token.mjs";
 import { attachRoleSeatSession, claimRoleWake, completeRoleAttentionPass, deliverRoleSeatNotes, heartbeatRoleSeat, heartbeatRoleWakeWorker, readRoleSeats, recoverStaleRoleSeats, requestRoleAttentionSignal, requestRoleWake, unseatRole } from "../role-seats.mjs";
 import { authenticateRoleWake, loadRoleWakeCredentials } from "../role-wake-auth.mjs";
 
-const VERSION = "0.9.0";
+const VERSION = "0.10.0";
 const STARTED_AT = new Date().toISOString();
 const STATIC_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "public");
 const STATIC_FILES = {

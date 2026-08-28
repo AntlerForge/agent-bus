@@ -7,6 +7,10 @@ import { registerAgent, setAgentLifecycleStatus } from "../src/agents.mjs";
 import { readInbox, sendMessage } from "../src/mailbox.mjs";
 import { attentionSignalKey, currentReviewStatusSince, currentRunStatusSince, evaluateRoleAttention, planRoleAttention, waitingRunThresholdAt } from "../src/role-attention.mjs";
 import { roleAttentionHealthFaults } from "../src/role-attention-health.mjs";
+import { executeRoleAttentionCycle } from "../src/role-attention-monitor.mjs";
+import { assignWorkItem, createWorkItem, startRun, transitionWorkItem, updateRun } from "../src/work-ledger/store.mjs";
+import { claimRoleWake, readRoleSeats, requestRoleAttentionSignal, requestRoleWake } from "../src/role-seats.mjs";
+import { readJsonFile } from "../src/io.mjs";
 
 test("attention monitor raises only aged response-required unread messages", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "role-attention-"));
@@ -47,6 +51,21 @@ test("declared waiting gate replaces the default threshold", () => {
   assert.equal(waitingRunThresholdAt({}, entered, 14400).threshold_ms, Date.parse("2026-08-28T04:00:00Z"));
 });
 
+test("sanctioned ledger writer persists a waiting gate consumed by the evaluator", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "role-attention-"));
+  const item = await createWorkItem({ title: "Gated wait", objective: "Wait until declared checkpoint", source_ref: "test:gate", proposed_by: "chief-of-staff" }, root);
+  await transitionWorkItem({ work_item_id: item.work_item_id, status: "ready", actor: "tony" }, root);
+  await assignWorkItem({ work_item_id: item.work_item_id, agent_id: "codex", assigned_by: "tony" }, root);
+  const started = await startRun({ work_item_id: item.work_item_id, actor: "codex" }, root);
+  const gate = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
+  const waiting = await updateRun({ work_item_id: item.work_item_id, run_id: started.run.run_id, status: "waiting_input", actor: "codex", next_check_at: gate }, root);
+  assert.equal(waiting.run.next_check_at, gate);
+  const thresholds = { unread_response_seconds: 14400, waiting_run_seconds: 14400, pending_review_seconds: 86400 };
+  assert.equal((await evaluateRoleAttention({ now_ms: Date.now() + 5 * 60 * 60 * 1000, thresholds }, root)).findings.length, 0);
+  const afterGate = await evaluateRoleAttention({ now_ms: new Date(gate).getTime(), thresholds }, root);
+  assert.equal(afterGate.findings[0].gate, gate);
+});
+
 test("pending pre-submit signal retries identically; removal is quiet and rebreach is new", () => {
   const finding = { type: "waiting_run", ref: "run_1", episode_key: "waiting_run:run_1:entry_1" };
   const pending = { signal_key: "stalled:fixed", episode_keys: [finding.episode_key] };
@@ -62,6 +81,32 @@ test("attention health fails stale state and recovers on fresh monitor and worke
   const now = Date.parse("2026-08-28T12:00:00Z");
   assert.equal(roleAttentionHealthFaults({ snapshot: { last_success_at: "2026-08-28T11:44:59Z" }, seats: { worker: { last_seen_at: "2026-08-28T11:59:00Z" } }, now_ms: now }).length, 1);
   assert.deepEqual(roleAttentionHealthFaults({ snapshot: { last_success_at: "2026-08-28T11:59:00Z" }, seats: { worker: { last_seen_at: "2026-08-28T11:59:00Z" } }, now_ms: now }), []);
+});
+
+test("durable pending signal survives crash and coalesces two episodes exactly once", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "role-attention-cycle-"));
+  const snapshotFile = path.join(root, "snapshot.json");
+  await requestRoleWake({ role: "estate-operations-manager", requested_by: "chief-of-staff", triggered_by: "estate-operations-monitor", how_woken: "stuck-work-signal", reason: "existing patrol" }, root);
+  await claimRoleWake({ worker_id: "worker", worker_identity: "mac-role-wake-worker", worker_pid: 101, host: "mac" }, root);
+  const client = {
+    list: () => readRoleSeats(root),
+    signal: (args) => requestRoleAttentionSignal(args, root),
+  };
+  const evaluation = { evaluated_at: "2026-08-28T12:00:00Z", findings: [
+    { type: "waiting_run", ref: "run_1", episode_key: "waiting_run:run_1:entry" },
+    { type: "unread_response", ref: "msg_1", episode_key: "unread_response:msg_1:created" },
+  ] };
+  const thresholds = { patrol_seconds: 14400 };
+  await assert.rejects(executeRoleAttentionCycle({ evaluation, thresholds, client, snapshot_file: snapshotFile, before_signal: () => { throw new Error("injected crash"); } }), /injected crash/);
+  assert.equal((await readJsonFile(snapshotFile, {})).pending_signal.episode_keys.length, 2);
+  const recovered = await executeRoleAttentionCycle({ evaluation, thresholds, client, snapshot_file: snapshotFile });
+  assert.equal(recovered.disposition, "occupied_noop");
+  await executeRoleAttentionCycle({ evaluation, thresholds, client, snapshot_file: snapshotFile });
+  const state = await readRoleSeats(root);
+  assert.equal(state.wake_requests.length, 1);
+  assert.equal(state.signals.length, 1);
+  assert.equal(state.signals[0].episode_keys.length, 2);
+  assert.equal(state.occupant_notes.length, 1);
 });
 
 test("attention threshold is inclusive and retired recipients are excluded", async () => {

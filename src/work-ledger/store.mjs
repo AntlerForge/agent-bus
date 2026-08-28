@@ -71,6 +71,14 @@ function cleanText(value, field) {
   return text;
 }
 
+function cleanOptionalTimestamp(value, field) {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const parsed = new Date(String(value));
+  if (!Number.isFinite(parsed.getTime())) throw new Error(`${field} must be an ISO timestamp or null`);
+  return parsed.toISOString();
+}
+
 function workItemBody(item) {
   return `# ${item.title}\n\n${item.objective.trim()}\n`;
 }
@@ -436,7 +444,7 @@ export async function recordOwnerDecision(
 }
 
 export async function startRun(
-  { work_item_id, actor, provider = null, provider_session_ref = null, thread_id = null },
+  { work_item_id, actor, provider = null, provider_session_ref = null, thread_id = null, next_check_at = null },
   root,
 ) {
   const id = cleanText(work_item_id, "work_item_id");
@@ -462,6 +470,7 @@ export async function startRun(
       status: "running",
       started_at: nowIso(),
       updated_at: nowIso(),
+      next_check_at: cleanOptionalTimestamp(next_check_at, "next_check_at"),
       usage: { input_tokens: null, output_tokens: null, total_tokens: null, estimated_cost: null },
     };
     item.runs.push(run);
@@ -476,7 +485,7 @@ export async function startRun(
 }
 
 export async function updateRun(
-  { work_item_id, run_id, status, actor, input_tokens, output_tokens, estimated_cost, reason = null },
+  { work_item_id, run_id, status, actor, input_tokens, output_tokens, estimated_cost, reason = null, next_check_at },
   root,
 ) {
   const id = cleanText(work_item_id, "work_item_id");
@@ -491,6 +500,7 @@ export async function updateRun(
     if (!RUN_STATUSES.includes(status)) throw new Error(`Unsupported run status: ${status}`);
     run.status = status;
     run.updated_at = nowIso();
+    if (next_check_at !== undefined) run.next_check_at = cleanOptionalTimestamp(next_check_at, "next_check_at");
     const parseUsage = (value, previous) => value === undefined ? previous : value === null ? null : Number(value);
     const parsedInput = parseUsage(input_tokens, run.usage.input_tokens);
     const parsedOutput = parseUsage(output_tokens, run.usage.output_tokens);
@@ -515,6 +525,7 @@ export async function updateRun(
       status,
       usage: run.usage,
       reason,
+      next_check_at: run.next_check_at ?? null,
     }));
     await writeStoredWorkItem(item);
     return { work_item: publicWorkItem(item), run };

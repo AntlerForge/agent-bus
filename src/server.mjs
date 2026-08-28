@@ -371,6 +371,7 @@ registerTool(
     provider: z.string().optional(),
     provider_session_ref: z.string().optional(),
     thread_id: z.string().optional(),
+    next_check_at: z.string().datetime().nullable().optional(),
   },
   (args) => workLedger.startRun(args),
 );
@@ -388,6 +389,7 @@ registerTool(
     output_tokens: z.number().nonnegative().nullable().optional(),
     estimated_cost: z.number().nonnegative().nullable().optional(),
     reason: z.string().optional(),
+    next_check_at: z.string().datetime().nullable().optional(),
   },
   (args) => workLedger.updateRun(args),
 );
