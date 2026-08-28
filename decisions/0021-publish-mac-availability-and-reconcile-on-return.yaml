@@ -1,0 +1,31 @@
+apiVersion: arch.kv/v1
+kind: Decision
+id: 0021-publish-mac-availability-and-reconcile-on-return
+namespace: project:agent-bus
+title: "Publish Mac availability on A6 and reconcile once on return"
+status: active
+owner: tony
+properties:
+  date: 2026-08-28
+  component: outcome-truth-sentinel
+  tags: [mac, availability, resilience, reconciliation, estate-monitor]
+  context: |
+    A multi-day Mac-offline window caused independent consumers to report expected
+    source gaps as faults. Existing decision 0010 suspends outcome contracts while
+    the Mac sleeps, but no shared A6 record names the offline window and no single
+    transition owns the catch-up summary.
+  decision: |
+    The A6 outcome sentinel derives one Mac availability record from the existing
+    Mac snapshot and Tailscale evidence. It publishes mac_last_seen and mac_state
+    as online, offline or sporadic, preserving transition history atomically. A
+    return from offline creates one reconciliation id. The existing Mac outcome
+    reporter, not a new agent, consumes that id once, runs bounded existing catch-up
+    operations, and uploads a summary. Estate Monitor projects the shared state;
+    Mac-dependent adapters treat offline as an expected skip. Tailscale is evidence,
+    never sole authority: a fresh reporter snapshot is required for online.
+  consequences:
+    positive: "Expected Mac absence is quiet and one auditable catch-up pass covers each offline window."
+    negative: "Catch-up waits for the existing reporter to run after the Mac returns."
+    neutral: "No inbound Mac service, wake request, credential or LOAD-BEARING conversion is introduced."
+  supersedes: null
+  superseded_by: null

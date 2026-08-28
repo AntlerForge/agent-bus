@@ -5,6 +5,8 @@ import { promisify } from "node:util";
 import { applyEvaluation, loadCards, loadMatrix, saveCards } from "../src/outcome-truth/core.mjs";
 import { dispatchOutcomeFailure } from "../src/estate-steward/dispatch.mjs";
 import { borgArchiveAgeMinutes, borgScriptCoversLegacySources, synthesisOutcomeIsClean } from "../src/outcome-truth/probes.mjs";
+import { deriveMacAvailability } from "../src/outcome-truth/mac-availability.mjs";
+import { writeJsonFileAtomic } from "../src/io.mjs";
 
 const execFile = promisify(execFileCb);
 const args = Object.fromEntries(process.argv.slice(2).map((v, i, a) => v.startsWith("--") ? [v.slice(2), a[i + 1]] : null).filter(Boolean));
@@ -14,6 +16,14 @@ const cardsFile = `${stateDir}/cards.json`;
 const snapshotFile = args.snapshot || process.env.OUTCOME_SNAPSHOT;
 const now = process.env.OUTCOME_NOW || new Date().toISOString();
 const runtimeRoot = process.env.AGENT_BUS_RUNTIME || "/srv/projects/Personal/agent-bus/runtime";
+const macAvailabilityFile = process.env.MAC_AVAILABILITY_FILE || `${stateDir}/mac-availability.json`;
+const macReconciliationFile = process.env.MAC_RECONCILIATION_FILE || `${stateDir}/mac-reconciliation.json`;
+const macReconciliationLedger = process.env.MAC_RECONCILIATION_LEDGER || `${stateDir}/mac-reconciliation.jsonl`;
+
+async function readJsonOrNull(file) {
+  try { return JSON.parse(await fs.readFile(file, "utf8")); }
+  catch (error) { if (error.code === "ENOENT") return null; throw error; }
+}
 
 async function collect() {
   if (snapshotFile) return JSON.parse(await fs.readFile(snapshotFile, "utf8"));
@@ -66,15 +76,44 @@ async function collect() {
   const macPeer = Object.values(tailscale.Peer || {}).find((peer) =>
     String(peer.DNSName || peer.HostName || "").toLowerCase().includes(peerName.toLowerCase()));
   const hostOnline = Boolean(macPeer?.Online);
+  const previousAvailability = await readJsonOrNull(macAvailabilityFile);
+  const availability = deriveMacAvailability({
+    now,
+    peerOnline: hostOnline,
+    reportObservedAt: mac.observed_at,
+    previous: previousAvailability,
+  });
+  const reconciliation = await readJsonOrNull(macReconciliationFile);
+  if (availability.reconciliation?.state === "pending"
+      && reconciliation?.id === availability.reconciliation.id
+      && ["completed", "completed_with_warnings"].includes(reconciliation?.state)) {
+    availability.reconciliation = reconciliation;
+    const priorCompleted = ["completed", "completed_with_warnings"].includes(previousAvailability?.reconciliation?.state)
+      && previousAvailability.reconciliation.id === reconciliation.id;
+    if (!priorCompleted) {
+      await fs.mkdir(stateDir, { recursive: true, mode: 0o700 });
+      await fs.appendFile(macReconciliationLedger, `${JSON.stringify({
+        event: "mac_return_reconciled",
+        ts: reconciliation.completed_at,
+        id: reconciliation.id,
+        offline_window: reconciliation.offline_window,
+        recovered: reconciliation.recovered,
+      })}\n`, { mode: 0o600 });
+    }
+  }
+  await writeJsonFileAtomic(macAvailabilityFile, availability);
   const reportFresh = mac.report_age_minutes <= 30;
   const localHour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", hour12: false }).format(new Date()));
   const daytimeExpected = localHour >= 7 && localHour < 23;
   const interactiveAvailable = reportFresh && Boolean(mac.interactive?.active);
   const healthyWhileInteractive = (healthy) => !interactiveAvailable || Boolean(healthy);
   mac.availability = {
-    online: hostOnline,
-    source: "tailscale",
+    online: availability.mac_state !== "offline",
+    state: availability.mac_state,
+    last_seen: availability.mac_last_seen,
+    source: "tailscale+reporter",
     peer: macPeer?.DNSName || macPeer?.HostName || null,
+    reconciliation: availability.reconciliation,
   };
   mac.contracts = {
     reporter: { healthy: !hostOnline || !daytimeExpected || reportFresh },

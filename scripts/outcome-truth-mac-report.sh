@@ -44,11 +44,25 @@ upload_snapshot() {
       'chmod 600 /srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-snapshot.incoming && mv /srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-snapshot.incoming /srv/projects/Personal/agent-bus/runtime/outcome-truth/mac-snapshot.json'
 }
 
+reconcile_return() {
+  local availability="${TMPDIR:-/tmp}/agent-bus-mac-availability.json"
+  local reconciliation="${TMPDIR:-/tmp}/agent-bus-mac-reconciliation.json"
+  /usr/bin/scp -q -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
+    ajbarfoot@antler-a6:/srv/projects/Personal/agent-bus/runtime/outcome-truth/mac-availability.json "$availability" || return 0
+  /usr/local/bin/node "$app_dir/scripts/mac-return-reconcile.mjs" "$availability" "$reconciliation"
+  [[ -s "$reconciliation" ]] || return 0
+  /usr/bin/scp -q -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 \
+    "$reconciliation" ajbarfoot@antler-a6:/srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-reconciliation.incoming &&
+    /usr/bin/ssh -o BatchMode=yes -o ConnectTimeout=8 -o ConnectionAttempts=1 ajbarfoot@antler-a6 \
+      'chmod 600 /srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-reconciliation.incoming && mv /srv/projects/Personal/agent-bus/runtime/outcome-truth/.mac-reconciliation.incoming /srv/projects/Personal/agent-bus/runtime/outcome-truth/mac-reconciliation.json'
+}
+
 # The Mac-to-A6 SSH edge occasionally closes a connection during wake/network
 # convergence. Retry within this scheduled run so a brief transport miss does
 # not defer semantic truth for another fifteen minutes.
 for attempt in 1 2 3; do
   if upload_snapshot; then
+    reconcile_return
     exit 0
   fi
   (( attempt < 3 )) && sleep $(( attempt * 2 ))

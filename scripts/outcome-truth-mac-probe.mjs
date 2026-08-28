@@ -5,6 +5,16 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 
 const home = process.env.HOME;
+function launchAgent(label) {
+  try {
+    const output = execFileSync("/bin/launchctl", ["print", `gui/${process.getuid()}/${label}`], { encoding: "utf8" });
+    return {
+      loaded: true,
+      running: /\bstate = running\b/.test(output),
+      last_exit: Number(output.match(/\blast exit code = (-?\d+)/)?.[1] ?? 0),
+    };
+  } catch { return { loaded: false, running: false, last_exit: null }; }
+}
 let idleSeconds = null;
 try {
   const output = execFileSync("/usr/sbin/ioreg", ["-c", "IOHIDSystem", "-d", "4"], { encoding: "utf8" });
@@ -63,5 +73,5 @@ if (fs.existsSync(localBusRoot)) {
   };
   walk(localBusRoot);
 }
-console.log(JSON.stringify({ observed_at: new Date().toISOString(), interactive: { active: idleSeconds !== null && idleSeconds < 1800, idle_seconds: idleSeconds }, mount_present: fs.existsSync("/Volumes/share"), launchagents,
+console.log(JSON.stringify({ observed_at: new Date().toISOString(), interactive: { active: idleSeconds !== null && idleSeconds < 1800, idle_seconds: idleSeconds }, mount_present: fs.existsSync("/Volumes/share"), tunnel: launchAgent("com.antlerforge.agent-bus-a6-tunnel"), launchagents,
   repo_sweep, local_bus: { unexpected_write_count: unexpectedLocalWrites.length, unexpected_paths: unexpectedLocalWrites.slice(0, 20) } }));
