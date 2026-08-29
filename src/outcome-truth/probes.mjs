@@ -37,6 +37,16 @@ export function synthesisOutcomeIsClean(outcome) {
   const ordinaryMailFallbackHealthy = metadata.ordinary_mail_fallback === true
     && Number.isInteger(metadata.ordinary_mail_scanned)
     && metadata.ordinary_mail_scanned > 0;
+  const ordinaryMailReconciliation = metadata.ordinary_mail_reconciliation;
+  const ordinaryMailReconciliationHealthy = Boolean(ordinaryMailReconciliation
+    && Number.isInteger(ordinaryMailReconciliation.inbox)
+    && ordinaryMailReconciliation.inbox >= 0
+    && Number.isInteger(ordinaryMailReconciliation.sent)
+    && ordinaryMailReconciliation.sent >= 0
+    && Array.isArray(ordinaryMailReconciliation.tasks_created)
+    && Array.isArray(ordinaryMailReconciliation.tasks_updated)
+    && Array.isArray(ordinaryMailReconciliation.tasks_completed)
+    && Array.isArray(ordinaryMailReconciliation.calendar_events_created));
   const emailHealthy = metadata.email_triage
     ? metadata.email_triage.fresh === true
       && (metadata.email_triage.status === "completed"
@@ -45,7 +55,8 @@ export function synthesisOutcomeIsClean(outcome) {
         && (metadata.email_triage_status === undefined
           || metadata.email_triage_status === "completed"
           || (metadata.email_triage_status === "warning" && dashboardHealthy)))
-      || ordinaryMailFallbackHealthy;
+      || ordinaryMailFallbackHealthy
+      || ordinaryMailReconciliationHealthy;
   const funnelErrors = metadata.funnel?.auto_errors ?? metadata.auto_errors;
   const funnelHealthy = funnelErrors === 0;
   const doctorWarnings = (metadata.warnings || []).filter((warning) => /doctor/i.test(String(warning))).join(" ");

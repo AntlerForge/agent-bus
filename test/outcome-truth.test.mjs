@@ -254,3 +254,30 @@ test("synthesis accepts a successful ordinary-mail fallback when scheduled triag
     ordinary_mail_scanned: 0,
   } }), false);
 });
+
+test("synthesis accepts the authoritative ordinary-mail reconciliation shape", () => {
+  const currentRun = {
+    event: "run_warning",
+    metadata: {
+      adapter_health: "all required source adapters ok",
+      dashboard_health: { healthz: 200, kv_data: 200, usage: 200, version: 200 },
+      doctor_status: "warn_no_hard_failure",
+      funnel: { auto_errors: 0 },
+      ordinary_mail_reconciliation: {
+        hours: 6,
+        inbox: 1,
+        sent: 0,
+        tasks_created: [],
+        tasks_updated: [],
+        tasks_completed: [],
+        calendar_events_created: [],
+      },
+      warnings: ["House climate sensor source unreachable: No route to host."],
+    },
+  };
+  assert.equal(synthesisOutcomeIsClean(currentRun), true);
+  assert.equal(synthesisOutcomeIsClean({ ...currentRun, metadata: {
+    ...currentRun.metadata,
+    ordinary_mail_reconciliation: { ...currentRun.metadata.ordinary_mail_reconciliation, tasks_updated: null },
+  } }), false);
+});
