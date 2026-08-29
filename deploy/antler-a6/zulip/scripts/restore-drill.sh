@@ -27,13 +27,11 @@ cd "$deploy"
 export ZULIP_DATA_ROOT="$drill"
 export ZULIP_HTTP_PORT=18093
 
-op run --env-file=/etc/zulip-estate/op.env -- \
-  docker compose -p zulip-restore-drill up -d database memcached rabbitmq redis
-op run --env-file=/etc/zulip-estate/op.env -- \
-  docker compose -p zulip-restore-drill run --rm zulip \
+/usr/local/libexec/antler-zulip-check-secrets
+docker compose -p zulip-restore-drill up -d database memcached rabbitmq redis
+docker compose -p zulip-restore-drill run --rm zulip \
   /sbin/entrypoint.sh app:restore "/data/backups/$(basename "$backup")"
-op run --env-file=/etc/zulip-estate/op.env -- \
-  docker compose -p zulip-restore-drill up -d --wait
+docker compose -p zulip-restore-drill up -d --wait
 curl -fsS http://127.0.0.1:18093/api/v1/server_settings | jq -e '.result == "success"'
 
 echo "Restore drill server healthy on 127.0.0.1:18093; verify the synthetic G0 message before teardown."

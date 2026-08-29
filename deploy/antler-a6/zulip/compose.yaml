@@ -84,9 +84,9 @@ services:
       SETTING_MEMCACHED_LOCATION: memcached:11211
       SETTING_RABBITMQ_HOST: rabbitmq
       SETTING_REDIS_HOST: redis
-      SETTING_EMAIL_HOST: "${ZULIP_EMAIL_HOST}"
-      SETTING_EMAIL_HOST_USER: "${ZULIP_EMAIL_HOST_USER}"
-      SETTING_EMAIL_PORT: "${ZULIP_EMAIL_PORT:-587}"
+      SETTING_EMAIL_HOST: "smtp.gmail.com"
+      SETTING_EMAIL_HOST_USER: "tonyjbarfoot@googlemail.com"
+      SETTING_EMAIL_PORT: "587"
       SETTING_EMAIL_USE_SSL: "${ZULIP_EMAIL_USE_SSL:-False}"
       SETTING_EMAIL_USE_TLS: "${ZULIP_EMAIL_USE_TLS:-True}"
       SETTING_ZULIP_SERVICE_PUSH_NOTIFICATIONS: "${ZULIP_PUSH_NOTIFICATIONS:-True}"
@@ -104,14 +104,14 @@ services:
 
 secrets:
   zulip__postgres_password:
-    environment: ZULIP__POSTGRES_PASSWORD
+    file: /etc/antlerforge/secrets/zulip-antlerforge/postgres_password
   zulip__memcached_password:
-    environment: ZULIP__MEMCACHED_PASSWORD
+    file: /etc/antlerforge/secrets/zulip-antlerforge/memcached_password
   zulip__rabbitmq_password:
-    environment: ZULIP__RABBITMQ_PASSWORD
+    file: /etc/antlerforge/secrets/zulip-antlerforge/rabbitmq_password
   zulip__redis_password:
-    environment: ZULIP__REDIS_PASSWORD
+    file: /etc/antlerforge/secrets/zulip-antlerforge/redis_password
   zulip__secret_key:
-    environment: ZULIP__SECRET_KEY
+    file: /etc/antlerforge/secrets/zulip-antlerforge/secret_key
   zulip__email_password:
-    environment: ZULIP__EMAIL_PASSWORD
+    file: /etc/antlerforge/secrets/zulip-antlerforge/smtp_password

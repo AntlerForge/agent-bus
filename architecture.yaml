@@ -770,14 +770,13 @@ properties:
   loopback_port: 8093
   data_root: "/srv/projects/Personal/zulip-estate/data"
   phase: "Gate G0 only; no estate data, relay, publisher or Bus credential"
-  secret_vault: "AntlerForge Deployments"
-  secret_item: "zulip-antlerforge"
-  service_account: "A6 Zulip AntlerForge (read-only, named vault only)"
-  bootstrap_token_path: "/etc/1password/service-accounts/zulip-antlerforge.token (root:root 0600)"
+  secret_authority: "/etc/antlerforge/secrets/zulip-antlerforge"
+  secret_identity: "zulip-antlerforge"
+  secret_inventory: "/srv/kv/home-platform-architecture/contracts/estate-machine-secrets-inventory.yaml"
 relations:
   - to: Decision:project:agent-bus/0020-run-zulip-as-a-governed-conversation-layer-trial
     type: governed-by
-  - to: Decision:project:agent-bus/0023-bootstrap-a6-zulip-from-a-scoped-1password-service-account
+  - to: Decision:platform/0023-centralise-machine-secret-custody-on-a6
     type: governed-by
   - to: Platform:platform/home-platform
     type: runs-on

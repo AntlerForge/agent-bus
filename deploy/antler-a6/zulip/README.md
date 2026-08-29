@@ -3,18 +3,14 @@
 This directory deploys only the empty Zulip stack and Gate G0. It contains no
 Agent Bus relay, outbound publisher or Agent Bus credential.
 
-## Prerequisites
+## Secret custody
 
-- `/usr/bin/op` version 2.18.0 or later.
-- 1Password vault `AntlerForge Deployments`, item `zulip-antlerforge`, and
-  read-only service account `A6 Zulip AntlerForge`.
-- `/etc/1password/service-accounts/zulip-antlerforge.token`, root:root mode
-  `0600`; this is the sole headless bootstrap credential.
-- `/etc/zulip-estate/op.env`, root:root mode `0600`, containing only the
-  tracked `op://` references.
-- `zulip.antlerforge.com` routed through the existing local-config
-  `kv-dashboard` tunnel to `http://127.0.0.1:8093`.
-- A Cloudflare Access application protecting the whole hostname.
+The sole machine authority is `/etc/antlerforge/secrets/zulip-antlerforge`.
+The directory is root-owned mode `0700`; its six credential files are
+root-owned mode `0600`. Five internal credentials are generated on A6 without
+being printed. The SMTP credential is an owner-supplied Gmail app password.
+Compose mounts each credential as a named read-only Docker secret. No secret is
+passed through an environment file.
 
 ## Install
 
@@ -28,12 +24,14 @@ sudo docker compose ps
 curl -fsS http://127.0.0.1:8093/api/v1/server_settings | jq -e '.result == "success"'
 ```
 
+Startup fails closed until all six files pass the metadata and non-empty checks.
+`zulip.antlerforge.com` must route through the existing local-config
+`kv-dashboard` tunnel to `http://127.0.0.1:8093`, with Cloudflare Access
+protecting the entire hostname.
+
 Create only the disposable Gate G0 organization/admin/channel/topic/message and
 test attachment before running `G0-CLIENT-TEST.md`. Estate accounts and data are
-phase 2 and must not be added here.
-
-Create the organization with realm name exactly `AntlerForge`. No hostname,
-realm, vault, item, service-account or application name is temporary.
+phase 2 and must not be added here. The realm name is exactly `AntlerForge`.
 
 ## Backup and isolated restore
 
@@ -52,5 +50,5 @@ It never restores over live state.
 ## Rollback demonstration
 
 `sudo ./scripts/rollback.sh` stops and removes containers/networks while keeping
-only the declared backed-up data directory. Restart with
+the declared backed-up data directory. Restart with
 `sudo systemctl start antler-zulip.target`.
