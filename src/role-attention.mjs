@@ -55,6 +55,10 @@ export async function evaluateRoleAttention({ now_ms = Date.now(), thresholds = 
   }
   const items = await listWorkItems({}, root);
   for (const item of items) {
+    // Parent lifecycle is authoritative. Preserve terminal parents and their
+    // child runs as audit history, but never turn those historical run states
+    // into operational attention episodes.
+    if (["canceled", "done"].includes(item.status)) continue;
     const events = await listWorkItemEvents({ work_item_id: item.work_item_id }, root);
     for (const run of item.runs || []) {
       if (!["waiting_input", "blocked"].includes(run.status)) continue;

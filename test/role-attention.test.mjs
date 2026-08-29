@@ -8,9 +8,73 @@ import { readInbox, sendMessage } from "../src/mailbox.mjs";
 import { attentionSignalKey, currentReviewStatusSince, currentRunStatusSince, evaluateRoleAttention, planRoleAttention, waitingRunThresholdAt } from "../src/role-attention.mjs";
 import { roleAttentionHealthFaults } from "../src/role-attention-health.mjs";
 import { executeRoleAttentionCycle } from "../src/role-attention-monitor.mjs";
-import { assignWorkItem, createWorkItem, startRun, transitionWorkItem, updateRun } from "../src/work-ledger/store.mjs";
+import { assignWorkItem, createWorkItem, startRun, submitReceipt, transitionWorkItem, updateRun } from "../src/work-ledger/store.mjs";
 import { claimRoleWake, readRoleSeats, requestRoleAttentionSignal, requestRoleWake } from "../src/role-seats.mjs";
 import { readJsonFile } from "../src/io.mjs";
+
+async function createWaitingRun(root, title) {
+  const item = await createWorkItem({ title, objective: title, source_ref: `test:${title}`, proposed_by: "chief-of-staff" }, root);
+  await transitionWorkItem({ work_item_id: item.work_item_id, status: "ready", actor: "tony" }, root);
+  await assignWorkItem({ work_item_id: item.work_item_id, agent_id: "codex", assigned_by: "tony" }, root);
+  const started = await startRun({ work_item_id: item.work_item_id, actor: "codex" }, root);
+  await updateRun({ work_item_id: item.work_item_id, run_id: started.run.run_id, status: "waiting_input", actor: "codex" }, root);
+  return { item, run: started.run };
+}
+
+const immediateThresholds = {
+  unread_response_seconds: 0,
+  waiting_run_seconds: 0,
+  pending_review_seconds: 0,
+  patrol_seconds: 14_400,
+};
+
+test("waiting child run under canceled parent produces no episode", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "role-attention-terminal-"));
+  const { item, run } = await createWaitingRun(root, "Canceled parent");
+  await transitionWorkItem({ work_item_id: item.work_item_id, status: "canceled", actor: "tony" }, root);
+  const evaluation = await evaluateRoleAttention({ thresholds: immediateThresholds }, root);
+  assert.equal(evaluation.findings.some((finding) => finding.ref === run.run_id), false);
+});
+
+test("waiting child run under done parent produces no episode", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "role-attention-terminal-"));
+  const { item, run } = await createWaitingRun(root, "Done parent");
+  await submitReceipt({
+    work_item_id: item.work_item_id,
+    submitted_by: "codex",
+    outcome: "complete",
+    summary: "Test completion",
+    evidence: [{ target_state: "complete", location: "test fixture", verify: "fixture assertion" }],
+  }, root);
+  const evaluation = await evaluateRoleAttention({ thresholds: immediateThresholds }, root);
+  assert.equal(evaluation.findings.some((finding) => finding.ref === run.run_id), false);
+});
+
+test("identical waiting child run under active parent remains an episode", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "role-attention-terminal-"));
+  const { run } = await createWaitingRun(root, "Active parent");
+  const evaluation = await evaluateRoleAttention({ thresholds: immediateThresholds }, root);
+  assert.equal(evaluation.findings.filter((finding) => finding.ref === run.run_id).length, 1);
+});
+
+test("active waiting episode disappears quietly when parent is canceled", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "role-attention-terminal-"));
+  const { item, run } = await createWaitingRun(root, "Quiet cancellation");
+  const active = await evaluateRoleAttention({ thresholds: immediateThresholds }, root);
+  const episode = active.findings.find((finding) => finding.ref === run.run_id);
+  assert.ok(episode);
+  await transitionWorkItem({ work_item_id: item.work_item_id, status: "canceled", actor: "tony" }, root);
+  const cleared = await evaluateRoleAttention({ thresholds: immediateThresholds }, root);
+  assert.equal(cleared.findings.some((finding) => finding.ref === run.run_id), false);
+  const plan = planRoleAttention({
+    evaluation: cleared,
+    previous: { signaled_episode_keys: [episode.episode_key] },
+    roleSeats: { attention: { last_completed_at: new Date().toISOString() } },
+    thresholds: immediateThresholds,
+  });
+  assert.equal(plan.signal, null);
+  assert.deepEqual(plan.newly_breached, []);
+});
 
 test("attention monitor raises only aged response-required unread messages", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "role-attention-"));
